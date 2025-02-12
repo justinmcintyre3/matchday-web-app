@@ -11,24 +11,25 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('M A T C H  D A Y', style: TextStyle(letterSpacing: 2.0)),
+        title: const Text('M A T C H  D A Y',
+            style: TextStyle(letterSpacing: 2.0)),
       ),
       body: Consumer<ChecklistProvider>(
         builder: (context, provider, child) {
           final groups = provider.groups;
-          
+
           if (groups.isEmpty) {
             return const Center(
               child: Text('No checklists yet. Add one below!'),
             );
           }
-          
+
           return ListView.builder(
             itemCount: groups.length,
             itemBuilder: (context, index) {
               final group = groups[index];
               final items = provider.getItems(group.id);
-              
+
               return Dismissible(
                 key: ValueKey(group.id),
                 direction: DismissDirection.endToStart,
@@ -57,13 +58,15 @@ class HomeScreen extends StatelessWidget {
                 },
                 child: _ExpandableCard(
                   title: group.title,
-                  completedItems: items.where((item) => item.isCompleted).length,
+                  completedItems:
+                      items.where((item) => item.isCompleted).length,
                   totalItems: items.length,
                   createdAt: group.createdAt,
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (context) => ChecklistDetailScreen(groupId: group.id),
+                        builder: (context) =>
+                            ChecklistDetailScreen(groupId: group.id),
                       ),
                     );
                   },
@@ -82,7 +85,7 @@ class HomeScreen extends StatelessWidget {
 
   Future<void> _showAddChecklistDialog(BuildContext context) async {
     final controller = TextEditingController();
-    
+
     return showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -211,15 +214,15 @@ class _ExpandableCardState extends State<_ExpandableCard> {
                 Text(
                   '${widget.completedItems}/${widget.totalItems} items completed',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Created ${DateFormat('MMM d, y • h:mm a').format(widget.createdAt)}',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                 ),
               ],
             ],
