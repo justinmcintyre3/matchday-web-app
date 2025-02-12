@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:provider/provider.dart';
+import '../models/checklist_group.dart';
 import '../providers/checklist_provider.dart';
 import 'checklist_detail_screen.dart';
 import 'package:intl/intl.dart';
@@ -30,32 +32,47 @@ class HomeScreen extends StatelessWidget {
               final group = groups[index];
               final items = provider.getItems(group.id);
 
-              return Dismissible(
+              return Slidable(
+                direction: Axis.horizontal,
                 key: ValueKey(group.id),
-                direction: DismissDirection.endToStart,
-                background: Container(
-                  color: Theme.of(context).colorScheme.error,
-                  alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.only(right: 16),
-                  child: const Icon(
-                    Icons.delete,
-                    color: Colors.white,
-                  ),
-                ),
-                onDismissed: (direction) {
-                  provider.deleteGroup(group.id);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('${group.title} deleted'),
-                      action: SnackBarAction(
-                        label: 'Undo',
-                        onPressed: () {
-                          provider.restoreGroup(group);
-                        },
-                      ),
+                startActionPane: ActionPane(
+                  motion: const DrawerMotion(),
+                  children: [
+                    SlidableAction(
+                      onPressed: (context) =>
+                          _showEditDialog(context, provider, group),
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      icon: Icons.edit,
+                      label: 'Edit',
                     ),
-                  );
-                },
+                  ],
+                ),
+                endActionPane: ActionPane(
+                  motion: const DrawerMotion(),
+                  children: [
+                    SlidableAction(
+                      onPressed: (context) {
+                        provider.deleteGroup(group.id);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('${group.title} deleted'),
+                            action: SnackBarAction(
+                              label: 'Undo',
+                              onPressed: () {
+                                provider.restoreGroup(group);
+                              },
+                            ),
+                          ),
+                        );
+                      },
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      icon: Icons.delete,
+                      label: 'Delete',
+                    ),
+                  ],
+                ),
                 child: _ExpandableCard(
                   title: group.title,
                   completedItems:
@@ -150,6 +167,60 @@ class HomeScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<void> _showEditDialog(BuildContext context, ChecklistProvider provider,
+    ChecklistGroup group) async {
+  final controller = TextEditingController(text: group.title);
+
+  return showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(
+        'Edit Checklist',
+        style: Theme.of(context).textTheme.titleLarge,
+      ),
+      content: TextField(
+        controller: controller,
+        decoration: InputDecoration(
+          hintText: 'Enter new checklist name',
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(
+              color: Theme.of(context).colorScheme.outline,
+            ),
+          ),
+        ),
+        autofocus: true,
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(
+            'Cancel',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+        ),
+        TextButton(
+          onPressed: () {
+            if (controller.text.isNotEmpty) {
+              provider.updateGroupTitle(group.id, controller.text);
+              Navigator.pop(context);
+            }
+          },
+          child: Text(
+            'Save',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _ExpandableCard extends StatefulWidget {
