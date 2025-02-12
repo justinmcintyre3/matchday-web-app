@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:provider/provider.dart';
+import '../models/checklist_item.dart';
 import '../providers/checklist_provider.dart';
 import 'package:confetti/confetti.dart';
 import 'dart:math';
@@ -122,28 +124,66 @@ class _ChecklistDetailScreenState extends State<ChecklistDetailScreen> {
                       itemCount: items.length,
                       itemBuilder: (context, index) {
                         final item = items[index];
-                        return Dismissible(
+                        return Slidable(
+                          direction: Axis.horizontal,
                           key: ValueKey(item.id),
-                          direction: DismissDirection.endToStart,
-                          background: Container(
-                            color: Theme.of(context).colorScheme.error,
-                            alignment: Alignment.centerRight,
-                            padding: const EdgeInsets.only(right: 16),
-                            child: const Icon(
-                              Icons.delete,
-                              color: Colors.white,
-                            ),
+                          startActionPane: ActionPane(
+                            motion: const DrawerMotion(),
+                            children: [
+                              SlidableAction(
+                                onPressed: (context) =>
+                                    _showEditItemDialog(context, item),
+                                backgroundColor: Colors.blue,
+                                foregroundColor: Colors.white,
+                                icon: Icons.edit,
+                                label: 'Edit',
+                              ),
+                            ],
                           ),
-                          onDismissed: (direction) {
-                            provider.removeItem(widget.groupId, item.id);
-                          },
-                          child: CheckboxListTile(
-                            value: item.isCompleted,
-                            onChanged: (bool? value) {
+                          endActionPane: ActionPane(
+                            motion: const DrawerMotion(),
+                            children: [
+                              SlidableAction(
+                                onPressed: (context) {
+                                  final removedItem =
+                                      item; // Store the removed item
+                                  provider.removeItem(widget.groupId, item.id);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('${item.title} deleted'),
+                                      action: SnackBarAction(
+                                        label: 'Undo',
+                                        onPressed: () {
+                                          provider.addItem(widget.groupId,
+                                              removedItem.title);
+                                        },
+                                      ),
+                                    ),
+                                  );
+                                },
+                                backgroundColor: Colors.red,
+                                foregroundColor: Colors.white,
+                                icon: Icons.delete,
+                                label: 'Delete',
+                              ),
+                            ],
+                          ),
+                          child: ListTile(
+                            title: Text(
+                              item.title,
+                              style: TextStyle(
+                                decoration: item.isCompleted
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                                color: item.isCompleted
+                                    ? Colors.grey
+                                    : Colors.black,
+                              ),
+                            ),
+                            onTap: () {
                               provider.toggleItem(widget.groupId, item.id);
                               _checkCompletion(context, provider);
                             },
-                            title: Text(item.title),
                           ),
                         );
                       },
@@ -225,5 +265,52 @@ class _ChecklistDetailScreenState extends State<ChecklistDetailScreen> {
         controller.dispose();
       });
     });
+  }
+
+  Future<void> _showEditItemDialog(
+      BuildContext context, ChecklistItem item) async {
+    final controller = TextEditingController(text: item.title);
+
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Edit Item'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Enter new item name',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+            },
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              if (controller.text.isNotEmpty) {
+                // Create a new ChecklistItem with the updated title
+                final updatedItem = ChecklistItem(
+                  id: item.id,
+                  title: controller.text, // New title
+                  isCompleted: item.isCompleted,
+                );
+
+                // Update the item in the provider's list
+                Provider.of<ChecklistProvider>(context, listen: false)
+                    .updateItem(widget.groupId, updatedItem);
+
+                Navigator.of(dialogContext).pop();
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
   }
 }

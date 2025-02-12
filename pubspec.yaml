@@ -37,12 +37,13 @@ dependencies:
   # State management
   provider: ^6.1.2
   # Local storage
-  shared_preferences: ^2.2.2
+  shared_preferences: ^2.5.2
   # UUID generation
-  uuid: ^4.3.3
+  uuid: ^4.5.1
   # For date/time formatting
-  intl: ^0.18.0
-  confetti: ^0.7.0
+  intl: ^0.20.2
+  confetti: ^0.8.0
+  flutter_slidable: ^4.0.0
 
 dev_dependencies:
   flutter_test:

@@ -61,6 +61,34 @@ class ChecklistProvider with ChangeNotifier {
     }
   }
 
+  void updateGroupTitle(String groupId, String newTitle) {
+    final index = _groups.indexWhere((g) => g.id == groupId);
+    if (index != -1) {
+      _groups[index] = ChecklistGroup(
+        id: _groups[index].id, // Keep the same ID
+        title: newTitle, // Update the title
+        createdAt: _groups[index].createdAt, // Keep original date
+        itemList: _groups[index].itemList, // Preserve existing items
+      );
+      _saveGroups();
+      notifyListeners();
+    }
+  }
+
+  void updateItem(String groupId, ChecklistItem updatedItem) {
+    final items =
+        _checklists[groupId]; // ✅ Get the checklist items for the groupId
+
+    if (items != null) {
+      final index = items.indexWhere((item) => item.id == updatedItem.id);
+      if (index != -1) {
+        items[index] = updatedItem;
+        _saveItems(groupId); // ✅ Save changes to storage
+        notifyListeners(); // ✅ Notify UI to update
+      }
+    }
+  }
+
   void deleteGroup(String groupId) {
     _groups.removeWhere((group) => group.id == groupId);
     _checklists.remove(groupId);
