@@ -11,25 +11,29 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('M A T C H  D A Y',
-            style: TextStyle(letterSpacing: 2.0)),
-      ),
-      body: Consumer<ChecklistProvider>(
-        builder: (context, provider, child) {
-          final groups = provider.groups;
-
-          if (groups.isEmpty) {
-            return const Center(
-              child: Text('No checklists yet. Add one below!'),
-            );
-          }
-
-          return ListView.builder(
-            itemCount: groups.length,
-            itemBuilder: (context, index) {
-              final group = groups[index];
+    return Consumer<ChecklistProvider>(
+      builder: (context, provider, child) {
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Checklist Groups'),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.add),
+                onPressed: () {
+                  _showAddChecklistDialog(context);
+                },
+              ),
+            ],
+          ),
+          body: ReorderableListView(
+            onReorder: (oldIndex, newIndex) {
+              if (newIndex > oldIndex) {
+                newIndex--;
+              }
+              provider.reorderGroups(oldIndex, newIndex);
+            },
+            children: List.generate(provider.groups.length, (index) {
+              final group = provider.groups[index];
               final items = provider.getItems(group.id);
 
               return Slidable(
@@ -89,14 +93,10 @@ class HomeScreen extends StatelessWidget {
                   },
                 ),
               );
-            },
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddChecklistDialog(context),
-        child: const Icon(Icons.add),
-      ),
+            }),
+          ),
+        );
+      },
     );
   }
 
@@ -167,60 +167,60 @@ class HomeScreen extends StatelessWidget {
       ),
     );
   }
-}
 
-Future<void> _showEditDialog(BuildContext context, ChecklistProvider provider,
-    ChecklistGroup group) async {
-  final controller = TextEditingController(text: group.title);
+  Future<void> _showEditDialog(BuildContext context, ChecklistProvider provider,
+      ChecklistGroup group) async {
+    final controller = TextEditingController(text: group.title);
 
-  return showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text(
-        'Edit Checklist',
-        style: Theme.of(context).textTheme.titleLarge,
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Edit Checklist',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            hintText: 'Enter new checklist name',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(
+                color: Theme.of(context).colorScheme.outline,
+              ),
+            ),
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              if (controller.text.isNotEmpty) {
+                provider.updateGroupTitle(group.id, controller.text);
+                Navigator.pop(context);
+              }
+            },
+            child: Text(
+              'Save',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
-      content: TextField(
-        controller: controller,
-        decoration: InputDecoration(
-          hintText: 'Enter new checklist name',
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(
-              color: Theme.of(context).colorScheme.outline,
-            ),
-          ),
-        ),
-        autofocus: true,
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(
-            'Cancel',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.primary,
-            ),
-          ),
-        ),
-        TextButton(
-          onPressed: () {
-            if (controller.text.isNotEmpty) {
-              provider.updateGroupTitle(group.id, controller.text);
-              Navigator.pop(context);
-            }
-          },
-          child: Text(
-            'Save',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.primary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
+    );
+  }
 }
 
 class _ExpandableCard extends StatefulWidget {

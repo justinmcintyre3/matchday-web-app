@@ -1,0 +1,2 @@
+C:/Users/Justin/StudioProjects/matchday/android/app/.cxx/RelWithDebInfo/681257o2/x86/CMakeFiles/edit_cache.dir
+C:/Users/Justin/StudioProjects/matchday/android/app/.cxx/RelWithDebInfo/681257o2/x86/CMakeFiles/rebuild_cache.dir

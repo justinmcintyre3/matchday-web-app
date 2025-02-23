@@ -120,9 +120,16 @@ class _ChecklistDetailScreenState extends State<ChecklistDetailScreen> {
                   ? const Center(
                       child: Text('No items yet. Add one below!'),
                     )
-                  : ListView.builder(
-                      itemCount: items.length,
-                      itemBuilder: (context, index) {
+                  : ReorderableListView(
+                      onReorder: (oldIndex, newIndex) {
+                        // Adjust the newIndex if it is greater than the oldIndex
+                        if (newIndex > oldIndex) {
+                          newIndex--;
+                        }
+                        // Update the provider with the new order
+                        provider.reorderItems(widget.groupId, oldIndex, newIndex);
+                      },
+                      children: List.generate(items.length, (index) {
                         final item = items[index];
                         return Slidable(
                           direction: Axis.horizontal,
@@ -186,7 +193,7 @@ class _ChecklistDetailScreenState extends State<ChecklistDetailScreen> {
                             },
                           ),
                         );
-                      },
+                      }),
                     ),
               floatingActionButton: FloatingActionButton(
                 onPressed: () => _showAddItemDialog(context),
@@ -270,6 +277,7 @@ class _ChecklistDetailScreenState extends State<ChecklistDetailScreen> {
   Future<void> _showEditItemDialog(
       BuildContext context, ChecklistItem item) async {
     final controller = TextEditingController(text: item.title);
+    final focusNode = FocusNode(debugLabel: 'EditItemDialog');
 
     return showDialog<void>(
       context: context,
@@ -293,24 +301,31 @@ class _ChecklistDetailScreenState extends State<ChecklistDetailScreen> {
           TextButton(
             onPressed: () {
               if (controller.text.isNotEmpty) {
-                // Create a new ChecklistItem with the updated title
-                final updatedItem = ChecklistItem(
+                // Use dialogContext to access the provider
+                Provider.of<ChecklistProvider>(dialogContext, listen: false)
+                    .updateItem(widget.groupId, ChecklistItem(
                   id: item.id,
                   title: controller.text, // New title
                   isCompleted: item.isCompleted,
-                );
-
-                // Update the item in the provider's list
-                Provider.of<ChecklistProvider>(context, listen: false)
-                    .updateItem(widget.groupId, updatedItem);
-
+                ));
                 Navigator.of(dialogContext).pop();
               }
             },
-            child: const Text('Save'),
+            child: Text(
+              'Save',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),
-    );
+    ).whenComplete(() {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        focusNode.dispose();
+        controller.dispose();
+      });
+    });
   }
 }

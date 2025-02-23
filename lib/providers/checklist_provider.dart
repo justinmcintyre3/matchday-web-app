@@ -160,4 +160,21 @@ class ChecklistProvider with ChangeNotifier {
       notifyListeners();
     }
   }
+
+  void reorderItems(String groupId, int oldIndex, int newIndex) {
+    final items = _checklists[groupId];
+    if (items != null) {
+      final item = items.removeAt(oldIndex);
+      items.insert(newIndex, item);
+      _saveItems(groupId); // Save the new order
+      notifyListeners(); // Notify listeners to update the UI
+    }
+  }
+
+  void reorderGroups(int oldIndex, int newIndex) {
+    final group = _groups.removeAt(oldIndex);
+    _groups.insert(newIndex, group);
+    _saveGroups(); // Save the new order
+    notifyListeners(); // Notify listeners to update the UI
+  }
 }
