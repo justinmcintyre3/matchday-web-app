@@ -47,7 +47,7 @@ class MyApp extends StatelessWidget {
           scrolledUnderElevation: 0,
         ),
         scaffoldBackgroundColor: const Color(0xFFF2F2F7), // iOS background gray
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
@@ -81,7 +81,7 @@ class MyApp extends StatelessWidget {
             letterSpacing: -0.3,
           ),
         ),
-        dialogTheme: DialogTheme(
+        dialogTheme: DialogThemeData(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
