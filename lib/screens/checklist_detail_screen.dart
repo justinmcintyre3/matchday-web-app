@@ -121,13 +121,16 @@ class _ChecklistDetailScreenState extends State<ChecklistDetailScreen> {
                       child: Text('No items yet. Add one below!'),
                     )
                   : ReorderableListView(
+                padding:
+                const EdgeInsets.only(bottom: kBottomNavigationBarHeight),
                       onReorder: (oldIndex, newIndex) {
                         // Adjust the newIndex if it is greater than the oldIndex
                         if (newIndex > oldIndex) {
                           newIndex--;
                         }
                         // Update the provider with the new order
-                        provider.reorderItems(widget.groupId, oldIndex, newIndex);
+                        provider.reorderItems(
+                            widget.groupId, oldIndex, newIndex);
                       },
                       children: List.generate(items.length, (index) {
                         final item = items[index];
@@ -303,11 +306,13 @@ class _ChecklistDetailScreenState extends State<ChecklistDetailScreen> {
               if (controller.text.isNotEmpty) {
                 // Use dialogContext to access the provider
                 Provider.of<ChecklistProvider>(dialogContext, listen: false)
-                    .updateItem(widget.groupId, ChecklistItem(
-                  id: item.id,
-                  title: controller.text, // New title
-                  isCompleted: item.isCompleted,
-                ));
+                    .updateItem(
+                        widget.groupId,
+                        ChecklistItem(
+                          id: item.id,
+                          title: controller.text, // New title
+                          isCompleted: item.isCompleted,
+                        ));
                 Navigator.of(dialogContext).pop();
               }
             },

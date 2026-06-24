@@ -26,6 +26,8 @@ class HomeScreen extends StatelessWidget {
             ],
           ),
           body: ReorderableListView(
+            padding:
+                const EdgeInsets.only(bottom: kBottomNavigationBarHeight),
             onReorder: (oldIndex, newIndex) {
               if (newIndex > oldIndex) {
                 newIndex--;
