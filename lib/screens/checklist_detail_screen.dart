@@ -178,22 +178,25 @@ class _ChecklistDetailScreenState extends State<ChecklistDetailScreen> {
                               ),
                             ],
                           ),
-                          child: ListTile(
-                            title: Text(
-                              item.title,
-                              style: TextStyle(
-                                decoration: item.isCompleted
-                                    ? TextDecoration.lineThrough
-                                    : null,
-                                color: item.isCompleted
-                                    ? Colors.grey
-                                    : Colors.black,
+                          child: Card(
+                            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                            child: ListTile(
+                              title: Text(
+                                item.title,
+                                style: TextStyle(
+                                  decoration: item.isCompleted
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                  color: item.isCompleted
+                                      ? Colors.grey
+                                      : Colors.white,
+                                ),
                               ),
+                              onTap: () {
+                                provider.toggleItem(widget.groupId, item.id);
+                                _checkCompletion(context, provider);
+                              },
                             ),
-                            onTap: () {
-                              provider.toggleItem(widget.groupId, item.id);
-                              _checkCompletion(context, provider);
-                            },
                           ),
                         );
                       }),

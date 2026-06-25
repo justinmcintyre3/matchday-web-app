@@ -337,7 +337,7 @@ class _MatchSetupWizardState extends State<_MatchSetupWizard> {
         bottom: 24 + keyboardSpace,
       ),
       decoration: const BoxDecoration(
-        color: Color(0xFFF2F2F7),
+        color: Color(0xFF1E1E24),
         borderRadius: BorderRadius.only(
           topLeft: Radius.circular(20),
           topRight: Radius.circular(20),
@@ -376,7 +376,7 @@ class _MatchSetupWizardState extends State<_MatchSetupWizard> {
                       labelText: 'Match Name',
                       hintText: 'e.g. Blue Ridge PRS Regional',
                       border: OutlineInputBorder(),
-                      fillColor: Colors.white,
+                      fillColor: const Color(0xFF121214),
                       filled: true,
                     ),
                     validator: (value) {
@@ -393,7 +393,7 @@ class _MatchSetupWizardState extends State<_MatchSetupWizard> {
                       labelText: 'Match Location',
                       hintText: 'e.g. Clean Valley Range, VA',
                       border: OutlineInputBorder(),
-                      fillColor: Colors.white,
+                      fillColor: const Color(0xFF121214),
                       filled: true,
                     ),
                     validator: (value) {
@@ -406,9 +406,9 @@ class _MatchSetupWizardState extends State<_MatchSetupWizard> {
                   const SizedBox(height: 16),
                   Card(
                     margin: EdgeInsets.zero,
-                    color: Colors.white,
+                    color: const Color(0xFF121214),
                     shape: RoundedRectangleBorder(
-                      side: BorderSide(color: Colors.grey[300]!),
+                      side: const BorderSide(color: Colors.white10),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: ListTile(

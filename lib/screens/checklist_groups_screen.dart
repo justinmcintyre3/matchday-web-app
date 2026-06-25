@@ -247,12 +247,12 @@ class _ExpandableCard extends StatefulWidget {
 class _ExpandableCardState extends State<_ExpandableCard> {
   bool _isExpanded = false;
 
-  @override
   Widget build(BuildContext context) {
     return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: InkWell(
         onTap: widget.onTap,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(14),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(

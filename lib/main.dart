@@ -48,25 +48,29 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Matchday',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF007AFF), // iOS blue
-          brightness: Brightness.light,
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: const Color(0xFF121214),
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFF007AFF),
+          secondary: Color(0xFF00E676),
+          surface: Color(0xFF1E1E24),
+          error: Color(0xFFFF5252),
         ),
         appBarTheme: const AppBarTheme(
           centerTitle: true,
-          backgroundColor: Colors.transparent,
+          backgroundColor: Color(0xFF121214),
           elevation: 0,
           scrolledUnderElevation: 0,
+          iconTheme: IconThemeData(color: Colors.white),
+          titleTextStyle: TextStyle(
+              color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
         ),
-        scaffoldBackgroundColor: const Color(0xFFF2F2F7), // iOS background gray
         cardTheme: CardThemeData(
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(14),
           ),
-          color: Colors.white,
+          color: const Color(0xFF1E1E24),
         ),
         listTileTheme: const ListTileThemeData(
           contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -79,25 +83,29 @@ class MyApp extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
           ),
         ),
+        dialogTheme: DialogThemeData(
+          backgroundColor: const Color(0xFF1E1E24),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
         textTheme: const TextTheme(
           titleLarge: TextStyle(
             fontSize: 17,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
             letterSpacing: -0.5,
           ),
           titleMedium: TextStyle(
             fontSize: 16,
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w600,
+            color: Colors.white70,
             letterSpacing: -0.5,
           ),
           bodyMedium: TextStyle(
             fontSize: 15,
+            color: Colors.white70,
             letterSpacing: -0.3,
-          ),
-        ),
-        dialogTheme: DialogThemeData(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
           ),
         ),
       ),
