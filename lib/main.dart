@@ -1,12 +1,23 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'screens/checklist_groups_screen.dart';
+import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 import 'providers/checklist_provider.dart';
+import 'providers/match_provider.dart';
+import 'screens/main_navigation_container.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Set immersive sticky mode to hide navigation buttons
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  
+  // Initialize Hive
+  await Hive.initFlutter();
+  final matchesBox = await Hive.openBox('matchesBox');
+
   final prefs = await SharedPreferences.getInstance();
 
   if (kDebugMode) {
@@ -19,6 +30,9 @@ void main() async {
       providers: [
         ChangeNotifierProvider(
           create: (_) => ChecklistProvider(prefs),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => MatchProvider(matchesBox),
         ),
       ],
       child: const MyApp(),
@@ -87,7 +101,7 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const HomeScreen(),
+      home: const MainNavigationContainer(),
     );
   }
 }

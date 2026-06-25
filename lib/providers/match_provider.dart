@@ -1,0 +1,459 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
+import 'package:hive_ce/hive.dart';
+import 'package:watch_connectivity/watch_connectivity.dart';
+import '../models/match.dart';
+
+class MatchProvider with ChangeNotifier {
+  final Box _box;
+  final List<Match> _matches = [];
+  String? _activeMatchId;
+  int? _activeStageIndex;
+
+  final _watchConnectivity = WatchConnectivity();
+  final _watchResultController = StreamController<WatchResultEvent>.broadcast();
+  final _watchLiveUpdateController = StreamController<WatchLiveUpdateEvent>.broadcast();
+  final _watchTimerStartedController = StreamController<void>.broadcast();
+
+  MatchProvider(this._box) {
+    _loadMatches();
+    _initWatchConnectivity();
+  }
+
+  List<Match> get matches => _matches;
+  String? get activeMatchId => _activeMatchId;
+  int? get activeStageIndex => _activeStageIndex;
+  Stream<WatchResultEvent> get watchResultStream => _watchResultController.stream;
+  Stream<WatchLiveUpdateEvent> get watchLiveUpdateStream => _watchLiveUpdateController.stream;
+  Stream<void> get watchTimerStartedStream => _watchTimerStartedController.stream;
+
+  Match? get activeMatch {
+    if (_activeMatchId == null) return null;
+    try {
+      return _matches.firstWhere((m) => m.id == _activeMatchId);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Stage? get activeStage {
+    final match = activeMatch;
+    if (match == null || _activeStageIndex == null) return null;
+    if (_activeStageIndex! >= 0 && _activeStageIndex! < match.stages.length) {
+      return match.stages[_activeStageIndex!];
+    }
+    return null;
+  }
+
+  void _loadMatches() {
+    final List<dynamic>? stored = _box.get('matches_list') as List<dynamic>?;
+    if (stored != null) {
+      _matches.clear();
+      for (var item in stored) {
+        if (item is Map) {
+          final Map<String, dynamic> casted = Map<String, dynamic>.from(item);
+          _matches.add(Match.fromMap(casted));
+        } else if (item is String) {
+          _matches.add(Match.fromJson(item));
+        }
+      }
+    }
+    _activeMatchId = _box.get('active_match_id') as String?;
+    _activeStageIndex = _box.get('active_stage_index') as int?;
+    notifyListeners();
+  }
+
+  void _saveMatches() {
+    final List<Map<String, dynamic>> rawList = _matches.map((m) => m.toMap()).toList();
+    _box.put('matches_list', rawList);
+  }
+
+  void addMatch(Match match) {
+    _matches.add(match);
+    _saveMatches();
+    notifyListeners();
+  }
+
+  void deleteMatch(String id) {
+    _matches.removeWhere((m) => m.id == id);
+    if (_activeMatchId == id) {
+      _activeMatchId = null;
+      _activeStageIndex = null;
+      _box.delete('active_match_id');
+      _box.delete('active_stage_index');
+    }
+    _saveMatches();
+    notifyListeners();
+  }
+
+  void setActiveStage(String matchId, int stageIndex) {
+    _activeMatchId = matchId;
+    _activeStageIndex = stageIndex;
+    _box.put('active_match_id', matchId);
+    _box.put('active_stage_index', stageIndex);
+    notifyListeners();
+
+    // Auto-sync active stage to the watch
+    syncActiveStageToWatch();
+  }
+
+  void updateStage(String matchId, Stage updatedStage) {
+    final matchIndex = _matches.indexWhere((m) => m.id == matchId);
+    if (matchIndex != -1) {
+      final stageIndex = _matches[matchIndex].stages.indexWhere((s) => s.stageNumber == updatedStage.stageNumber);
+      if (stageIndex != -1) {
+        _matches[matchIndex].stages[stageIndex] = updatedStage;
+        _saveMatches();
+        notifyListeners();
+      }
+    }
+  }
+
+  void addStage(String matchId) {
+    final matchIndex = _matches.indexWhere((m) => m.id == matchId);
+    if (matchIndex != -1) {
+      final match = _matches[matchIndex];
+      final newStageNumber = match.stages.isEmpty ? 1 : match.stages.last.stageNumber + 1;
+      match.stages.add(Stage(
+        stageNumber: newStageNumber,
+        status: 'pending',
+        targets: [],
+        windPlan: WindPlan(),
+        shotResults: [],
+      ));
+      
+      // Update match with new stage count
+      final updatedMatch = Match(
+        id: match.id,
+        name: match.name,
+        location: match.location,
+        date: match.date,
+        numStages: match.stages.length,
+        shotsPerStage: match.shotsPerStage,
+        stages: match.stages,
+        winnerHits: match.winnerHits,
+        position: match.position,
+        matchNotes: match.matchNotes,
+        deletedMentalTags: match.deletedMentalTags,
+        deletedSkillsTags: match.deletedSkillsTags,
+        deletedEnvTags: match.deletedEnvTags,
+        customMentalTags: match.customMentalTags,
+        customSkillsTags: match.customSkillsTags,
+        customEnvTags: match.customEnvTags,
+      );
+      _matches[matchIndex] = updatedMatch;
+      _saveMatches();
+      notifyListeners();
+    }
+  }
+
+  void removeStage(String matchId, int stageNumber) {
+    final matchIndex = _matches.indexWhere((m) => m.id == matchId);
+    if (matchIndex != -1) {
+      final match = _matches[matchIndex];
+      match.stages.removeWhere((s) => s.stageNumber == stageNumber);
+      
+      // Re-index remaining stages to ensure continuous numbering
+      for (int i = 0; i < match.stages.length; i++) {
+        final oldStage = match.stages[i];
+        match.stages[i] = Stage(
+          stageNumber: i + 1,
+          name: oldStage.name,
+          status: oldStage.status,
+          numTargets: oldStage.numTargets,
+          targets: oldStage.targets,
+          windPlan: oldStage.windPlan,
+          timedOut: oldStage.timedOut,
+          timeRemaining: oldStage.timeRemaining,
+          avgHeartRate: oldStage.avgHeartRate,
+          shotResults: oldStage.shotResults,
+          mentalErrors: oldStage.mentalErrors,
+          skillsErrors: oldStage.skillsErrors,
+          environmentalErrors: oldStage.environmentalErrors,
+          timeLimit: oldStage.timeLimit,
+        );
+      }
+
+      final updatedMatch = Match(
+        id: match.id,
+        name: match.name,
+        location: match.location,
+        date: match.date,
+        numStages: match.stages.length,
+        shotsPerStage: match.shotsPerStage,
+        stages: match.stages,
+        winnerHits: match.winnerHits,
+        position: match.position,
+        matchNotes: match.matchNotes,
+        deletedMentalTags: match.deletedMentalTags,
+        deletedSkillsTags: match.deletedSkillsTags,
+        deletedEnvTags: match.deletedEnvTags,
+        customMentalTags: match.customMentalTags,
+        customSkillsTags: match.customSkillsTags,
+        customEnvTags: match.customEnvTags,
+      );
+      _matches[matchIndex] = updatedMatch;
+      
+      // Adjust active stage index bounds if it becomes invalid
+      if (_activeMatchId == matchId && _activeStageIndex != null) {
+        if (_activeStageIndex! >= match.stages.length) {
+          _activeStageIndex = match.stages.isEmpty ? null : match.stages.length - 1;
+          if (_activeStageIndex == null) {
+            _box.delete('active_stage_index');
+          } else {
+            _box.put('active_stage_index', _activeStageIndex);
+          }
+        }
+      }
+
+      _saveMatches();
+      notifyListeners();
+    }
+  }
+
+  void updateMatchDetails(String matchId, {int? winnerHits, int? position, String? matchNotes}) {
+    final matchIndex = _matches.indexWhere((m) => m.id == matchId);
+    if (matchIndex != -1) {
+      final match = _matches[matchIndex];
+      _matches[matchIndex] = Match(
+        id: match.id,
+        name: match.name,
+        location: match.location,
+        date: match.date,
+        numStages: match.numStages,
+        shotsPerStage: match.shotsPerStage,
+        stages: match.stages,
+        winnerHits: winnerHits,
+        position: position,
+        matchNotes: matchNotes,
+        deletedMentalTags: match.deletedMentalTags,
+        deletedSkillsTags: match.deletedSkillsTags,
+        deletedEnvTags: match.deletedEnvTags,
+        customMentalTags: match.customMentalTags,
+        customSkillsTags: match.customSkillsTags,
+        customEnvTags: match.customEnvTags,
+      );
+      _saveMatches();
+      notifyListeners();
+    }
+  }
+
+  void addCustomTagToMatch(String matchId, String tag, String errorType) {
+    final matchIndex = _matches.indexWhere((m) => m.id == matchId);
+    if (matchIndex != -1) {
+      final match = _matches[matchIndex];
+      final List<String> updatedCustomMental = List.from(match.customMentalTags);
+      final List<String> updatedCustomSkills = List.from(match.customSkillsTags);
+      final List<String> updatedCustomEnv = List.from(match.customEnvTags);
+
+      if (errorType == 'mental') {
+        if (!updatedCustomMental.contains(tag)) updatedCustomMental.add(tag);
+      } else if (errorType == 'skills') {
+        if (!updatedCustomSkills.contains(tag)) updatedCustomSkills.add(tag);
+      } else if (errorType == 'env') {
+        if (!updatedCustomEnv.contains(tag)) updatedCustomEnv.add(tag);
+      }
+
+      // Also ensure it is removed from deleted tags list if it was previously deleted
+      final List<String> updatedDeletedMental = List.from(match.deletedMentalTags)..remove(tag);
+      final List<String> updatedDeletedSkills = List.from(match.deletedSkillsTags)..remove(tag);
+      final List<String> updatedDeletedEnv = List.from(match.deletedEnvTags)..remove(tag);
+
+      _matches[matchIndex] = Match(
+        id: match.id,
+        name: match.name,
+        location: match.location,
+        date: match.date,
+        numStages: match.numStages,
+        shotsPerStage: match.shotsPerStage,
+        stages: match.stages,
+        winnerHits: match.winnerHits,
+        position: match.position,
+        matchNotes: match.matchNotes,
+        deletedMentalTags: updatedDeletedMental,
+        deletedSkillsTags: updatedDeletedSkills,
+        deletedEnvTags: updatedDeletedEnv,
+        customMentalTags: updatedCustomMental,
+        customSkillsTags: updatedCustomSkills,
+        customEnvTags: updatedCustomEnv,
+      );
+
+      _saveMatches();
+      notifyListeners();
+    }
+  }
+
+  void deleteTagFromMatch(String matchId, String tag, String errorType) {
+    final matchIndex = _matches.indexWhere((m) => m.id == matchId);
+    if (matchIndex != -1) {
+      final match = _matches[matchIndex];
+      final List<String> updatedDeletedMental = List.from(match.deletedMentalTags);
+      final List<String> updatedDeletedSkills = List.from(match.deletedSkillsTags);
+      final List<String> updatedDeletedEnv = List.from(match.deletedEnvTags);
+
+      final List<String> updatedCustomMental = List.from(match.customMentalTags);
+      final List<String> updatedCustomSkills = List.from(match.customSkillsTags);
+      final List<String> updatedCustomEnv = List.from(match.customEnvTags);
+
+      if (errorType == 'mental') {
+        if (!updatedDeletedMental.contains(tag)) updatedDeletedMental.add(tag);
+        updatedCustomMental.remove(tag);
+      } else if (errorType == 'skills') {
+        if (!updatedDeletedSkills.contains(tag)) updatedDeletedSkills.add(tag);
+        updatedCustomSkills.remove(tag);
+      } else if (errorType == 'env') {
+        if (!updatedDeletedEnv.contains(tag)) updatedDeletedEnv.add(tag);
+        updatedCustomEnv.remove(tag);
+      }
+
+      // Also remove it from all stages in this match
+      for (var stage in match.stages) {
+        if (errorType == 'mental') {
+          final tags = stage.mentalErrors
+              .split(',')
+              .map((t) => t.trim())
+              .where((t) => t.isNotEmpty && t != tag)
+              .toList();
+          stage.mentalErrors = tags.join(', ');
+        } else if (errorType == 'skills') {
+          final tags = stage.skillsErrors
+              .split(',')
+              .map((t) => t.trim())
+              .where((t) => t.isNotEmpty && t != tag)
+              .toList();
+          stage.skillsErrors = tags.join(', ');
+        } else if (errorType == 'env') {
+          final tags = stage.environmentalErrors
+              .split(',')
+              .map((t) => t.trim())
+              .where((t) => t.isNotEmpty && t != tag)
+              .toList();
+          stage.environmentalErrors = tags.join(', ');
+        }
+      }
+
+      _matches[matchIndex] = Match(
+        id: match.id,
+        name: match.name,
+        location: match.location,
+        date: match.date,
+        numStages: match.numStages,
+        shotsPerStage: match.shotsPerStage,
+        stages: match.stages,
+        winnerHits: match.winnerHits,
+        position: match.position,
+        matchNotes: match.matchNotes,
+        deletedMentalTags: updatedDeletedMental,
+        deletedSkillsTags: updatedDeletedSkills,
+        deletedEnvTags: updatedDeletedEnv,
+        customMentalTags: updatedCustomMental,
+        customSkillsTags: updatedCustomSkills,
+        customEnvTags: updatedCustomEnv,
+      );
+
+      _saveMatches();
+      notifyListeners();
+    }
+  }
+
+  Future<void> syncActiveStageToWatch() async {
+    final stage = activeStage;
+    if (stage == null) return;
+
+    try {
+      final isSupported = await _watchConnectivity.isSupported;
+      if (!isSupported) return;
+
+      await _watchConnectivity.sendMessage({
+        'type': 'sync_stage',
+        'stageNumber': stage.stageNumber,
+        'timeLimit': stage.timeLimit,
+      });
+      debugPrint('Synced active stage ${stage.stageNumber} to watch');
+    } catch (e) {
+      debugPrint('Error syncing stage to watch: $e');
+    }
+  }
+
+  void _initWatchConnectivity() {
+    _watchConnectivity.messageStream.listen((message) {
+      debugPrint('Incoming watch message: $message');
+      if (message['type'] == 'stage_result') {
+        final timeLeft = message['timeLeft'] as int?;
+        final avgHeartRate = message['avgHeartRate'] as int?;
+        final lastSetTime = message['lastSetTime'] as int?;
+
+        if (timeLeft != null && avgHeartRate != null) {
+          final event = WatchResultEvent(
+            timeLeft: timeLeft,
+            avgHeartRate: avgHeartRate,
+            lastSetTime: lastSetTime ?? 105,
+          );
+          _handleWatchResult(event);
+        }
+      } else if (message['type'] == 'live_update') {
+        final timeLeft = message['timeLeft'] as int?;
+        final heartRate = message['heartRate'] as int?;
+        if (timeLeft != null && heartRate != null) {
+          final stage = activeStage;
+          if (stage != null) {
+            stage.timeRemaining = timeLeft;
+            stage.avgHeartRate = heartRate;
+            notifyListeners();
+          }
+          _watchLiveUpdateController.add(WatchLiveUpdateEvent(
+            timeLeft: timeLeft,
+            heartRate: heartRate,
+          ));
+        }
+      } else if (message['type'] == 'timer_started') {
+        _watchTimerStartedController.add(null);
+      }
+    });
+  }
+
+  void _handleWatchResult(WatchResultEvent event) {
+    final match = activeMatch;
+    final stage = activeStage;
+    if (match != null && stage != null) {
+      stage.timeRemaining = event.timeLeft;
+      stage.avgHeartRate = event.avgHeartRate;
+      stage.timedOut = (event.timeLeft == 0);
+      
+      updateStage(match.id, stage);
+
+      // Trigger UI callback stream so detail screen can prompt user
+      _watchResultController.add(event);
+    }
+  }
+
+  @override
+  void dispose() {
+    _watchResultController.close();
+    _watchLiveUpdateController.close();
+    _watchTimerStartedController.close();
+    super.dispose();
+  }
+}
+
+class WatchResultEvent {
+  final int timeLeft;
+  final int avgHeartRate;
+  final int lastSetTime;
+
+  WatchResultEvent({
+    required this.timeLeft,
+    required this.avgHeartRate,
+    required this.lastSetTime,
+  });
+}
+
+class WatchLiveUpdateEvent {
+  final int timeLeft;
+  final int heartRate;
+
+  WatchLiveUpdateEvent({
+    required this.timeLeft,
+    required this.heartRate,
+  });
+}
