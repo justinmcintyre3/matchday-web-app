@@ -17,6 +17,8 @@ class Match {
   final List<String> customMentalTags;
   final List<String> customSkillsTags;
   final List<String> customEnvTags;
+  final List<String> customTargetTypes;
+  final List<String> deletedTargetTypes;
 
   Match({
     required this.id,
@@ -35,12 +37,16 @@ class Match {
     List<String>? customMentalTags,
     List<String>? customSkillsTags,
     List<String>? customEnvTags,
+    List<String>? customTargetTypes,
+    List<String>? deletedTargetTypes,
   }) : deletedMentalTags = deletedMentalTags ?? [],
        deletedSkillsTags = deletedSkillsTags ?? [],
        deletedEnvTags = deletedEnvTags ?? [],
        customMentalTags = customMentalTags ?? [],
        customSkillsTags = customSkillsTags ?? [],
-       customEnvTags = customEnvTags ?? [];
+       customEnvTags = customEnvTags ?? [],
+       customTargetTypes = customTargetTypes ?? [],
+       deletedTargetTypes = deletedTargetTypes ?? [];
 
   int get totalHits {
     return stages.fold(0, (sum, stage) => sum + stage.hitCount);
@@ -78,6 +84,8 @@ class Match {
       'customMentalTags': customMentalTags,
       'customSkillsTags': customSkillsTags,
       'customEnvTags': customEnvTags,
+      'customTargetTypes': customTargetTypes,
+      'deletedTargetTypes': deletedTargetTypes,
     };
   }
 
@@ -99,6 +107,8 @@ class Match {
       customMentalTags: List<String>.from(map['customMentalTags'] ?? const []),
       customSkillsTags: List<String>.from(map['customSkillsTags'] ?? const []),
       customEnvTags: List<String>.from(map['customEnvTags'] ?? const []),
+      customTargetTypes: List<String>.from(map['customTargetTypes'] ?? const []),
+      deletedTargetTypes: List<String>.from(map['deletedTargetTypes'] ?? const []),
     );
   }
 

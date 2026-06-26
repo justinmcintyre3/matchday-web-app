@@ -431,8 +431,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                           setState(() {
                             _stage.targets.add(Target(
                               index: _stage.targets.length + 1,
-                              size: '1.5 MIL',
-                              distance: '400 YD',
+                              size: '',
+                              distance: '',
                               degreeOfFire: '0°',
                               type: 'IPSC',
                               shotsCount: 1,
@@ -1594,6 +1594,21 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     );
   }
 
+  List<String> _buildTargetTypeOptions(Match match) {
+    final Set<String> allTypes = {};
+    allTypes.addAll(_targetTypes.where((t) => t != 'Other'));
+    allTypes.addAll(match.customTargetTypes);
+    for (var stage in match.stages) {
+      for (var t in stage.targets) {
+        if (t.type.isNotEmpty && t.type != 'Other') {
+          allTypes.add(t.type);
+        }
+      }
+    }
+    allTypes.removeAll(match.deletedTargetTypes);
+    return allTypes.toList();
+  }
+
   void _showShapeSelector(Target target) {
     showModalBottomSheet(
       context: context,
@@ -1607,14 +1622,23 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       ),
       builder: (context) {
         final originalType = target.type;
+        final match = context.read<MatchProvider>().matches.firstWhere(
+              (m) => m.id == widget.matchId,
+            );
+        var availableTypes = _buildTargetTypeOptions(match);
+        final prefillText = (availableTypes.contains(target.type) || target.type == 'Other') ? '' : target.type;
         final TextEditingController customController = TextEditingController(
-          text: _targetTypes.contains(target.type) ? '' : target.type,
+          text: prefillText,
         );
 
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final currentMatch = context.read<MatchProvider>().matches.firstWhere(
+                  (m) => m.id == widget.matchId,
+                );
+            availableTypes = _buildTargetTypeOptions(currentMatch);
             final isCustomMode =
-                !_targetTypes.contains(target.type) || target.type == 'Other';
+                !availableTypes.contains(target.type) || target.type == 'Other';
 
             return Padding(
               padding: EdgeInsets.only(
@@ -1654,7 +1678,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        ..._targetTypes.where((t) => t != 'Other').map((type) {
+                        ...availableTypes.map((type) {
                           final isSelected = target.type == type;
                           return InkWell(
                             onTap: () {
@@ -1662,6 +1686,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                 target.type = type;
                               });
                               Navigator.pop(context);
+                            },
+                            onLongPress: () {
+                              _confirmDeleteTag(context, type, 'targetType', setModalState);
                             },
                             child: Container(
                               padding: const EdgeInsets.symmetric(
@@ -1749,7 +1776,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                             onPressed: () {
                               setModalState(() {
                                 target.type =
-                                    _targetTypes.contains(originalType)
+                                    availableTypes.contains(originalType)
                                         ? originalType
                                         : 'IPSC';
                               });
@@ -1768,6 +1795,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                             onPressed: () {
                               final text = customController.text.trim();
                               if (text.isNotEmpty) {
+                                context.read<MatchProvider>().addCustomTagToMatch(widget.matchId, text, 'targetType');
                                 setState(() {
                                   target.type = text;
                                 });

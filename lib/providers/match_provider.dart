@@ -140,6 +140,8 @@ class MatchProvider with ChangeNotifier {
         customMentalTags: match.customMentalTags,
         customSkillsTags: match.customSkillsTags,
         customEnvTags: match.customEnvTags,
+        customTargetTypes: match.customTargetTypes,
+        deletedTargetTypes: match.deletedTargetTypes,
       );
       _matches[matchIndex] = updatedMatch;
       _saveMatches();
@@ -191,6 +193,8 @@ class MatchProvider with ChangeNotifier {
         customMentalTags: match.customMentalTags,
         customSkillsTags: match.customSkillsTags,
         customEnvTags: match.customEnvTags,
+        customTargetTypes: match.customTargetTypes,
+        deletedTargetTypes: match.deletedTargetTypes,
       );
       _matches[matchIndex] = updatedMatch;
       
@@ -232,6 +236,8 @@ class MatchProvider with ChangeNotifier {
         customMentalTags: match.customMentalTags,
         customSkillsTags: match.customSkillsTags,
         customEnvTags: match.customEnvTags,
+        customTargetTypes: match.customTargetTypes,
+        deletedTargetTypes: match.deletedTargetTypes,
       );
       _saveMatches();
       notifyListeners();
@@ -245,6 +251,7 @@ class MatchProvider with ChangeNotifier {
       final List<String> updatedCustomMental = List.from(match.customMentalTags);
       final List<String> updatedCustomSkills = List.from(match.customSkillsTags);
       final List<String> updatedCustomEnv = List.from(match.customEnvTags);
+      final List<String> updatedCustomTargetTypes = List.from(match.customTargetTypes);
 
       if (errorType == 'mental') {
         if (!updatedCustomMental.contains(tag)) updatedCustomMental.add(tag);
@@ -252,12 +259,15 @@ class MatchProvider with ChangeNotifier {
         if (!updatedCustomSkills.contains(tag)) updatedCustomSkills.add(tag);
       } else if (errorType == 'env') {
         if (!updatedCustomEnv.contains(tag)) updatedCustomEnv.add(tag);
+      } else if (errorType == 'targetType') {
+        if (!updatedCustomTargetTypes.contains(tag)) updatedCustomTargetTypes.add(tag);
       }
 
       // Also ensure it is removed from deleted tags list if it was previously deleted
       final List<String> updatedDeletedMental = List.from(match.deletedMentalTags)..remove(tag);
       final List<String> updatedDeletedSkills = List.from(match.deletedSkillsTags)..remove(tag);
       final List<String> updatedDeletedEnv = List.from(match.deletedEnvTags)..remove(tag);
+      final List<String> updatedDeletedTargetTypes = List.from(match.deletedTargetTypes)..remove(tag);
 
       _matches[matchIndex] = Match(
         id: match.id,
@@ -276,6 +286,8 @@ class MatchProvider with ChangeNotifier {
         customMentalTags: updatedCustomMental,
         customSkillsTags: updatedCustomSkills,
         customEnvTags: updatedCustomEnv,
+        customTargetTypes: updatedCustomTargetTypes,
+        deletedTargetTypes: updatedDeletedTargetTypes,
       );
 
       _saveMatches();
@@ -290,10 +302,12 @@ class MatchProvider with ChangeNotifier {
       final List<String> updatedDeletedMental = List.from(match.deletedMentalTags);
       final List<String> updatedDeletedSkills = List.from(match.deletedSkillsTags);
       final List<String> updatedDeletedEnv = List.from(match.deletedEnvTags);
+      final List<String> updatedDeletedTargetTypes = List.from(match.deletedTargetTypes);
 
       final List<String> updatedCustomMental = List.from(match.customMentalTags);
       final List<String> updatedCustomSkills = List.from(match.customSkillsTags);
       final List<String> updatedCustomEnv = List.from(match.customEnvTags);
+      final List<String> updatedCustomTargetTypes = List.from(match.customTargetTypes);
 
       if (errorType == 'mental') {
         if (!updatedDeletedMental.contains(tag)) updatedDeletedMental.add(tag);
@@ -304,6 +318,9 @@ class MatchProvider with ChangeNotifier {
       } else if (errorType == 'env') {
         if (!updatedDeletedEnv.contains(tag)) updatedDeletedEnv.add(tag);
         updatedCustomEnv.remove(tag);
+      } else if (errorType == 'targetType') {
+        if (!updatedDeletedTargetTypes.contains(tag)) updatedDeletedTargetTypes.add(tag);
+        updatedCustomTargetTypes.remove(tag);
       }
 
       // Also remove it from all stages in this match
@@ -349,6 +366,8 @@ class MatchProvider with ChangeNotifier {
         customMentalTags: updatedCustomMental,
         customSkillsTags: updatedCustomSkills,
         customEnvTags: updatedCustomEnv,
+        customTargetTypes: updatedCustomTargetTypes,
+        deletedTargetTypes: updatedDeletedTargetTypes,
       );
 
       _saveMatches();

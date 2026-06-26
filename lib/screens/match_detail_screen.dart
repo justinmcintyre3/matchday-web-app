@@ -83,7 +83,7 @@ class MatchDetailScreen extends StatelessWidget {
             children: [
               // Top Stats Dashboard
               Container(
-                color: Colors.white,
+                color: const Color(0xFF1E1E24),
                 padding: const EdgeInsets.all(20.0),
                 child: Column(
                   children: [
@@ -95,18 +95,18 @@ class MatchDetailScreen extends StatelessWidget {
                           children: [
                             Text(
                               match.location,
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 14,
-                                color: Colors.grey[600],
+                                color: Colors.white70,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               DateFormat('MMMM d, yyyy').format(match.date),
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 13,
-                                color: Colors.grey[500],
+                                color: Colors.white54,
                               ),
                             ),
                           ],
@@ -121,7 +121,7 @@ class MatchDetailScreen extends StatelessWidget {
                           child: Text(
                             'Hit Rate: ${hitRate.toStringAsFixed(1)}%',
                             style: const TextStyle(
-                              color: Colors.green,
+                              color: Colors.greenAccent,
                               fontWeight: FontWeight.bold,
                               fontSize: 13,
                             ),
@@ -246,15 +246,16 @@ class MatchDetailScreen extends StatelessWidget {
           style: const TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.bold,
+            color: Colors.white,
             letterSpacing: -0.5,
           ),
         ),
         const SizedBox(height: 2),
         Text(
           label,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 11,
-            color: Colors.grey[500],
+            color: Colors.white70,
           ),
         ),
       ],
@@ -337,9 +338,9 @@ class MatchDetailScreen extends StatelessWidget {
                   ? const Icon(Icons.check, color: Colors.green)
                   : Text(
                       '${stage.stageNumber}',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: Colors.grey[700],
+                        color: Colors.white70,
                       ),
                     ),
             ),
