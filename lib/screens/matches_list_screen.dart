@@ -376,7 +376,7 @@ class _MatchSetupWizardState extends State<_MatchSetupWizard> {
                       labelText: 'Match Name',
                       hintText: 'e.g. Blue Ridge PRS Regional',
                       border: OutlineInputBorder(),
-                      fillColor: const Color(0xFF121214),
+                      fillColor: Color(0xFF121214),
                       filled: true,
                     ),
                     validator: (value) {
@@ -393,7 +393,7 @@ class _MatchSetupWizardState extends State<_MatchSetupWizard> {
                       labelText: 'Match Location',
                       hintText: 'e.g. Clean Valley Range, VA',
                       border: OutlineInputBorder(),
-                      fillColor: const Color(0xFF121214),
+                      fillColor: Color(0xFF121214),
                       filled: true,
                     ),
                     validator: (value) {

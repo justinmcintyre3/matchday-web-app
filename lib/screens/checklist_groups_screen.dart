@@ -247,6 +247,7 @@ class _ExpandableCard extends StatefulWidget {
 class _ExpandableCardState extends State<_ExpandableCard> {
   bool _isExpanded = false;
 
+  @override
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
