@@ -73,7 +73,8 @@ class MatchDetailScreen extends StatelessWidget {
                   HapticFeedback.lightImpact();
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (context) => MatchSummaryScreen(matchId: match.id),
+                      builder: (context) =>
+                          MatchSummaryScreen(matchId: match.id),
                     ),
                   );
                 },
@@ -81,7 +82,22 @@ class MatchDetailScreen extends StatelessWidget {
               IconButton(
                 icon: const Icon(Icons.share_outlined),
                 onPressed: () {
-                  // Optional share function
+                  HapticFeedback.lightImpact();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text(
+                        'Coming soon!',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
+                      ),
+                      behavior: SnackBarBehavior.floating,
+                      duration: const Duration(seconds: 2),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      backgroundColor: Colors.grey[300],
+                    ),
+                  );
                 },
               ),
             ],
@@ -127,7 +143,7 @@ class MatchDetailScreen extends StatelessWidget {
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
-                            'Hit Rate: ${hitRate.toStringAsFixed(1)}%',
+                            'Impact %: ${hitRate.toStringAsFixed(1)}%',
                             style: const TextStyle(
                               color: Colors.greenAccent,
                               fontWeight: FontWeight.bold,
@@ -192,7 +208,8 @@ class MatchDetailScreen extends StatelessWidget {
                       children: [
                         Text(
                           '${match.stages.length} Stages',
-                          style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                          style:
+                              TextStyle(fontSize: 12, color: Colors.grey[500]),
                         ),
                         const SizedBox(width: 8),
                         TextButton.icon(
@@ -200,7 +217,8 @@ class MatchDetailScreen extends StatelessWidget {
                             HapticFeedback.lightImpact();
                             provider.addStage(match.id);
                           },
-                          icon: const Icon(Icons.add, size: 16, color: Color(0xFF007AFF)),
+                          icon: const Icon(Icons.add,
+                              size: 16, color: Color(0xFF007AFF)),
                           label: const Text(
                             'Add Stage',
                             style: TextStyle(
@@ -209,7 +227,8 @@ class MatchDetailScreen extends StatelessWidget {
                                 fontWeight: FontWeight.bold),
                           ),
                           style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
                             minimumSize: Size.zero,
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
@@ -290,7 +309,8 @@ class MatchDetailScreen extends StatelessWidget {
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('Delete Stage'),
-            content: Text('Are you sure you want to delete ${stage.name.isNotEmpty ? stage.name : "Stage ${stage.stageNumber}"}? Remaining stages will be renumbered.'),
+            content: Text(
+                'Are you sure you want to delete ${stage.name.isNotEmpty ? stage.name : "Stage ${stage.stageNumber}"}? Remaining stages will be renumbered.'),
             actions: [
               TextButton(
                 onPressed: () {
@@ -304,7 +324,8 @@ class MatchDetailScreen extends StatelessWidget {
                   HapticFeedback.lightImpact();
                   Navigator.pop(context, true);
                 },
-                child: const Text('Delete', style: TextStyle(color: Colors.redAccent)),
+                child: const Text('Delete',
+                    style: TextStyle(color: Colors.redAccent)),
               ),
             ],
           ),
@@ -317,7 +338,8 @@ class MatchDetailScreen extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 8.0),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           onTap: () {
             HapticFeedback.lightImpact();
             // Set active stage in provider (starts syncing to watch!)
@@ -395,8 +417,8 @@ class MatchDetailScreen extends StatelessWidget {
                           const SizedBox(width: 2),
                           Text(
                             '${stage.avgHeartRate} BPM',
-                            style:
-                                TextStyle(fontSize: 11, color: Colors.grey[500]),
+                            style: TextStyle(
+                                fontSize: 11, color: Colors.grey[500]),
                           ),
                         ],
                       ),
