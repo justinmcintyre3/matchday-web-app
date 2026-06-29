@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'matches_list_screen.dart';
 import 'checklist_groups_screen.dart';
+import 'settings_screen.dart';
 
 class MainNavigationContainer extends StatefulWidget {
   const MainNavigationContainer({super.key});
@@ -16,6 +17,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
   final List<Widget> _screens = [
     const MatchesListScreen(),
     const HomeScreen(), // The original checklist Groups screen
+    const SettingsScreen(),
   ];
 
   @override
@@ -60,6 +62,11 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
               icon: Icon(Icons.fact_check_outlined, size: 24),
               activeIcon: Icon(Icons.fact_check, size: 24),
               label: 'Checklists',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.settings_outlined, size: 24),
+              activeIcon: Icon(Icons.settings, size: 24),
+              label: 'Settings',
             ),
           ],
         ),
