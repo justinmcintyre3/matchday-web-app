@@ -24,17 +24,54 @@ class KestrelDetailScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(device?.name ?? 'Kestrel'),
         actions: [
-          if (state == KestrelConnectionState.connected)
-            TextButton(
-              onPressed: () async {
-                HapticFeedback.mediumImpact();
-                await provider.forgetDevice();
-                if (context.mounted) Navigator.pop(context);
+          if (device != null)
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert, color: Colors.white70),
+              color: const Color(0xFF1E1E24),
+              onSelected: (value) async {
+                if (value == 'forget') {
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Forget Device'),
+                      content: const Text(
+                        'This will disconnect and remove the Kestrel device. '
+                        'You will need to scan and pair again.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancel'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text(
+                            'Forget',
+                            style: TextStyle(color: Colors.redAccent),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirm == true && context.mounted) {
+                    await context.read<KestrelProvider>().forgetDevice();
+                    if (context.mounted) Navigator.of(context).pop();
+                  }
+                }
               },
-              child: const Text(
-                'Forget',
-                style: TextStyle(color: Color(0xFFFF5252)),
-              ),
+              itemBuilder: (_) => [
+                const PopupMenuItem(
+                  value: 'forget',
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
+                      SizedBox(width: 10),
+                      Text('Forget Device',
+                          style: TextStyle(color: Colors.redAccent)),
+                    ],
+                  ),
+                ),
+              ],
             ),
         ],
       ),

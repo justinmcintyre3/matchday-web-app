@@ -7,6 +7,10 @@ import '../features/kestrel_ble/providers/kestrel_provider.dart';
 import '../features/kestrel_ble/models/kestrel_device.dart';
 import '../features/kestrel_ble/screens/kestrel_scan_screen.dart';
 import '../features/kestrel_ble/screens/kestrel_detail_screen.dart';
+import '../features/sg_pulse/providers/sg_pulse_provider.dart';
+import '../features/sg_pulse/models/sg_pulse_device.dart';
+import '../features/sg_pulse/screens/sg_pulse_scan_screen.dart';
+import '../features/sg_pulse/screens/sg_pulse_detail_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -90,6 +94,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final kestrel = context.watch<KestrelProvider>().connectedDevice;
     final isKestrelSaved = kestrel != null;
     final kestrelConnected = kestrel?.state == KestrelConnectionState.connected;
+
+    final sgPulse = context.watch<SgPulseProvider>().connectedDevice;
+    final isSgPulseSaved = sgPulse != null;
+    final sgPulseConnected = sgPulse?.state == SgPulseConnectionState.connected;
 
     return Scaffold(
       appBar: AppBar(
@@ -272,6 +280,78 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                     ),
                   ],
+
+                  // ── SG Pulse tile (if a device is saved) ──────────────────
+                  if (isSgPulseSaved) ...[
+                    Divider(
+                      height: 1,
+                      indent: 56,
+                      color: Colors.white.withValues(alpha: 0.06),
+                    ),
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 6,
+                      ),
+                      leading: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: (sgPulseConnected ? const Color(0xFF00E676) : Colors.white)
+                              .withValues(alpha: sgPulseConnected ? 0.12 : 0.05),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          sgPulseConnected ? Icons.bluetooth_connected : Icons.bluetooth,
+                          color: sgPulseConnected ? const Color(0xFF00E676) : Colors.white38,
+                          size: 20,
+                        ),
+                      ),
+                      title: Text(
+                        sgPulse.name,
+                        style: TextStyle(
+                          color: sgPulseConnected ? Colors.white : Colors.white70,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      subtitle: Text(
+                        sgPulseConnected 
+                          ? 'SG Pulse • Connected'
+                          : 'SG Pulse • Disconnected',
+                        style: TextStyle(
+                          color: sgPulseConnected ? const Color(0xFF00E676) : Colors.white38,
+                          fontSize: 12,
+                        ),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (sgPulseConnected)
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF00E676),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          if (sgPulseConnected) const SizedBox(width: 8),
+                          const Icon(Icons.chevron_right,
+                              color: Colors.white38, size: 20),
+                        ],
+                      ),
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const SgPulseDetailScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -379,17 +459,17 @@ class _AddDeviceSheet extends StatelessWidget {
           // ── IMU Device tile ───────────────────────────────────────────
           _DeviceTypeTile(
             icon: Icons.sensors,
-            iconColor: Colors.white38,
+            iconColor: const Color(0xFF007AFF),
             title: 'IMU Device',
-            subtitle: 'Coming soon',
-            enabled: false,
+            subtitle: 'SG Pulse',
+            enabled: true,
             onTap: () {
-              HapticFeedback.lightImpact();
+              HapticFeedback.mediumImpact();
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('IMU device support is coming soon.'),
-                  behavior: SnackBarBehavior.floating,
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const SgPulseScanScreen(),
                 ),
               );
             },

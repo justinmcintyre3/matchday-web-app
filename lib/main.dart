@@ -7,6 +7,7 @@ import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 import 'providers/checklist_provider.dart';
 import 'providers/match_provider.dart';
 import 'features/kestrel_ble/providers/kestrel_provider.dart';
+import 'features/sg_pulse/providers/sg_pulse_provider.dart';
 import 'screens/main_navigation_container.dart';
 
 void main() async {
@@ -37,6 +38,9 @@ void main() async {
         ),
         ChangeNotifierProvider(
           create: (_) => KestrelProvider(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => SgPulseProvider(),
         ),
       ],
       child: const MyApp(),
