@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:provider/provider.dart';
 import '../models/checklist_group.dart';
@@ -20,6 +21,7 @@ class HomeScreen extends StatelessWidget {
               IconButton(
                 icon: const Icon(Icons.add),
                 onPressed: () {
+                  HapticFeedback.lightImpact();
                   _showAddChecklistDialog(context);
                 },
               ),
@@ -45,8 +47,10 @@ class HomeScreen extends StatelessWidget {
                   motion: const DrawerMotion(),
                   children: [
                     SlidableAction(
-                      onPressed: (context) =>
-                          _showEditDialog(context, provider, group),
+                      onPressed: (context) {
+                        HapticFeedback.lightImpact();
+                        _showEditDialog(context, provider, group);
+                      },
                       backgroundColor: Colors.blue,
                       foregroundColor: Colors.white,
                       icon: Icons.edit,
@@ -59,6 +63,7 @@ class HomeScreen extends StatelessWidget {
                   children: [
                     SlidableAction(
                       onPressed: (context) {
+                        HapticFeedback.lightImpact();
                         provider.deleteGroup(group.id);
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
@@ -66,6 +71,7 @@ class HomeScreen extends StatelessWidget {
                             action: SnackBarAction(
                               label: 'Undo',
                               onPressed: () {
+                                HapticFeedback.lightImpact();
                                 provider.restoreGroup(group);
                               },
                             ),
@@ -86,6 +92,7 @@ class HomeScreen extends StatelessWidget {
                   totalItems: items.length,
                   createdAt: group.createdAt,
                   onTap: () {
+                    HapticFeedback.lightImpact();
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (context) =>
@@ -114,6 +121,7 @@ class HomeScreen extends StatelessWidget {
         ),
         content: TextField(
           controller: controller,
+          onTap: () => HapticFeedback.lightImpact(),
           decoration: InputDecoration(
             hintText: 'Enter checklist name',
             border: OutlineInputBorder(
@@ -137,12 +145,15 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
           autofocus: true,
-          textCapitalization: TextCapitalization.sentences,
+          textCapitalization: TextCapitalization.words,
           style: Theme.of(context).textTheme.bodyMedium,
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              Navigator.pop(context);
+            },
             child: Text(
               'Cancel',
               style: TextStyle(
@@ -152,6 +163,7 @@ class HomeScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () {
+              HapticFeedback.lightImpact();
               if (controller.text.isNotEmpty) {
                 context.read<ChecklistProvider>().addGroup(controller.text);
                 Navigator.pop(context);
@@ -183,6 +195,7 @@ class HomeScreen extends StatelessWidget {
         ),
         content: TextField(
           controller: controller,
+          onTap: () => HapticFeedback.lightImpact(),
           decoration: InputDecoration(
             hintText: 'Enter new checklist name',
             border: OutlineInputBorder(
@@ -193,10 +206,14 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
           autofocus: true,
+          textCapitalization: TextCapitalization.words,
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              Navigator.pop(context);
+            },
             child: Text(
               'Cancel',
               style: TextStyle(
@@ -206,6 +223,7 @@ class HomeScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () {
+              HapticFeedback.lightImpact();
               if (controller.text.isNotEmpty) {
                 provider.updateGroupTitle(group.id, controller.text);
                 Navigator.pop(context);
@@ -252,7 +270,10 @@ class _ExpandableCardState extends State<_ExpandableCard> {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: InkWell(
-        onTap: widget.onTap,
+        onTap: () {
+          HapticFeedback.lightImpact();
+          widget.onTap();
+        },
         borderRadius: BorderRadius.circular(14),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -274,6 +295,7 @@ class _ExpandableCardState extends State<_ExpandableCard> {
                       color: Theme.of(context).colorScheme.primary,
                     ),
                     onPressed: () {
+                      HapticFeedback.lightImpact();
                       setState(() {
                         _isExpanded = !_isExpanded;
                       });

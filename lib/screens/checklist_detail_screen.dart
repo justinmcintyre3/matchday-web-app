@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:provider/provider.dart';
 import '../models/checklist_item.dart';
@@ -62,6 +63,7 @@ class _ChecklistDetailScreenState extends State<ChecklistDetailScreen> {
           actions: [
             TextButton(
               onPressed: () {
+                HapticFeedback.lightImpact();
                 Navigator.pop(context);
                 setState(() {
                   _showResetButton =
@@ -72,6 +74,7 @@ class _ChecklistDetailScreenState extends State<ChecklistDetailScreen> {
             ),
             TextButton(
               onPressed: () {
+                HapticFeedback.lightImpact();
                 provider.resetGroup(widget.groupId);
                 setState(() {
                   _showResetButton =
@@ -108,6 +111,7 @@ class _ChecklistDetailScreenState extends State<ChecklistDetailScreen> {
                     IconButton(
                       icon: const Icon(Icons.refresh),
                       onPressed: () {
+                        HapticFeedback.lightImpact();
                         provider.resetGroup(widget.groupId);
                         setState(() {
                           _showResetButton = false;
@@ -140,42 +144,46 @@ class _ChecklistDetailScreenState extends State<ChecklistDetailScreen> {
                           startActionPane: ActionPane(
                             motion: const DrawerMotion(),
                             children: [
-                              SlidableAction(
-                                onPressed: (context) =>
-                                    _showEditItemDialog(context, item),
-                                backgroundColor: Colors.blue,
-                                foregroundColor: Colors.white,
-                                icon: Icons.edit,
-                                label: 'Edit',
-                              ),
+                               SlidableAction(
+                                 onPressed: (context) {
+                                   HapticFeedback.lightImpact();
+                                   _showEditItemDialog(context, item);
+                                 },
+                                 backgroundColor: Colors.blue,
+                                 foregroundColor: Colors.white,
+                                 icon: Icons.edit,
+                                 label: 'Edit',
+                               ),
                             ],
                           ),
                           endActionPane: ActionPane(
                             motion: const DrawerMotion(),
                             children: [
-                              SlidableAction(
-                                onPressed: (context) {
-                                  final removedItem =
-                                      item; // Store the removed item
-                                  provider.removeItem(widget.groupId, item.id);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('${item.title} deleted'),
-                                      action: SnackBarAction(
-                                        label: 'Undo',
-                                        onPressed: () {
-                                          provider.addItem(widget.groupId,
-                                              removedItem.title);
-                                        },
-                                      ),
-                                    ),
-                                  );
-                                },
-                                backgroundColor: Colors.red,
-                                foregroundColor: Colors.white,
-                                icon: Icons.delete,
-                                label: 'Delete',
-                              ),
+                               SlidableAction(
+                                 onPressed: (context) {
+                                   HapticFeedback.lightImpact();
+                                   final removedItem =
+                                       item; // Store the removed item
+                                   provider.removeItem(widget.groupId, item.id);
+                                   ScaffoldMessenger.of(context).showSnackBar(
+                                     SnackBar(
+                                       content: Text('${item.title} deleted'),
+                                       action: SnackBarAction(
+                                         label: 'Undo',
+                                         onPressed: () {
+                                           HapticFeedback.lightImpact();
+                                           provider.addItem(widget.groupId,
+                                               removedItem.title);
+                                         },
+                                       ),
+                                     ),
+                                   );
+                                 },
+                                 backgroundColor: Colors.red,
+                                 foregroundColor: Colors.white,
+                                 icon: Icons.delete,
+                                 label: 'Delete',
+                               ),
                             ],
                           ),
                           child: Card(
@@ -193,6 +201,7 @@ class _ChecklistDetailScreenState extends State<ChecklistDetailScreen> {
                                 ),
                               ),
                               onTap: () {
+                                HapticFeedback.lightImpact();
                                 provider.toggleItem(widget.groupId, item.id);
                                 _checkCompletion(context, provider);
                               },
@@ -202,7 +211,10 @@ class _ChecklistDetailScreenState extends State<ChecklistDetailScreen> {
                       }),
                     ),
               floatingActionButton: FloatingActionButton(
-                onPressed: () => _showAddItemDialog(context),
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  _showAddItemDialog(context);
+                },
                 child: const Icon(Icons.add),
               ),
             ),
@@ -243,6 +255,8 @@ class _ChecklistDetailScreenState extends State<ChecklistDetailScreen> {
             controller: controller,
             focusNode: focusNode,
             autofocus: true,
+            onTap: () => HapticFeedback.lightImpact(),
+            textCapitalization: TextCapitalization.words,
             decoration: const InputDecoration(
               hintText: 'Enter item name',
               border: OutlineInputBorder(),
@@ -251,12 +265,14 @@ class _ChecklistDetailScreenState extends State<ChecklistDetailScreen> {
           actions: [
             TextButton(
               onPressed: () {
+                HapticFeedback.lightImpact();
                 Navigator.of(dialogContext).pop();
               },
               child: const Text('Cancel'),
             ),
             TextButton(
               onPressed: () {
+                HapticFeedback.lightImpact();
                 if (controller.text.isNotEmpty) {
                   Provider.of<ChecklistProvider>(context, listen: false)
                       .addItem(widget.groupId, controller.text);
@@ -292,6 +308,8 @@ class _ChecklistDetailScreenState extends State<ChecklistDetailScreen> {
         content: TextField(
           controller: controller,
           autofocus: true,
+          onTap: () => HapticFeedback.lightImpact(),
+          textCapitalization: TextCapitalization.words,
           decoration: const InputDecoration(
             hintText: 'Enter new item name',
             border: OutlineInputBorder(),
@@ -300,12 +318,14 @@ class _ChecklistDetailScreenState extends State<ChecklistDetailScreen> {
         actions: [
           TextButton(
             onPressed: () {
+              HapticFeedback.lightImpact();
               Navigator.of(dialogContext).pop();
             },
             child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () {
+              HapticFeedback.lightImpact();
               if (controller.text.isNotEmpty) {
                 // Use dialogContext to access the provider
                 Provider.of<ChecklistProvider>(dialogContext, listen: false)

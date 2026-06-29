@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/match.dart';
@@ -46,20 +47,30 @@ class MatchDetailScreen extends StatelessWidget {
             match.stages.where((s) => s.status == 'completed').toList();
         final completedCount = completedStages.length;
 
-        final double avgHeartRate = completedStages.isNotEmpty
-            ? completedStages.fold(
-                    0, (sum, stage) => sum + stage.avgHeartRate) /
-                completedCount
+        final heartRateStages =
+            completedStages.where((s) => s.avgHeartRate > 0).toList();
+        final double avgHeartRate = heartRateStages.isNotEmpty
+            ? heartRateStages.fold(
+                    0.0, (sum, stage) => sum + stage.avgHeartRate) /
+                heartRateStages.length
             : 0.0;
 
         return Scaffold(
           appBar: AppBar(
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                Navigator.pop(context);
+              },
+            ),
             title: Text(match.name),
             actions: [
               IconButton(
                 icon: const Icon(Icons.analytics_outlined),
                 tooltip: 'Match Summary',
                 onPressed: () {
+                  HapticFeedback.lightImpact();
                   Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (context) => MatchSummaryScreen(matchId: match.id),
@@ -71,9 +82,6 @@ class MatchDetailScreen extends StatelessWidget {
                 icon: const Icon(Icons.share_outlined),
                 onPressed: () {
                   // Optional share function
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Sharing coming soon!')),
-                  );
                 },
               ),
             ],
@@ -189,12 +197,8 @@ class MatchDetailScreen extends StatelessWidget {
                         const SizedBox(width: 8),
                         TextButton.icon(
                           onPressed: () {
+                            HapticFeedback.lightImpact();
                             provider.addStage(match.id);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Stage ${match.stages.length + 1} added!'),
-                              ),
-                            );
                           },
                           icon: const Icon(Icons.add, size: 16, color: Color(0xFF007AFF)),
                           label: const Text(
@@ -289,11 +293,17 @@ class MatchDetailScreen extends StatelessWidget {
             content: Text('Are you sure you want to delete ${stage.name.isNotEmpty ? stage.name : "Stage ${stage.stageNumber}"}? Remaining stages will be renumbered.'),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context, false),
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.pop(context, false);
+                },
                 child: const Text('Cancel'),
               ),
               TextButton(
-                onPressed: () => Navigator.pop(context, true),
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.pop(context, true);
+                },
                 child: const Text('Delete', style: TextStyle(color: Colors.redAccent)),
               ),
             ],
@@ -302,9 +312,6 @@ class MatchDetailScreen extends StatelessWidget {
       },
       onDismissed: (direction) {
         provider.removeStage(match.id, stage.stageNumber);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Stage deleted')),
-        );
       },
       child: Card(
         margin: const EdgeInsets.only(bottom: 8.0),
@@ -312,6 +319,7 @@ class MatchDetailScreen extends StatelessWidget {
         child: ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           onTap: () {
+            HapticFeedback.lightImpact();
             // Set active stage in provider (starts syncing to watch!)
             provider.setActiveStage(match.id, index);
 
@@ -370,7 +378,7 @@ class MatchDetailScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      '${stage.hitCount}/${stage.shotResults.length} Hits',
+                      '${stage.hitCount}/${stage.shotResults.length}',
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 13,

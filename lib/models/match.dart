@@ -122,7 +122,7 @@ class Stage {
   String name; // Stage name (optional)
   String status; // 'pending', 'completed'
   int numTargets;
-  List<Target> targets;
+  List<TargetArray> targetArrays;
   WindPlan windPlan;
   bool timedOut;
   int timeRemaining; // in seconds
@@ -132,13 +132,14 @@ class Stage {
   String skillsErrors;
   String environmentalErrors;
   int timeLimit; // in seconds
+  int numPositions; // number of positions
 
   Stage({
     required this.stageNumber,
     this.name = '',
     this.status = 'pending',
     this.numTargets = 0,
-    required this.targets,
+    required this.targetArrays,
     required this.windPlan,
     this.timedOut = false,
     this.timeRemaining = 0,
@@ -148,7 +149,26 @@ class Stage {
     this.skillsErrors = '',
     this.environmentalErrors = '',
     this.timeLimit = 105,
+    this.numPositions = 1,
   });
+
+  List<Target> get targets {
+    List<Target> all = [];
+    int globalIndex = 1;
+    for (var array in targetArrays) {
+      for (var t in array.targets) {
+        all.add(Target(
+          index: globalIndex++,
+          size: t.size,
+          distance: array.distance,
+          degreeOfFire: array.degreeOfFire,
+          type: t.type,
+          shotsCount: t.shotsCount,
+        ));
+      }
+    }
+    return all;
+  }
 
   int get hitCount => shotResults.where((r) => r == 'hit').length;
   int get missCount => shotResults.where((r) => r == 'miss').length;
@@ -160,7 +180,7 @@ class Stage {
       'name': name,
       'status': status,
       'numTargets': numTargets,
-      'targets': targets.map((x) => x.toMap()).toList(),
+      'targetArrays': targetArrays.map((x) => x.toMap()).toList(),
       'windPlan': windPlan.toMap(),
       'timedOut': timedOut,
       'timeRemaining': timeRemaining,
@@ -170,16 +190,39 @@ class Stage {
       'skillsErrors': skillsErrors,
       'environmentalErrors': environmentalErrors,
       'timeLimit': timeLimit,
+      'numPositions': numPositions,
     };
   }
 
   factory Stage.fromMap(Map<dynamic, dynamic> map) {
+    final targetArraysList = map['targetArrays'] != null
+        ? List<TargetArray>.from(map['targetArrays']?.map((x) => TargetArray.fromMap(x as Map)) ?? const [])
+        : <TargetArray>[];
+
+    if (targetArraysList.isEmpty && map['targets'] != null) {
+      final legacyTargets = List<Target>.from(map['targets']?.map((x) => Target.fromMap(x as Map)) ?? const []);
+      if (legacyTargets.isNotEmpty) {
+        final Map<String, List<Target>> groups = {};
+        for (var t in legacyTargets) {
+          final key = '${t.distance}_${t.degreeOfFire}';
+          groups.putIfAbsent(key, () => []).add(t);
+        }
+        for (var group in groups.values) {
+          targetArraysList.add(TargetArray(
+            distance: group.first.distance,
+            degreeOfFire: group.first.degreeOfFire,
+            targets: group,
+          ));
+        }
+      }
+    }
+
     return Stage(
       stageNumber: map['stageNumber']?.toInt() ?? 1,
       name: map['name'] ?? '',
       status: map['status'] ?? 'pending',
       numTargets: map['numTargets']?.toInt() ?? 0,
-      targets: List<Target>.from(map['targets']?.map((x) => Target.fromMap(x as Map)) ?? const []),
+      targetArrays: targetArraysList,
       windPlan: WindPlan.fromMap(map['windPlan'] as Map? ?? const {}),
       timedOut: map['timedOut'] ?? false,
       timeRemaining: map['timeRemaining']?.toInt() ?? 0,
@@ -189,6 +232,7 @@ class Stage {
       skillsErrors: map['skillsErrors'] ?? '',
       environmentalErrors: map['environmentalErrors'] ?? '',
       timeLimit: map['timeLimit']?.toInt() ?? 105,
+      numPositions: map['numPositions']?.toInt() ?? 1,
     );
   }
 }
@@ -273,6 +317,34 @@ class WindPlan {
       kestrelDirection: map['kestrelDirection'] ?? 'None',
       actualValue: (map['actualValue'] as num?)?.toDouble() ?? 0.0,
       actualDirection: map['actualDirection'] ?? 'None',
+    );
+  }
+}
+
+class TargetArray {
+  String distance;
+  String degreeOfFire;
+  List<Target> targets;
+
+  TargetArray({
+    this.distance = '',
+    this.degreeOfFire = '',
+    required this.targets,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'distance': distance,
+      'degreeOfFire': degreeOfFire,
+      'targets': targets.map((x) => x.toMap()).toList(),
+    };
+  }
+
+  factory TargetArray.fromMap(Map<dynamic, dynamic> map) {
+    return TargetArray(
+      distance: map['distance'] ?? '',
+      degreeOfFire: map['degreeOfFire'] ?? '',
+      targets: List<Target>.from(map['targets']?.map((x) => Target.fromMap(x as Map)) ?? const []),
     );
   }
 }

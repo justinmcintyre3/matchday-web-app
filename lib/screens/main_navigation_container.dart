@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'matches_list_screen.dart';
 import 'checklist_groups_screen.dart';
 
@@ -37,6 +38,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
         child: BottomNavigationBar(
           currentIndex: _selectedIndex,
           onTap: (index) {
+            HapticFeedback.lightImpact();
             setState(() {
               _selectedIndex = index;
             });

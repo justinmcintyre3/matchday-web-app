@@ -117,9 +117,9 @@ class MatchProvider with ChangeNotifier {
       match.stages.add(Stage(
         stageNumber: newStageNumber,
         status: 'pending',
-        targets: [],
+        targetArrays: const [],
         windPlan: WindPlan(),
-        shotResults: [],
+        shotResults: const [],
       ));
       
       // Update match with new stage count
@@ -163,7 +163,7 @@ class MatchProvider with ChangeNotifier {
           name: oldStage.name,
           status: oldStage.status,
           numTargets: oldStage.numTargets,
-          targets: oldStage.targets,
+          targetArrays: oldStage.targetArrays,
           windPlan: oldStage.windPlan,
           timedOut: oldStage.timedOut,
           timeRemaining: oldStage.timeRemaining,
@@ -173,6 +173,7 @@ class MatchProvider with ChangeNotifier {
           skillsErrors: oldStage.skillsErrors,
           environmentalErrors: oldStage.environmentalErrors,
           timeLimit: oldStage.timeLimit,
+          numPositions: oldStage.numPositions,
         );
       }
 

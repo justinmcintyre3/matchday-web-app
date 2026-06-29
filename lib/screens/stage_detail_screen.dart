@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import '../models/match.dart';
 import '../providers/match_provider.dart';
+import 'package:hive_ce_flutter/hive_ce_flutter.dart';
+import 'package:flutter/services.dart';
 
 class StageDetailScreen extends StatefulWidget {
   final String matchId;
@@ -25,6 +27,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   StreamSubscription<WatchResultEvent>? _watchSubscription;
   StreamSubscription<WatchLiveUpdateEvent>? _liveUpdateSubscription;
   StreamSubscription<void>? _timerStartedSubscription;
+  Timer? _remainingTimeTimer;
 
   // Controllers for text inputs
   final _stageNameController = TextEditingController();
@@ -87,6 +90,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       if (!mounted) return;
+      if (_tabController.indexIsChanging) {
+        HapticFeedback.lightImpact();
+      }
       setState(() {});
     });
 
@@ -180,23 +186,29 @@ class _StageDetailScreenState extends State<StageDetailScreen>
         name: currentStage.name,
         status: currentStage.status,
         numTargets: currentStage.numTargets,
-        targets: List<Target>.from(currentStage.targets.map((t) {
-          // Normalize size to MIL
-          final cleanSize = t.size.replaceAll(RegExp(r'[^0-9.]'), '');
-          final normalizedSize = cleanSize.isEmpty ? '' : '$cleanSize MIL';
+        targetArrays: List<TargetArray>.from(currentStage.targetArrays.map((arr) {
+          // Normalize targets inside array
+          final normalizedTargets = List<Target>.from(arr.targets.map((t) {
+            final cleanSize = t.size.replaceAll(RegExp(r'[^0-9.]'), '');
+            final normalizedSize = cleanSize.isEmpty ? '' : '$cleanSize MIL';
+            return Target(
+              index: t.index,
+              size: normalizedSize,
+              distance: '',
+              degreeOfFire: '',
+              type: t.type,
+              shotsCount: t.shotsCount,
+            );
+          }));
 
-          // Normalize distance to YD
-          final cleanDistance = t.distance.replaceAll(RegExp(r'[^0-9.]'), '');
+          final cleanDistance = arr.distance.replaceAll(RegExp(r'[^0-9.]'), '');
           final normalizedDistance =
               cleanDistance.isEmpty ? '' : '$cleanDistance YD';
 
-          return Target(
-            index: t.index,
-            size: normalizedSize,
+          return TargetArray(
             distance: normalizedDistance,
-            degreeOfFire: t.degreeOfFire,
-            type: t.type,
-            shotsCount: t.shotsCount,
+            degreeOfFire: arr.degreeOfFire,
+            targets: normalizedTargets,
           );
         })),
         windPlan: WindPlan(
@@ -215,6 +227,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
         skillsErrors: currentStage.skillsErrors,
         environmentalErrors: currentStage.environmentalErrors,
         timeLimit: currentStage.timeLimit,
+        numPositions: currentStage.numPositions,
       );
 
       // Automatically prefill previous stage's actual windage if this is a fresh stage
@@ -260,6 +273,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     _watchSubscription?.cancel();
     _liveUpdateSubscription?.cancel();
     _timerStartedSubscription?.cancel();
+    _remainingTimeTimer?.cancel();
     _stageNameController.dispose();
     _mentalErrorsController.dispose();
     _skillsErrorsController.dispose();
@@ -268,6 +282,70 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     _heartRateController.dispose();
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _startRemainingTimeAutoIncrement(int delta) {
+    _remainingTimeTimer?.cancel();
+    _remainingTimeTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+      setState(() {
+        if (delta < 0) {
+          if (_stage.timeRemaining > 0) {
+            _stage.timeRemaining--;
+            _timeRemainingController.text = '${_stage.timeRemaining}';
+          }
+        } else {
+          _stage.timeRemaining++;
+          _timeRemainingController.text = '${_stage.timeRemaining}';
+        }
+      });
+    });
+  }
+
+  void _stopRemainingTimeAutoIncrement() {
+    _remainingTimeTimer?.cancel();
+  }
+
+  void _showHeartRateInputDialog() {
+    final controller = TextEditingController(
+        text: _stage.avgHeartRate > 0 ? '${_stage.avgHeartRate}' : '');
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Heart Rate'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Heart Rate (BPM)',
+            hintText: 'e.g. 110',
+            border: OutlineInputBorder(),
+          ),
+          onTap: () => HapticFeedback.lightImpact(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              Navigator.pop(context);
+            },
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              final hr = int.tryParse(controller.text.trim()) ?? 0;
+              setState(() {
+                _stage.avgHeartRate = hr;
+              });
+              _saveStage(exitScreen: false);
+              Navigator.pop(context);
+            },
+            child: const Text('Save', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   // Adjust Flat shot list based on sum of targets shotsCount
@@ -301,21 +379,12 @@ class _StageDetailScreenState extends State<StageDetailScreen>
 
     if (exitScreen) {
       Navigator.pop(context);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Stage settings saved')),
-      );
     }
   }
 
   void _syncToWatch() {
     _saveStage(exitScreen: false);
     context.read<MatchProvider>().syncActiveStageToWatch();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content:
-              Text('Syncing Stage ${widget.stageNumber} setup to watch...')),
-    );
   }
 
   @override
@@ -350,11 +419,19 @@ class _StageDetailScreenState extends State<StageDetailScreen>
         },
         child: Scaffold(
           appBar: AppBar(
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                Navigator.pop(context);
+              },
+            ),
             title: Text(_stage.name.isNotEmpty
                 ? _stage.name
                 : 'Stage ${widget.stageNumber} Setup'),
             bottom: TabBar(
               controller: _tabController,
+              onTap: (index) => HapticFeedback.lightImpact(),
               indicatorColor: const Color(0xFF007AFF),
               labelColor: const Color(0xFF007AFF),
               unselectedLabelColor: Colors.grey,
@@ -381,7 +458,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   // PLAN TAB
   Widget _buildPlanTab() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.all(12.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -391,6 +468,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
               padding: const EdgeInsets.all(16.0),
               child: TextFormField(
                 controller: _stageNameController,
+                onTap: () => HapticFeedback.lightImpact(),
+                textCapitalization: TextCapitalization.words,
                 decoration: const InputDecoration(
                   labelText: 'Stage Name (Optional)',
                   hintText: 'e.g. Barricade Buster',
@@ -402,11 +481,10 @@ class _StageDetailScreenState extends State<StageDetailScreen>
           ),
           const SizedBox(height: 12),
 
-          // Target Config Card
+          // Target Config Card (Target Arrays)
           Card(
             child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10.0, vertical: 12.0),
+              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 10.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -416,7 +494,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                       const Padding(
                         padding: EdgeInsets.only(left: 4.0),
                         child: Text(
-                          'TARGETS',
+                          'TARGET ARRAYS',
                           style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 13,
@@ -426,16 +504,22 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                       ),
                       TextButton.icon(
                         icon: const Icon(Icons.add, size: 18),
-                        label: const Text('Add Target'),
+                        label: const Text('Add Array'),
                         onPressed: () {
                           setState(() {
-                            _stage.targets.add(Target(
-                              index: _stage.targets.length + 1,
-                              size: '',
+                            _stage.targetArrays.add(TargetArray(
                               distance: '',
                               degreeOfFire: '0°',
-                              type: 'IPSC',
-                              shotsCount: 1,
+                              targets: [
+                                Target(
+                                  index: 1,
+                                  size: '',
+                                  distance: '',
+                                  degreeOfFire: '',
+                                  type: 'IPSC',
+                                  shotsCount: 1,
+                                ),
+                              ],
                             ));
                             _adjustShotResultsLength();
                           });
@@ -444,166 +528,220 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                     ],
                   ),
                   const SizedBox(height: 4),
-                  if (_stage.targets.isEmpty)
+                  if (_stage.targetArrays.isEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 24.0),
                       child: Center(
                         child: Text(
-                          'No targets defined. Add target positions above.',
-                          style:
-                              TextStyle(color: Colors.grey[500], fontSize: 13),
+                          'No target arrays defined. Add one above.',
+                          style: TextStyle(color: Colors.grey[500], fontSize: 13),
                         ),
                       ),
                     ),
                   ListView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    itemCount: _stage.targets.length,
-                    itemBuilder: (context, i) {
-                      final target = _stage.targets[i];
+                    itemCount: _stage.targetArrays.length,
+                    itemBuilder: (context, arrayIdx) {
+                      final array = _stage.targetArrays[arrayIdx];
                       return Container(
-                        margin: const EdgeInsets.only(bottom: 10.0),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8.0, vertical: 10.0),
+                        margin: const EdgeInsets.only(bottom: 12.0),
+                        padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 8.0),
                         decoration: BoxDecoration(
                           color: const Color(0xFF121214),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.05)),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                CircleAvatar(
-                                  radius: 12,
-                                  backgroundColor: const Color(0xFF007AFF)
-                                      .withValues(alpha: 0.2),
-                                  child: Text('${target.index}',
-                                      style: const TextStyle(
-                                          fontSize: 11,
-                                          color: Color(0xFF007AFF),
-                                          fontWeight: FontWeight.bold)),
+                                Text(
+                                  'ARRAY ${arrayIdx + 1}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: Color(0xFF007AFF),
+                                  ),
                                 ),
-                                const SizedBox(width: 8),
-                                Expanded(child: _buildShapeButton(target)),
-                                const SizedBox(width: 8),
-                                _buildShotsButton(target),
-                                const SizedBox(width: 4),
                                 IconButton(
                                   visualDensity: VisualDensity.compact,
                                   padding: EdgeInsets.zero,
-                                  icon: const Icon(Icons.delete_outline,
+                                  icon: const Icon(Icons.delete_sweep,
                                       color: Colors.redAccent, size: 20),
                                   onPressed: () {
                                     setState(() {
-                                      _stage.targets.removeAt(i);
-                                      // Reindex
-                                      for (int k = 0;
-                                          k < _stage.targets.length;
-                                          k++) {
-                                        _stage.targets[k] = Target(
-                                          index: k + 1,
-                                          size: _stage.targets[k].size,
-                                          distance: _stage.targets[k].distance,
-                                          degreeOfFire:
-                                              _stage.targets[k].degreeOfFire,
-                                          type: _stage.targets[k].type,
-                                          shotsCount:
-                                              _stage.targets[k].shotsCount,
-                                        );
-                                      }
+                                      _stage.targetArrays.removeAt(arrayIdx);
                                       _adjustShotResultsLength();
                                     });
                                   },
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 8),
                             Row(
                               children: [
                                 Expanded(
-                                  flex: 3,
+                                  flex: 5,
                                   child: TextFormField(
-                                    key: Key(
-                                        'dist_${target.index}_${target.distance}'),
-                                    initialValue: target.distance
-                                        .replaceAll(RegExp(r'[^0-9.]'), ''),
+                                    key: Key('arr_dist_${arrayIdx}_${array.distance}'),
+                                    initialValue: array.distance.replaceAll(RegExp(r'[^0-9.]'), ''),
                                     keyboardType: TextInputType.number,
+                                    onTap: () => HapticFeedback.lightImpact(),
                                     style: const TextStyle(fontSize: 13),
                                     decoration: const InputDecoration(
                                       labelText: 'Distance',
                                       suffixText: 'YD',
                                       isDense: true,
                                       border: OutlineInputBorder(),
-                                      contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 10),
+                                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                                       labelStyle: TextStyle(fontSize: 12),
-                                      suffixStyle: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold),
+                                      suffixStyle: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                                     ),
                                     onChanged: (val) {
-                                      target.distance =
-                                          val.isEmpty ? '' : '$val YD';
+                                      array.distance = val.isEmpty ? '' : '$val YD';
                                     },
                                   ),
                                 ),
-                                const SizedBox(width: 6),
+                                const SizedBox(width: 8),
                                 Expanded(
-                                  flex: 3,
+                                  flex: 5,
                                   child: TextFormField(
-                                    key: Key(
-                                        'size_${target.index}_${target.size}'),
-                                    initialValue: target.size
-                                        .replaceAll(RegExp(r'[^0-9.]'), ''),
-                                    keyboardType:
-                                        const TextInputType.numberWithOptions(
-                                            decimal: true),
-                                    style: const TextStyle(fontSize: 13),
-                                    decoration: const InputDecoration(
-                                      labelText: 'Size',
-                                      suffixText: 'MIL',
-                                      isDense: true,
-                                      border: OutlineInputBorder(),
-                                      contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 10),
-                                      labelStyle: TextStyle(fontSize: 12),
-                                      suffixStyle: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold),
-                                    ),
-                                    onChanged: (val) {
-                                      target.size =
-                                          val.isEmpty ? '' : '$val MIL';
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  flex: 4,
-                                  child: TextFormField(
-                                    key: Key(
-                                        'angle_${target.index}_${target.degreeOfFire}'),
-                                    initialValue: target.degreeOfFire,
+                                    key: Key('arr_angle_${arrayIdx}_${array.degreeOfFire}'),
+                                    initialValue: array.degreeOfFire,
                                     readOnly: true,
-                                    onTap: () => _showCompassDialog(target),
+                                    onTap: () {
+                                      HapticFeedback.lightImpact();
+                                      _showCompassDialog(array);
+                                    },
                                     style: const TextStyle(fontSize: 13),
                                     decoration: const InputDecoration(
                                       labelText: 'Angle/Dir',
                                       isDense: true,
                                       border: OutlineInputBorder(),
-                                      contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 10),
+                                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                                       labelStyle: TextStyle(fontSize: 12),
-                                      suffixIcon: Icon(
-                                          Icons.compass_calibration,
-                                          size: 14),
+                                      suffixIcon: Icon(Icons.compass_calibration, size: 14),
                                     ),
                                   ),
                                 ),
                               ],
+                            ),
+                            const Divider(height: 24, color: Colors.white10),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'TARGETS',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 11,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                                TextButton.icon(
+                                  style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                                  icon: const Icon(Icons.add, size: 14),
+                                  label: const Text('Add Target', style: TextStyle(fontSize: 11)),
+                                  onPressed: () {
+                                    setState(() {
+                                      array.targets.add(Target(
+                                        index: array.targets.length + 1,
+                                        size: '',
+                                        distance: '',
+                                        degreeOfFire: '',
+                                        type: 'IPSC',
+                                        shotsCount: 1,
+                                      ));
+                                      _adjustShotResultsLength();
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            ListView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: array.targets.length,
+                              itemBuilder: (context, targetIdx) {
+                                final target = array.targets[targetIdx];
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                  child: Row(
+                                    children: [
+                                      Text(
+                                        'T${targetIdx + 1}',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        flex: 11,
+                                        child: _buildShapeButton(target),
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Expanded(
+                                        flex: 5,
+                                        child: TextFormField(
+                                          key: Key('tgt_size_${arrayIdx}_${targetIdx}_${target.size}'),
+                                          initialValue: target.size.replaceAll(RegExp(r'[^0-9.]'), ''),
+                                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                          onTap: () => HapticFeedback.lightImpact(),
+                                          style: const TextStyle(fontSize: 12),
+                                          decoration: const InputDecoration(
+                                            labelText: 'Size',
+                                            suffixText: 'MIL',
+                                            isDense: true,
+                                            border: OutlineInputBorder(),
+                                            contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                                            labelStyle: TextStyle(fontSize: 10),
+                                            suffixStyle: TextStyle(fontSize: 9, fontWeight: FontWeight.bold),
+                                          ),
+                                          onChanged: (val) {
+                                            target.size = val.isEmpty ? '' : '$val MIL';
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: 5),
+                                      Expanded(
+                                        flex: 4,
+                                        child: _buildShotsButton(target),
+                                      ),
+                                      const SizedBox(width: 2),
+                                      IconButton(
+                                        visualDensity: VisualDensity.compact,
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                        icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
+                                        onPressed: () {
+                                          HapticFeedback.lightImpact();
+                                          setState(() {
+                                            array.targets.removeAt(targetIdx);
+                                            // Reindex targets inside array
+                                            for (int k = 0; k < array.targets.length; k++) {
+                                              array.targets[k] = Target(
+                                                index: k + 1,
+                                                size: array.targets[k].size,
+                                                distance: '',
+                                                degreeOfFire: '',
+                                                type: array.targets[k].type,
+                                                shotsCount: array.targets[k].shotsCount,
+                                              );
+                                            }
+                                            _adjustShotResultsLength();
+                                          });
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
                             ),
                           ],
                         ),
@@ -614,7 +752,127 @@ class _StageDetailScreenState extends State<StageDetailScreen>
               ),
             ),
           ),
+          const SizedBox(height: 12),
 
+          // Timer Settings & Positions Card
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'STAGE TIME CONFIGURATION',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        letterSpacing: 0.5,
+                        color: Color(0xFF007AFF)),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Timer Limit',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white70),
+                      ),
+                      InkWell(
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          _showTimePickerDialog();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF121214),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.white10),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.timer_outlined, size: 16, color: Color(0xFF007AFF)),
+                              const SizedBox(width: 6),
+                              Text(
+                                '${_stage.timeLimit} seconds',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.arrow_drop_down, size: 16, color: Colors.grey),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Number of Positions',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white70),
+                      ),
+                      InkWell(
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          _showPositionsSelector();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF121214),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.white10),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.place_outlined, size: 16, color: Color(0xFF00E676)),
+                              const SizedBox(width: 6),
+                              Text(
+                                '${_stage.numPositions} ${_stage.numPositions == 1 ? 'Position' : 'Positions'}',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.arrow_drop_down, size: 16, color: Colors.grey),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF121214),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Time Per Position',
+                          style: TextStyle(fontSize: 13, color: Colors.grey),
+                        ),
+                        Text(
+                          '${(_stage.timeLimit / _stage.numPositions).toStringAsFixed(1)}s',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF00E676),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: 12),
 
           // Windage Planning Card
@@ -678,63 +936,22 @@ class _StageDetailScreenState extends State<StageDetailScreen>
               ),
             ),
           ),
+          const SizedBox(height: 16),
 
-          const SizedBox(height: 12),
-
-          // Timer settings Card
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text(
-                    'STAGE TIME CONFIGURATION',
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                        letterSpacing: 0.5,
-                        color: Color(0xFF007AFF)),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Timer Limit duration',
-                          style: TextStyle(fontSize: 15)),
-                      DropdownButton<int>(
-                        value: _stage.timeLimit,
-                        items: [60, 75, 90, 105, 120, 150]
-                            .map((limit) => DropdownMenuItem(
-                                  value: limit,
-                                  child: Text('$limit seconds'),
-                                ))
-                            .toList(),
-                        onChanged: (val) {
-                          if (val != null) {
-                            setState(() {
-                              _stage.timeLimit = val;
-                            });
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: _syncToWatch,
-                    icon: const Icon(Icons.sync),
-                    label: const Text('Sync Configuration to Watch'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      foregroundColor: const Color(0xFF007AFF),
-                      side: const BorderSide(color: Color(0xFF007AFF)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
-                ],
+          ElevatedButton.icon(
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              _syncToWatch();
+            },
+            icon: const Icon(Icons.sync),
+            label: const Text('Sync Configuration to Watch'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.transparent,
+              foregroundColor: const Color(0xFF007AFF),
+              side: const BorderSide(color: Color(0xFF007AFF)),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
               ),
             ),
           ),
@@ -773,6 +990,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
             // Left Adjustment Button
             ElevatedButton(
               onPressed: () {
+                HapticFeedback.lightImpact();
                 if (direction == 'R') {
                   double newVal = value - 0.1;
                   if (newVal < 0.05) {
@@ -824,6 +1042,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
             // Right Adjustment Button
             ElevatedButton(
               onPressed: () {
+                HapticFeedback.lightImpact();
                 if (direction == 'L') {
                   double newVal = value - 0.1;
                   if (newVal < 0.05) {
@@ -980,122 +1199,187 @@ class _StageDetailScreenState extends State<StageDetailScreen>
               ),
             ),
 
-          // Generate a logging card for each target dynamically
-          ...List.generate(_stage.targets.length, (targetIdx) {
-            final target = _stage.targets[targetIdx];
-            final int currentOffset = flatIndexOffset;
-            flatIndexOffset += target.shotsCount;
+          // Group targets inside array boxes
+          ..._stage.targetArrays.asMap().entries.map((arrayEntry) {
+            final arrayIdx = arrayEntry.key;
+            final array = arrayEntry.value;
 
             return Card(
-              margin: const EdgeInsets.only(bottom: 12.0),
+              margin: const EdgeInsets.only(bottom: 16.0),
               child: Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(12.0),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // Array Header
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Expanded(
-                          child: Text(
-                            'TARGET ${target.index}: ${target.type}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                              color: Color(0xFF00E676),
-                              letterSpacing: 0.5,
-                            ),
+                        Text(
+                          'ARRAY ${arrayIdx + 1}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: Color(0xFF007AFF),
+                            letterSpacing: 0.5,
                           ),
                         ),
                         Text(
-                          '${target.distance} | ${target.size} | ${target.degreeOfFire}',
+                          '${array.distance.isEmpty ? "---" : array.distance} | ${array.degreeOfFire}',
                           style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.grey[400]),
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[400],
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
+                    const Divider(height: 16, color: Colors.white10),
 
-                    // Render shot row for this target
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: List.generate(target.shotsCount, (shotIdx) {
-                        final globalShotIdx = currentOffset + shotIdx;
+                    if (array.targets.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: Text(
+                          'No targets in this array',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
 
-                        // Safety bounds check
-                        if (globalShotIdx >= _stage.shotResults.length) {
-                          return const SizedBox();
-                        }
+                    // Targets list inside array
+                    ...List.generate(array.targets.length, (targetIdxInside) {
+                      final target = array.targets[targetIdxInside];
+                      final int currentOffset = flatIndexOffset;
+                      flatIndexOffset += target.shotsCount;
 
-                        final result = _stage.shotResults[globalShotIdx];
-                        Color bgColor = Colors.grey[850]!;
-                        Color textColor = Colors.white70;
-                        IconData? icon;
-
-                        if (result == 'hit') {
-                          bgColor =
-                              const Color(0xFF00E676).withValues(alpha: 0.2);
-                          textColor = const Color(0xFF00E676);
-                          icon = Icons.gps_fixed;
-                        } else if (result == 'miss') {
-                          bgColor = Colors.redAccent.withValues(alpha: 0.2);
-                          textColor = Colors.redAccent;
-                          icon = Icons.close;
-                        } else if (result == 'timeOutMiss') {
-                          bgColor = Colors.grey.withValues(alpha: 0.2);
-                          textColor = Colors.grey;
-                          icon = Icons.timer_outlined;
-                        }
-
-                        return InkWell(
-                          onTap: () {
-                            setState(() {
-                              if (result == 'miss') {
-                                _stage.shotResults[globalShotIdx] = 'hit';
-                              } else if (result == 'hit') {
-                                _stage.shotResults[globalShotIdx] =
-                                    'timeOutMiss';
-                              } else {
-                                _stage.shotResults[globalShotIdx] = 'miss';
-                              }
-                            });
-                          },
-                          borderRadius: BorderRadius.circular(25),
-                          child: Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: bgColor,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: textColor.withValues(alpha: 0.3),
-                                width: 1.5,
-                              ),
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'T${targetIdxInside + 1}: ${target.type}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: Color(0xFF00E676),
+                                  ),
+                                ),
+                                Row(
+                                  children: [
+                                    Text(
+                                      (target.size.isEmpty || target.size.replaceAll(RegExp(r'[^0-9.]'), '').trim().isEmpty)
+                                          ? '---'
+                                          : target.size,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey[400],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      '${target.shotsCount} ${target.shotsCount == 1 ? 'Shot' : 'Shots'}',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey[500],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
-                            child: Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    'Shot ${shotIdx + 1}',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: textColor,
+                            const SizedBox(height: 8),
+
+                            // Render shot row for this target
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 12,
+                              children: List.generate(target.shotsCount, (shotIdx) {
+                                final globalShotIdx = currentOffset + shotIdx;
+
+                                // Safety bounds check
+                                if (globalShotIdx >= _stage.shotResults.length) {
+                                  return const SizedBox();
+                                }
+
+                                final result = _stage.shotResults[globalShotIdx];
+                                Color bgColor = Colors.grey[850]!;
+                                Color textColor = Colors.white70;
+                                IconData? icon;
+
+                                if (result == 'hit') {
+                                  bgColor = const Color(0xFF00E676).withValues(alpha: 0.2);
+                                  textColor = const Color(0xFF00E676);
+                                  icon = Icons.gps_fixed;
+                                } else if (result == 'miss') {
+                                  bgColor = Colors.redAccent.withValues(alpha: 0.2);
+                                  textColor = Colors.redAccent;
+                                  icon = Icons.close;
+                                } else if (result == 'timeOutMiss') {
+                                  bgColor = Colors.grey.withValues(alpha: 0.2);
+                                  textColor = Colors.grey;
+                                  icon = Icons.timer_outlined;
+                                }
+
+                                return InkWell(
+                                  onTap: () {
+                                    HapticFeedback.lightImpact();
+                                    setState(() {
+                                      if (result == 'miss') {
+                                        _stage.shotResults[globalShotIdx] = 'hit';
+                                      } else if (result == 'hit') {
+                                        _stage.shotResults[globalShotIdx] = 'timeOutMiss';
+                                      } else {
+                                        _stage.shotResults[globalShotIdx] = 'miss';
+                                      }
+                                    });
+                                  },
+                                  borderRadius: BorderRadius.circular(25),
+                                  child: Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color: bgColor,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: textColor.withValues(alpha: 0.3),
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                    child: Center(
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            'Shot ${shotIdx + 1}',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              color: textColor,
+                                            ),
+                                          ),
+                                          if (icon != null)
+                                            Icon(icon, size: 12, color: textColor),
+                                        ],
+                                      ),
                                     ),
                                   ),
-                                  if (icon != null)
-                                    Icon(icon, size: 12, color: textColor),
-                                ],
-                              ),
+                                );
+                              }),
                             ),
-                          ),
-                        );
-                      }),
-                    ),
+                            if (targetIdxInside < array.targets.length - 1)
+                              const Padding(
+                                padding: EdgeInsets.only(top: 8.0),
+                                child: Divider(height: 1, color: Colors.white10),
+                              ),
+                          ],
+                        ),
+                      );
+                    }),
                   ],
                 ),
               ),
@@ -1142,12 +1426,12 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          IconButton(
-                            visualDensity: VisualDensity.compact,
-                            padding: EdgeInsets.zero,
-                            icon: const Icon(Icons.remove_circle_outline,
-                                color: Color(0xFF007AFF), size: 24),
-                            onPressed: () {
+                          GestureDetector(
+                            onTapDown: (_) {
+                              SystemSound.play(SystemSoundType.click);
+                              HapticFeedback.lightImpact();
+                            },
+                            onTap: () {
                               setState(() {
                                 if (_stage.timeRemaining > 0) {
                                   _stage.timeRemaining--;
@@ -1156,6 +1440,17 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                 }
                               });
                             },
+                            onLongPressStart: (_) {
+                              _startRemainingTimeAutoIncrement(-1);
+                            },
+                            onLongPressEnd: (_) {
+                              _stopRemainingTimeAutoIncrement();
+                            },
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                              child: Icon(Icons.remove_circle_outline,
+                                  color: Color(0xFF007AFF), size: 24),
+                            ),
                           ),
                           const SizedBox(width: 8),
                           Column(
@@ -1175,38 +1470,55 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                             ],
                           ),
                           const SizedBox(width: 8),
-                          IconButton(
-                            visualDensity: VisualDensity.compact,
-                            padding: EdgeInsets.zero,
-                            icon: const Icon(Icons.add_circle_outline,
-                                color: Color(0xFF007AFF), size: 24),
-                            onPressed: () {
+                          GestureDetector(
+                            onTapDown: (_) {
+                              SystemSound.play(SystemSoundType.click);
+                              HapticFeedback.lightImpact();
+                            },
+                            onTap: () {
                               setState(() {
                                 _stage.timeRemaining++;
                                 _timeRemainingController.text =
                                     '${_stage.timeRemaining}';
                               });
                             },
+                            onLongPressStart: (_) {
+                              _startRemainingTimeAutoIncrement(1);
+                            },
+                            onLongPressEnd: (_) {
+                              _stopRemainingTimeAutoIncrement();
+                            },
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                              child: Icon(Icons.add_circle_outline,
+                                  color: Color(0xFF007AFF), size: 24),
+                            ),
                           ),
                         ],
                       ),
                       Container(height: 40, width: 1, color: Colors.white10),
-                      // Avg Heart Rate (Read-only)
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.favorite,
-                              color: Colors.redAccent, size: 20),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${_stage.avgHeartRate} BPM',
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 15),
-                          ),
-                          const Text('Avg Heart Rate',
-                              style:
-                                  TextStyle(color: Colors.grey, fontSize: 10)),
-                        ],
+                      // Avg Heart Rate (Long press to manually edit)
+                      GestureDetector(
+                        onLongPress: () {
+                          HapticFeedback.lightImpact();
+                          _showHeartRateInputDialog();
+                        },
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.favorite,
+                                color: Colors.redAccent, size: 20),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${_stage.avgHeartRate} BPM',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 15),
+                            ),
+                            const Text('Avg Heart Rate',
+                                style:
+                                    TextStyle(color: Colors.grey, fontSize: 10)),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -1259,6 +1571,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () {
+                      HapticFeedback.lightImpact();
                       setState(() {
                         _stage.status = 'pending';
                         _stage.timeRemaining = 0;
@@ -1305,8 +1618,10 @@ class _StageDetailScreenState extends State<StageDetailScreen>
               ],
               Expanded(
                 child: ElevatedButton(
-                  onPressed: () =>
-                      _saveStage(markAsCompleted: _stage.status != 'completed'),
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    _saveStage(markAsCompleted: _stage.status != 'completed');
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF007AFF),
                     foregroundColor: Colors.white,
@@ -1342,7 +1657,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     return '---';
   }
 
-  void _showCompassDialog(Target target) {
+  void _showCompassDialog(dynamic targetOrArray) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1498,7 +1813,11 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                       ElevatedButton(
                         onPressed: () {
                           setState(() {
-                            target.degreeOfFire = '${displayHeading.round()}°';
+                            if (targetOrArray is Target) {
+                              targetOrArray.degreeOfFire = '${displayHeading.round()}°';
+                            } else if (targetOrArray is TargetArray) {
+                              targetOrArray.degreeOfFire = '${displayHeading.round()}°';
+                            }
                           });
                           Navigator.pop(context);
                         },
@@ -1530,32 +1849,31 @@ class _StageDetailScreenState extends State<StageDetailScreen>
 
   Widget _buildShapeButton(Target target) {
     return InkWell(
-      onTap: () => _showShapeSelector(target),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1E1E24),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: Colors.white10),
+      onTap: () {
+        HapticFeedback.lightImpact();
+        _showShapeSelector(target);
+      },
+      child: InputDecorator(
+        decoration: const InputDecoration(
+          labelText: 'Shape',
+          labelStyle: TextStyle(fontSize: 10),
+          isDense: true,
+          border: OutlineInputBorder(),
+          contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 8),
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Icon(Icons.category_outlined,
-                size: 14, color: Color(0xFF007AFF)),
-            const SizedBox(width: 4),
             Flexible(
               child: Text(
                 target.type,
                 style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
                   color: Colors.white,
-                  overflow: TextOverflow.ellipsis,
                 ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-            const SizedBox(width: 2),
             const Icon(Icons.arrow_drop_down, size: 14, color: Colors.grey),
           ],
         ),
@@ -1565,28 +1883,28 @@ class _StageDetailScreenState extends State<StageDetailScreen>
 
   Widget _buildShotsButton(Target target) {
     return InkWell(
-      onTap: () => _showShotsSelector(target),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1E1E24),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: Colors.white10),
+      onTap: () {
+        HapticFeedback.lightImpact();
+        _showShotsSelector(target);
+      },
+      child: InputDecorator(
+        decoration: const InputDecoration(
+          labelText: 'Shots',
+          labelStyle: TextStyle(fontSize: 10),
+          isDense: true,
+          border: OutlineInputBorder(),
+          contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 8),
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Icon(Icons.ads_click, size: 14, color: Color(0xFF007AFF)),
-            const SizedBox(width: 4),
             Text(
-              '${target.shotsCount} ${target.shotsCount == 1 ? 'Shot' : 'Shots'}',
+              '${target.shotsCount}',
               style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
+                fontSize: 12,
                 color: Colors.white,
               ),
             ),
-            const SizedBox(width: 2),
             const Icon(Icons.arrow_drop_down, size: 14, color: Colors.grey),
           ],
         ),
@@ -1682,12 +2000,14 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                           final isSelected = target.type == type;
                           return InkWell(
                             onTap: () {
+                              HapticFeedback.lightImpact();
                               setState(() {
                                 target.type = type;
                               });
                               Navigator.pop(context);
                             },
                             onLongPress: () {
+                              HapticFeedback.lightImpact();
                               _confirmDeleteTag(context, type, 'targetType', setModalState);
                             },
                             child: Container(
@@ -1722,6 +2042,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                         }),
                         InkWell(
                           onTap: () {
+                            HapticFeedback.lightImpact();
                             setModalState(() {
                               target.type = 'Other';
                             });
@@ -1759,6 +2080,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                     TextFormField(
                       controller: customController,
                       autofocus: true,
+                      onTap: () => HapticFeedback.lightImpact(),
                       style: const TextStyle(color: Colors.white),
                       decoration: const InputDecoration(
                         labelText: 'Shape Name',
@@ -1865,17 +2187,18 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 5,
+                  crossAxisCount: 6,
                   crossAxisSpacing: 10,
                   mainAxisSpacing: 10,
                   childAspectRatio: 1.0,
                 ),
-                itemCount: 10,
+                itemCount: 12,
                 itemBuilder: (context, index) {
                   final shots = index + 1;
                   final isSelected = target.shotsCount == shots;
                   return InkWell(
                     onTap: () {
+                      HapticFeedback.lightImpact();
                       setState(() {
                         target.shotsCount = shots;
                         _adjustShotResultsLength();
@@ -1952,8 +2275,10 @@ class _StageDetailScreenState extends State<StageDetailScreen>
               ),
             ),
             TextButton.icon(
-              onPressed: () =>
-                  _showErrorTagSelector(title, selectedTags, errorType),
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                _showErrorTagSelector(title, selectedTags, errorType);
+              },
               icon: const Icon(Icons.add, size: 16, color: Color(0xFF007AFF)),
               label: const Text(
                 'Manage Tags',
@@ -2002,6 +2327,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                       checkmarkColor: const Color(0xFF007AFF),
                       deleteIconColor: Colors.white54,
                       onDeleted: () {
+                        HapticFeedback.lightImpact();
                         setState(() {
                           selectedTags.remove(tag);
                         });
@@ -2099,6 +2425,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                       final isSelected = selectedTags.contains(tag);
                       return InkWell(
                         onTap: () {
+                          HapticFeedback.lightImpact();
                           setModalState(() {
                             if (isSelected) {
                               selectedTags.remove(tag);
@@ -2109,6 +2436,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                           setState(() {});
                         },
                         onLongPress: () {
+                          HapticFeedback.lightImpact();
                           _confirmDeleteTag(
                               context, tag, errorType, setModalState);
                         },
@@ -2155,6 +2483,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                       Expanded(
                         child: TextFormField(
                           controller: customController,
+                          onTap: () => HapticFeedback.lightImpact(),
                           style: const TextStyle(
                               color: Colors.white, fontSize: 14),
                           decoration: const InputDecoration(
@@ -2162,12 +2491,13 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                             border: OutlineInputBorder(),
                             isDense: true,
                           ),
-                          textCapitalization: TextCapitalization.sentences,
+                          textCapitalization: TextCapitalization.words,
                         ),
                       ),
                       const SizedBox(width: 8),
                       ElevatedButton(
                         onPressed: () {
+                          HapticFeedback.lightImpact();
                           final text = customController.text.trim();
                           if (text.isNotEmpty) {
                             // Add custom tag to database immediately
@@ -2198,7 +2528,10 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                   ),
                   const SizedBox(height: 24),
                   ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      Navigator.pop(context);
+                    },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF121214),
                       foregroundColor: Colors.white,
@@ -2292,11 +2625,15 @@ class _StageDetailScreenState extends State<StageDetailScreen>
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                Navigator.pop(dialogContext);
+              },
               child: const Text('Cancel'),
             ),
             TextButton(
               onPressed: () {
+                HapticFeedback.lightImpact();
                 Navigator.pop(dialogContext);
 
                 // 1. Delete from provider/match (updates db and all stages)
@@ -2328,6 +2665,381 @@ class _StageDetailScreenState extends State<StageDetailScreen>
           ],
         );
       },
+    );
+  }
+
+  void _showTimePickerDialog() async {
+    final result = await showDialog<int>(
+      context: context,
+      builder: (context) => MobileTimePickerDialog(initialTime: _stage.timeLimit),
+    );
+    if (result != null) {
+      setState(() {
+        _stage.timeLimit = result;
+      });
+    }
+  }
+
+  void _showPositionsSelector() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E24),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(20),
+          topRight: Radius.circular(20),
+        ),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'SELECT NUMBER OF POSITIONS',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  letterSpacing: 1.2,
+                  color: Color(0xFF007AFF),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 6,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                  childAspectRatio: 1.0,
+                ),
+                itemCount: 12,
+                itemBuilder: (context, index) {
+                  final positions = index + 1;
+                  final isSelected = _stage.numPositions == positions;
+                  return InkWell(
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      setState(() {
+                        _stage.numPositions = positions;
+                      });
+                      Navigator.pop(context);
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? const Color(0xFF007AFF).withValues(alpha: 0.2)
+                            : const Color(0xFF121214),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isSelected
+                              ? const Color(0xFF007AFF)
+                              : Colors.white10,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          '$positions',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: isSelected ? Colors.white : Colors.white70,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class MobileTimePickerDialog extends StatefulWidget {
+  final int initialTime;
+
+  const MobileTimePickerDialog({super.key, required this.initialTime});
+
+  @override
+  State<MobileTimePickerDialog> createState() => _MobileTimePickerDialogState();
+}
+
+class _MobileTimePickerDialogState extends State<MobileTimePickerDialog> {
+  late int _selectedTime;
+  late int _presetA;
+  late int _presetB;
+  Timer? _autoIncrementTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedTime = widget.initialTime.clamp(5, 600);
+    final box = Hive.box('matchesBox');
+    _presetA = box.get("PRESET_CUSTOM_A") ?? 105;
+    _presetB = box.get("PRESET_CUSTOM_B") ?? 120;
+  }
+
+  @override
+  void dispose() {
+    _autoIncrementTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startAutoIncrement(int val) {
+    _autoIncrementTimer?.cancel();
+    _autoIncrementTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+      setState(() {
+        _selectedTime = (_selectedTime + val).clamp(5, 600);
+      });
+    });
+  }
+
+  void _stopAutoIncrement() {
+    _autoIncrementTimer?.cancel();
+  }
+
+  String _formatTime(int seconds) {
+    int minutes = seconds ~/ 60;
+    int remainingSeconds = seconds % 60;
+    return '${minutes.toString()}:${remainingSeconds.toString().padLeft(2, '0')}';
+  }
+
+  void _savePresetA() {
+    final box = Hive.box('matchesBox');
+    setState(() {
+      _presetA = _selectedTime;
+    });
+    box.put("PRESET_CUSTOM_A", _presetA);
+  }
+
+  void _savePresetB() {
+    final box = Hive.box('matchesBox');
+    setState(() {
+      _presetB = _selectedTime;
+    });
+    box.put("PRESET_CUSTOM_B", _presetB);
+  }
+
+  Widget _buildPresetButton(String label, int value) {
+    return ElevatedButton(
+      onPressed: () {
+        HapticFeedback.lightImpact();
+        setState(() {
+          _selectedTime = value;
+        });
+      },
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.white10,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Colors.white24),
+        ),
+      ),
+      child: Text(label),
+    );
+  }
+
+  Widget _buildCustomPresetButton({
+    required String label,
+    required VoidCallback onTap,
+    required VoidCallback onLongPress,
+  }) {
+    return GestureDetector(
+      onLongPress: () {
+        HapticFeedback.lightImpact();
+        onLongPress();
+      },
+      child: ElevatedButton(
+        onPressed: () {
+          HapticFeedback.lightImpact();
+          onTap();
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF007AFF).withValues(alpha: 0.2),
+          foregroundColor: const Color(0xFF007AFF),
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Color(0xFF007AFF)),
+          ),
+        ),
+        child: Text(label),
+      ),
+    );
+  }
+
+  Widget _buildAdjustButton({
+    required IconData icon,
+    required int delta,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap();
+      },
+      onLongPressStart: (_) => _startAutoIncrement(delta),
+      onLongPressEnd: (_) => _stopAutoIncrement(),
+      child: Container(
+        width: 56,
+        height: 56,
+        decoration: const BoxDecoration(
+          color: Colors.white10,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: Colors.white, size: 28),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: const Color(0xFF1E1E24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'SET TIMER DURATION',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: Color(0xFF007AFF),
+                letterSpacing: 1.2,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildPresetButton("30s", 30),
+                const SizedBox(width: 8),
+                _buildPresetButton("60s", 60),
+                const SizedBox(width: 8),
+                _buildPresetButton("90s", 90),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildAdjustButton(
+                  icon: Icons.remove,
+                  delta: -1,
+                  onTap: () {
+                    setState(() {
+                      _selectedTime = (_selectedTime - 1).clamp(5, 600);
+                    });
+                  },
+                ),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${_selectedTime}s',
+                      style: const TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      _formatTime(_selectedTime),
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[400],
+                      ),
+                    ),
+                  ],
+                ),
+                _buildAdjustButton(
+                  icon: Icons.add,
+                  delta: 1,
+                  onTap: () {
+                    setState(() {
+                      _selectedTime = (_selectedTime + 1).clamp(5, 600);
+                    });
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'HOLD TO SAVE NEW PRESET',
+              style: TextStyle(fontSize: 10, color: Colors.grey),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildCustomPresetButton(
+                  label: '${_presetA}s',
+                  onTap: () {
+                    setState(() {
+                      _selectedTime = _presetA;
+                    });
+                  },
+                  onLongPress: _savePresetA,
+                ),
+                const SizedBox(width: 12),
+                _buildCustomPresetButton(
+                  label: '${_presetB}s',
+                  onTap: () {
+                    setState(() {
+                      _selectedTime = _presetB;
+                    });
+                  },
+                  onLongPress: _savePresetB,
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context, _selectedTime),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF007AFF),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Select'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

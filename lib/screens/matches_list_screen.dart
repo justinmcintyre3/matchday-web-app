@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
@@ -22,7 +23,10 @@ class _MatchesListScreenState extends State<MatchesListScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.add_circle_outline, size: 26),
-            onPressed: () => _showAddMatchWizard(context),
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              _showAddMatchWizard(context);
+            },
           ),
         ],
       ),
@@ -67,7 +71,10 @@ class _MatchesListScreenState extends State<MatchesListScreen> {
                     ),
                     const SizedBox(height: 32),
                     ElevatedButton.icon(
-                      onPressed: () => _showAddMatchWizard(context),
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        _showAddMatchWizard(context);
+                      },
                       icon: const Icon(Icons.add),
                       label: const Text('Setup First Match'),
                       style: ElevatedButton.styleFrom(
@@ -126,11 +133,17 @@ class _MatchesListScreenState extends State<MatchesListScreen> {
                 'Are you sure you want to delete "${match.name}"? This will delete all stage logs.'),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context, false),
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.pop(context, false);
+                },
                 child: const Text('Cancel'),
               ),
               TextButton(
-                onPressed: () => Navigator.pop(context, true),
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.pop(context, true);
+                },
                 child: Text('Delete', style: TextStyle(color: Colors.red[400])),
               ),
             ],
@@ -139,9 +152,6 @@ class _MatchesListScreenState extends State<MatchesListScreen> {
       },
       onDismissed: (direction) {
         provider.deleteMatch(match.id);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Match "${match.name}" deleted')),
-        );
       },
       child: Card(
         margin: const EdgeInsets.only(bottom: 12.0),
@@ -149,6 +159,7 @@ class _MatchesListScreenState extends State<MatchesListScreen> {
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: () {
+            HapticFeedback.lightImpact();
             Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (context) => MatchDetailScreen(matchId: match.id),
@@ -179,7 +190,7 @@ class _MatchesListScreenState extends State<MatchesListScreen> {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        '$percent% Hits',
+                        '$percent%',
                         style: TextStyle(
                           color: Theme.of(context).colorScheme.primary,
                           fontWeight: FontWeight.bold,
@@ -295,7 +306,7 @@ class _MatchSetupWizardState extends State<_MatchSetupWizard> {
         stageNumber: index + 1,
         status: 'pending',
         numTargets: 0,
-        targets: const [],
+        targetArrays: const [],
         windPlan: WindPlan(),
         shotResults: const [],
       ),
@@ -358,11 +369,14 @@ class _MatchSetupWizardState extends State<_MatchSetupWizard> {
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                         ),
+                        ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      Navigator.pop(context);
+                    },
                   ),
                 ],
               ),
@@ -372,6 +386,8 @@ class _MatchSetupWizardState extends State<_MatchSetupWizard> {
                 children: [
                   TextFormField(
                     controller: _nameController,
+                    onTap: () => HapticFeedback.lightImpact(),
+                    textCapitalization: TextCapitalization.words,
                     decoration: const InputDecoration(
                       labelText: 'Match Name',
                       hintText: 'e.g. Blue Ridge PRS Regional',
@@ -389,6 +405,8 @@ class _MatchSetupWizardState extends State<_MatchSetupWizard> {
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _locationController,
+                    onTap: () => HapticFeedback.lightImpact(),
+                    textCapitalization: TextCapitalization.words,
                     decoration: const InputDecoration(
                       labelText: 'Match Location',
                       hintText: 'e.g. Clean Valley Range, VA',
@@ -416,14 +434,16 @@ class _MatchSetupWizardState extends State<_MatchSetupWizard> {
                       subtitle: Text(DateFormat('EEEE, MMMM d, yyyy')
                           .format(_selectedDate)),
                       trailing: const Icon(Icons.calendar_today),
-                      onTap: () => _selectDate(context),
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        _selectDate(context);
+                      },
                     ),
                   ),
                   const SizedBox(height: 20),
                   const Text(
                     'Stages Configuration',
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 15),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                   ),
                   const SizedBox(height: 8),
                   Row(
@@ -441,6 +461,7 @@ class _MatchSetupWizardState extends State<_MatchSetupWizard> {
                                 ))
                             .toList(),
                         onChanged: (val) {
+                          HapticFeedback.lightImpact();
                           if (val != null) setState(() => _numStages = val);
                         },
                       ),
@@ -450,7 +471,10 @@ class _MatchSetupWizardState extends State<_MatchSetupWizard> {
               ),
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: _submitForm,
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  _submitForm();
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Theme.of(context).colorScheme.primary,
                   foregroundColor: Colors.white,
