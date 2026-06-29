@@ -28,7 +28,7 @@ class KestrelDetailScreen extends StatelessWidget {
             TextButton(
               onPressed: () async {
                 HapticFeedback.mediumImpact();
-                await provider.disconnect();
+                await provider.forgetDevice();
                 if (context.mounted) Navigator.pop(context);
               },
               child: const Text(
@@ -99,8 +99,11 @@ class KestrelDetailScreen extends StatelessWidget {
       case KestrelConnectionState.error:
         return _ErrorCard(
           message: device?.errorMessage ?? 'An unexpected error occurred.',
-          onRetry: () => provider.startScan(),
+          onRetry: () => provider.startScan(), // Or reconnect if MAC known
         );
+
+      case KestrelConnectionState.disconnected:
+        return _DisconnectedCard(device: device, provider: provider);
 
       default:
         return const SizedBox.shrink();
@@ -199,6 +202,7 @@ class _PinEntryCard extends StatefulWidget {
 class _PinEntryCardState extends State<_PinEntryCard> {
   final _controller = TextEditingController();
   bool _submitting = false;
+  bool _rememberPin = false;
 
   @override
   void dispose() {
@@ -211,9 +215,12 @@ class _PinEntryCardState extends State<_PinEntryCard> {
     if (pin.isEmpty) return;
     HapticFeedback.mediumImpact();
     setState(() => _submitting = true);
-    // Phase 2: widget.provider.sendPin(pin);
-    // For now — placeholder until PIN protocol is wired
-    setState(() => _submitting = false);
+    
+    await widget.provider.authenticateWithPin(pin, savePin: _rememberPin);
+    
+    if (mounted) {
+      setState(() => _submitting = false);
+    }
   }
 
   @override
@@ -269,7 +276,35 @@ class _PinEntryCardState extends State<_PinEntryCard> {
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Checkbox(
+                value: _rememberPin,
+                activeColor: const Color(0xFF007AFF),
+                onChanged: (val) {
+                  setState(() {
+                    _rememberPin = val ?? false;
+                  });
+                },
+              ),
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _rememberPin = !_rememberPin;
+                  });
+                },
+                child: Text(
+                  'Remember PIN',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.8),
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           SizedBox(
             height: 48,
             child: ElevatedButton(
@@ -476,6 +511,66 @@ class _InfoRow extends StatelessWidget {
             color: Colors.white.withValues(alpha: 0.06),
           ),
       ],
+    );
+  }
+}
+
+// ── Disconnected card ─────────────────────────────────────────────────────────
+
+class _DisconnectedCard extends StatelessWidget {
+  final KestrelDevice? device;
+  final KestrelProvider provider;
+  
+  const _DisconnectedCard({this.device, required this.provider});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E24),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.bluetooth_disabled_rounded,
+              color: Colors.white.withValues(alpha: 0.3), size: 36),
+          const SizedBox(height: 12),
+          Text(
+            'Waiting for device to come in range...\nThe app will automatically reconnect.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.7),
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                if (device != null) {
+                  provider.connect(device!, autoConnect: false);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF007AFF),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                elevation: 0,
+              ),
+              child: const Text(
+                'Connect',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

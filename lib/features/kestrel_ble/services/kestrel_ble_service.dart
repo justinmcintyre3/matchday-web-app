@@ -17,6 +17,7 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 import '../constants/kestrel_ble_constants.dart';
 import '../models/kestrel_device.dart';
+import 'kestrel_jni_service.dart';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Callback typedefs
@@ -62,6 +63,30 @@ class KestrelBleService {
   KestrelRxCallback? onRxData;
 
   // Internal state
+  final KestrelJniService _jni = KestrelJniService();
+
+  KestrelBleService() {
+    _jni.onTxBytes.listen((bytes) {
+      writeBytes(bytes);
+    });
+    
+    _jni.onPrivacyStatus.listen((isPrivacy) {
+      if (isPrivacy) {
+        onConnectionStateChanged?.call(KestrelConnectionState.pinRequired);
+      } else {
+        _jni.sendRequestAuth();
+      }
+    });
+
+    _jni.onAuthComplete.listen((success) {
+      if (success) {
+        onConnectionStateChanged?.call(KestrelConnectionState.connected);
+      } else {
+        onConnectionStateChanged?.call(KestrelConnectionState.error);
+        disconnect();
+      }
+    });
+  }
   BluetoothDevice? _connectedDevice;
   BluetoothCharacteristic? _txCharacteristic;
 
@@ -156,7 +181,7 @@ class KestrelBleService {
   /// [KestrelConnectionState.connected] (if no PIN required) or
   /// [KestrelConnectionState.pinRequired] once the privacy-status check
   /// is wired up (Phase 2).
-  Future<void> connect(KestrelDevice device) async {
+  Future<void> connect(KestrelDevice device, {bool autoConnect = false}) async {
     await stopScan();
 
     final btDevice = BluetoothDevice.fromId(device.address);
@@ -170,8 +195,8 @@ class KestrelBleService {
         btDevice.connectionState.listen(_onConnectionStateChange);
 
     await btDevice.connect(
-      autoConnect: false,
-      timeout: const Duration(seconds: 15),
+      autoConnect: autoConnect,
+      timeout: autoConnect ? const Duration(days: 365) : const Duration(seconds: 15),
     );
   }
 
@@ -214,9 +239,11 @@ class KestrelBleService {
         connectionPriorityRequest: ConnectionPriority.high,
       );
 
-      // For Phase 1 we surface as connected; PIN check comes when we
-      // send the getPrivacyStatus command in Phase 2.
-      onConnectionStateChanged?.call(KestrelConnectionState.connected);
+      // Begin Phase 2 Authentication Flow via JNI
+      await Future.delayed(const Duration(milliseconds: 500));
+      await _jni.connectJni();
+      await Future.delayed(const Duration(milliseconds: 200));
+      await _jni.sendCmdGetPrivacyStatus();
     } catch (e) {
       debugPrint('[KestrelBLE] Service discovery error: $e');
       onConnectionStateChanged?.call(KestrelConnectionState.error);
@@ -231,7 +258,10 @@ class KestrelBleService {
       await _rxSubscription?.cancel();
       _rxSubscription = characteristic.lastValueStream.listen(
         (bytes) {
-          if (bytes.isNotEmpty) onRxData?.call(bytes);
+          if (bytes.isNotEmpty) {
+            onRxData?.call(bytes);
+            _jni.setRxBytes(bytes); // Feed BLE data into JNI state machine
+          }
         },
       );
       debugPrint('[KestrelBLE] INDICATE enabled on RX characteristic');
@@ -265,11 +295,16 @@ class KestrelBleService {
     }
   }
 
+  Future<void> authenticateWithPin(String pin) async {
+    await _jni.sendCmdPrivacyAuthenticate(pin, "");
+  }
+
   // ────────────────────────────────────────────────────────────────────────────
   // Disconnect / cleanup
   // ────────────────────────────────────────────────────────────────────────────
 
   Future<void> disconnect() async {
+    await _jni.disconnectJni();
     await _rxSubscription?.cancel();
     await _connectionSubscription?.cancel();
     _rxSubscription = null;
@@ -281,6 +316,7 @@ class KestrelBleService {
   }
 
   void dispose() {
+    _jni.dispose();
     _scanTimer?.cancel();
     _scanSubscription?.cancel();
     _rxSubscription?.cancel();

@@ -88,8 +88,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final kestrel = context.watch<KestrelProvider>().connectedDevice;
-    final kestrelConnected =
-        kestrel?.state == KestrelConnectionState.connected;
+    final isKestrelSaved = kestrel != null;
+    final kestrelConnected = kestrel?.state == KestrelConnectionState.connected;
 
     return Scaffold(
       appBar: AppBar(
@@ -201,8 +201,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     },
                   ),
 
-                  // ── Kestrel tile (only when connected) ──────────────────
-                  if (kestrelConnected && kestrel != null) ...[
+                  // ── Kestrel tile (if a device is saved) ──────────────────
+                  if (isKestrelSaved) ...[
                     Divider(
                       height: 1,
                       indent: 56,
@@ -217,43 +217,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         width: 36,
                         height: 36,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF00E676)
-                              .withValues(alpha: 0.12),
+                          color: (kestrelConnected ? const Color(0xFF00E676) : Colors.white)
+                              .withValues(alpha: kestrelConnected ? 0.12 : 0.05),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Icon(
-                          Icons.bluetooth_connected,
-                          color: Color(0xFF00E676),
+                        child: Icon(
+                          kestrelConnected ? Icons.bluetooth_connected : Icons.bluetooth,
+                          color: kestrelConnected ? const Color(0xFF00E676) : Colors.white38,
                           size: 20,
                         ),
                       ),
                       title: Text(
                         kestrel.name,
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: kestrelConnected ? Colors.white : Colors.white70,
                           fontSize: 15,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
                       subtitle: Text(
-                        'Kestrel ${kestrel.deviceType} • Connected',
-                        style: const TextStyle(
-                          color: Color(0xFF00E676),
+                        kestrelConnected 
+                          ? 'Kestrel ${kestrel.deviceType} • Connected'
+                          : 'Kestrel ${kestrel.deviceType} • Disconnected',
+                        style: TextStyle(
+                          color: kestrelConnected ? const Color(0xFF00E676) : Colors.white38,
                           fontSize: 12,
                         ),
                       ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF00E676),
-                              shape: BoxShape.circle,
+                          if (kestrelConnected)
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF00E676),
+                                shape: BoxShape.circle,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
+                          if (kestrelConnected) const SizedBox(width: 8),
                           const Icon(Icons.chevron_right,
                               color: Colors.white38, size: 20),
                         ],

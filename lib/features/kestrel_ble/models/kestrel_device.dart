@@ -49,6 +49,9 @@ class KestrelDevice {
   final String? serialNumber;
   final String? firmwareVersion;
   final String? hardwareVersion;
+  
+  // Stored for auto-reconnect
+  final String? pin;
 
   final String? errorMessage;
 
@@ -61,8 +64,38 @@ class KestrelDevice {
     this.serialNumber,
     this.firmwareVersion,
     this.hardwareVersion,
+    this.pin,
     this.errorMessage,
   });
+
+  /// Factory constructor to load from JSON
+  factory KestrelDevice.fromJson(Map<String, dynamic> json) {
+    return KestrelDevice(
+      name: json['name'] as String? ?? 'Kestrel',
+      address: json['address'] as String? ?? '',
+      deviceType: json['deviceType'] as String? ?? 'Unknown',
+      state: KestrelConnectionState.disconnected, // Always load as disconnected
+      modelName: json['modelName'] as String?,
+      serialNumber: json['serialNumber'] as String?,
+      firmwareVersion: json['firmwareVersion'] as String?,
+      hardwareVersion: json['hardwareVersion'] as String?,
+      pin: json['pin'] as String?,
+    );
+  }
+
+  /// Convert to JSON for storage
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'address': address,
+      'deviceType': deviceType,
+      'modelName': modelName,
+      'serialNumber': serialNumber,
+      'firmwareVersion': firmwareVersion,
+      'hardwareVersion': hardwareVersion,
+      'pin': pin,
+    };
+  }
 
   /// Returns a copy with the specified fields overridden.
   KestrelDevice copyWith({
@@ -74,6 +107,7 @@ class KestrelDevice {
     String? serialNumber,
     String? firmwareVersion,
     String? hardwareVersion,
+    String? pin,
     String? errorMessage,
   }) {
     return KestrelDevice(
@@ -85,6 +119,7 @@ class KestrelDevice {
       serialNumber: serialNumber ?? this.serialNumber,
       firmwareVersion: firmwareVersion ?? this.firmwareVersion,
       hardwareVersion: hardwareVersion ?? this.hardwareVersion,
+      pin: pin ?? this.pin,
       errorMessage: errorMessage ?? this.errorMessage,
     );
   }
