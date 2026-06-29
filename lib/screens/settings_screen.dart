@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:watch_connectivity/watch_connectivity.dart';
+import 'package:provider/provider.dart';
 import 'device_detail_screen.dart';
+import '../features/kestrel_ble/providers/kestrel_provider.dart';
+import '../features/kestrel_ble/models/kestrel_device.dart';
+import '../features/kestrel_ble/screens/kestrel_scan_screen.dart';
+import '../features/kestrel_ble/screens/kestrel_detail_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -15,11 +20,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool? _isReachable;
   bool? _isPaired;
   bool _loading = true;
-
-  // Devices list - will be populated dynamically in the future.
-  static const List<Map<String, String>> _devices = [
-    {'name': 'Matchday Watch', 'type': 'Wear OS'},
-  ];
 
   @override
   void initState() {
@@ -70,30 +70,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  String _getSubtitle(Map<String, String> device) {
-    if (_loading) return 'Checking status...';
-    String status = device['type']!;
-    if (_isReachable == true) {
-      status += ' • Reachable';
-    } else if (_isPaired == true) {
-      status += ' • Paired';
-    } else if (_isPaired == false) {
-      status += ' • Disconnected';
-    } else {
-      status += ' • Not Reachable';
-    }
-    return status;
+  String _getWatchSubtitle() {
+    if (_loading) return 'Wear OS • Checking status...';
+    if (_isReachable == true) return 'Wear OS • Reachable';
+    if (_isPaired == true) return 'Wear OS • Paired';
+    if (_isPaired == false) return 'Wear OS • Disconnected';
+    return 'Wear OS • Not Reachable';
   }
 
-  Color _getStatusColor() {
+  Color _getWatchStatusColor() {
     if (_loading) return Colors.grey;
-    if (_isReachable == true) return const Color(0xFF00E676); // Green
-    if (_isPaired == true) return const Color(0xFF007AFF); // Blue
+    if (_isReachable == true) return const Color(0xFF00E676);
+    if (_isPaired == true) return const Color(0xFF007AFF);
     return Colors.white24;
   }
 
   @override
   Widget build(BuildContext context) {
+    final kestrel = context.watch<KestrelProvider>().connectedDevice;
+    final kestrelConnected =
+        kestrel?.state == KestrelConnectionState.connected;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
@@ -132,95 +129,147 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Column(
-                children: _devices.asMap().entries.map((entry) {
-                  final i = entry.key;
-                  final device = entry.value;
-                  final isLast = i == _devices.length - 1;
-                  return Column(
-                    children: [
-                      ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 6,
-                        ),
-                        leading: Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF007AFF).withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(
-                            Icons.watch_rounded,
-                            color: Color(0xFF007AFF),
-                            size: 20,
-                          ),
-                        ),
-                        title: Text(
-                          device['name']!,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        subtitle: Text(
-                          _getSubtitle(device),
-                          style: TextStyle(
-                            color: _loading
-                                ? Colors.white.withValues(alpha: 0.3)
-                                : _isReachable == true
-                                    ? const Color(0xFF00E676).withValues(alpha: 0.8)
-                                    : Colors.white.withValues(alpha: 0.4),
-                            fontSize: 12,
-                          ),
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (!_loading)
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: _getStatusColor(),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            const SizedBox(width: 8),
-                            const Icon(
-                              Icons.chevron_right,
-                              color: Colors.white38,
-                              size: 20,
-                            ),
-                          ],
-                        ),
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => DeviceDetailScreen(
-                                deviceName: device['name']!,
-                                deviceType: device['type']!,
-                              ),
-                            ),
-                          ).then((_) {
-                            // Reload when returning from device details
-                            _loadWatchStatus();
-                          });
-                        },
+                children: [
+                  // ── Matchday Watch tile ──────────────────────────────────
+                  ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
+                    leading: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color:
+                            const Color(0xFF007AFF).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      if (!isLast)
-                        Divider(
-                          height: 1,
-                          indent: 56,
-                          endIndent: 0,
-                          color: Colors.white.withValues(alpha: 0.06),
+                      child: const Icon(
+                        Icons.watch_rounded,
+                        color: Color(0xFF007AFF),
+                        size: 20,
+                      ),
+                    ),
+                    title: const Text(
+                      'Matchday Watch',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    subtitle: Text(
+                      _getWatchSubtitle(),
+                      style: TextStyle(
+                        color: _loading
+                            ? Colors.white.withValues(alpha: 0.3)
+                            : _isReachable == true
+                                ? const Color(0xFF00E676)
+                                    .withValues(alpha: 0.8)
+                                : Colors.white.withValues(alpha: 0.4),
+                        fontSize: 12,
+                      ),
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (!_loading)
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: _getWatchStatusColor(),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.chevron_right,
+                            color: Colors.white38, size: 20),
+                      ],
+                    ),
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const DeviceDetailScreen(
+                            deviceName: 'Matchday Watch',
+                            deviceType: 'Wear OS',
+                          ),
                         ),
-                    ],
-                  );
-                }).toList(),
+                      ).then((_) => _loadWatchStatus());
+                    },
+                  ),
+
+                  // ── Kestrel tile (only when connected) ──────────────────
+                  if (kestrelConnected && kestrel != null) ...[
+                    Divider(
+                      height: 1,
+                      indent: 56,
+                      color: Colors.white.withValues(alpha: 0.06),
+                    ),
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 6,
+                      ),
+                      leading: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00E676)
+                              .withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.bluetooth_connected,
+                          color: Color(0xFF00E676),
+                          size: 20,
+                        ),
+                      ),
+                      title: Text(
+                        kestrel.name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Kestrel ${kestrel.deviceType} • Connected',
+                        style: const TextStyle(
+                          color: Color(0xFF00E676),
+                          fontSize: 12,
+                        ),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF00E676),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(Icons.chevron_right,
+                              color: Colors.white38, size: 20),
+                        ],
+                      ),
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const KestrelDetailScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ],
               ),
             ),
 
@@ -242,7 +291,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: const Icon(Icons.add, size: 20),
                 label: const Text(
                   'Add Device',
-                  style: TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
+                  style:
+                      TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
                 ),
               ),
             ),
@@ -253,7 +303,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-// -- Add Device Bottom Sheet
+// ──────────────────────────────────────────────────────────────────────────────
+// Add Device Bottom Sheet — device type selector
+// ──────────────────────────────────────────────────────────────────────────────
+
 class _AddDeviceSheet extends StatelessWidget {
   const _AddDeviceSheet();
 
@@ -280,22 +333,6 @@ class _AddDeviceSheet extends StatelessWidget {
           ),
           const SizedBox(height: 28),
 
-          // Icon
-          Container(
-            width: 68,
-            height: 68,
-            decoration: BoxDecoration(
-              color: const Color(0xFF007AFF).withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Icon(
-              Icons.bluetooth_searching,
-              color: Color(0xFF007AFF),
-              size: 34,
-            ),
-          ),
-          const SizedBox(height: 20),
-
           const Text(
             'Add a Device',
             style: TextStyle(
@@ -305,42 +342,141 @@ class _AddDeviceSheet extends StatelessWidget {
               letterSpacing: -0.3,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
           Text(
-            'Bluetooth device pairing is coming soon.\nYou\'ll be able to discover and connect\nnew devices from here.',
-            textAlign: TextAlign.center,
+            'What type of device would you like to add?',
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.5),
+              color: Colors.white.withValues(alpha: 0.45),
               fontSize: 14,
-              height: 1.55,
             ),
           ),
-          const SizedBox(height: 32),
 
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                HapticFeedback.lightImpact();
-                Navigator.pop(context);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF007AFF),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+          const SizedBox(height: 28),
+
+          // ── Ballistics Device tile ────────────────────────────────────
+          _DeviceTypeTile(
+            icon: Icons.my_location_rounded,
+            iconColor: const Color(0xFF007AFF),
+            title: 'Ballistics Device',
+            subtitle: 'Kestrel 5700, 2700, Elite',
+            onTap: () {
+              HapticFeedback.mediumImpact();
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const KestrelScanScreen(),
                 ),
-              ),
-              child: const Text(
-                'Got it',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-              ),
-            ),
+              );
+            },
           ),
+
+          const SizedBox(height: 10),
+
+          // ── IMU Device tile ───────────────────────────────────────────
+          _DeviceTypeTile(
+            icon: Icons.sensors,
+            iconColor: Colors.white38,
+            title: 'IMU Device',
+            subtitle: 'Coming soon',
+            enabled: false,
+            onTap: () {
+              HapticFeedback.lightImpact();
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('IMU device support is coming soon.'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+          ),
+
+          const SizedBox(height: 24),
         ],
       ),
     );
   }
 }
+
+// ── Device type tile ──────────────────────────────────────────────────────────
+
+class _DeviceTypeTile extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final bool enabled;
+
+  const _DeviceTypeTile({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.enabled = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFF2A2A32),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: enabled ? 0.15 : 0.06),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  icon,
+                  color: enabled ? iconColor : Colors.white24,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: enabled ? Colors.white : Colors.white38,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.35),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: enabled ? Colors.white38 : Colors.white12,
+                size: 20,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+

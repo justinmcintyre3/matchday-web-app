@@ -1,0 +1,481 @@
+// Kestrel device detail screen.
+//
+// Shown after [KestrelScanScreen] initiates a connection.
+// Displays connection progress, prompts for PIN if required,
+// and shows device info when fully connected.
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+
+import '../models/kestrel_device.dart';
+import '../providers/kestrel_provider.dart';
+
+class KestrelDetailScreen extends StatelessWidget {
+  const KestrelDetailScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<KestrelProvider>();
+    final device = provider.connectedDevice;
+    final state = provider.connectionState;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(device?.name ?? 'Kestrel'),
+        actions: [
+          if (state == KestrelConnectionState.connected)
+            TextButton(
+              onPressed: () async {
+                HapticFeedback.mediumImpact();
+                await provider.disconnect();
+                if (context.mounted) Navigator.pop(context);
+              },
+              child: const Text(
+                'Forget',
+                style: TextStyle(color: Color(0xFFFF5252)),
+              ),
+            ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 24, 16, 40),
+        children: [
+          // ── Device header ───────────────────────────────────────────────
+          Center(
+            child: Column(
+              children: [
+                _DeviceIcon(state: state),
+                const SizedBox(height: 14),
+                Text(
+                  device?.name ?? 'Kestrel',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  device?.deviceType != null
+                      ? 'Kestrel ${device!.deviceType}'
+                      : 'Ballistics Device',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.45),
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 32),
+
+          // ── State-specific content ──────────────────────────────────────
+          _buildStateContent(context, state, device, provider),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStateContent(
+    BuildContext context,
+    KestrelConnectionState state,
+    KestrelDevice? device,
+    KestrelProvider provider,
+  ) {
+    switch (state) {
+      case KestrelConnectionState.connecting:
+      case KestrelConnectionState.discovering:
+        return _ConnectingCard(state: state);
+
+      case KestrelConnectionState.pinRequired:
+        return _PinEntryCard(provider: provider);
+
+      case KestrelConnectionState.connected:
+        return _ConnectedInfoCard(device: device);
+
+      case KestrelConnectionState.error:
+        return _ErrorCard(
+          message: device?.errorMessage ?? 'An unexpected error occurred.',
+          onRetry: () => provider.startScan(),
+        );
+
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Sub-widgets
+// ──────────────────────────────────────────────────────────────────────────────
+
+class _DeviceIcon extends StatelessWidget {
+  final KestrelConnectionState state;
+  const _DeviceIcon({required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    Color iconBg;
+    Color iconColor;
+    IconData icon;
+
+    switch (state) {
+      case KestrelConnectionState.connected:
+        iconBg = const Color(0xFF00E676).withValues(alpha: 0.12);
+        iconColor = const Color(0xFF00E676);
+        icon = Icons.bluetooth_connected;
+        break;
+      case KestrelConnectionState.error:
+        iconBg = const Color(0xFFFF5252).withValues(alpha: 0.12);
+        iconColor = const Color(0xFFFF5252);
+        icon = Icons.bluetooth_disabled;
+        break;
+      default:
+        iconBg = const Color(0xFF007AFF).withValues(alpha: 0.12);
+        iconColor = const Color(0xFF007AFF);
+        icon = Icons.bluetooth_searching;
+    }
+
+    return Container(
+      width: 72,
+      height: 72,
+      decoration: BoxDecoration(
+        color: iconBg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Icon(icon, color: iconColor, size: 38),
+    );
+  }
+}
+
+// ── Connecting / Discovering card ─────────────────────────────────────────────
+
+class _ConnectingCard extends StatelessWidget {
+  final KestrelConnectionState state;
+  const _ConnectingCard({required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = state == KestrelConnectionState.connecting
+        ? 'Connecting…'
+        : 'Discovering services…';
+
+    return Container(
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E24),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          const CircularProgressIndicator(
+            color: Color(0xFF007AFF),
+            strokeWidth: 2.5,
+          ),
+          const SizedBox(height: 20),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white70, fontSize: 15),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── PIN entry card ────────────────────────────────────────────────────────────
+
+class _PinEntryCard extends StatefulWidget {
+  final KestrelProvider provider;
+  const _PinEntryCard({required this.provider});
+
+  @override
+  State<_PinEntryCard> createState() => _PinEntryCardState();
+}
+
+class _PinEntryCardState extends State<_PinEntryCard> {
+  final _controller = TextEditingController();
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final pin = _controller.text.trim();
+    if (pin.isEmpty) return;
+    HapticFeedback.mediumImpact();
+    setState(() => _submitting = true);
+    // Phase 2: widget.provider.sendPin(pin);
+    // For now — placeholder until PIN protocol is wired
+    setState(() => _submitting = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E24),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'PIN Required',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'This Kestrel has privacy mode enabled.\nEnter the device PIN to continue.',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.5),
+              fontSize: 13,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 20),
+          TextField(
+            controller: _controller,
+            keyboardType: TextInputType.number,
+            maxLength: 8,
+            style: const TextStyle(color: Colors.white, letterSpacing: 4),
+            decoration: InputDecoration(
+              counterText: '',
+              hintText: '• • • •',
+              hintStyle: TextStyle(
+                color: Colors.white.withValues(alpha: 0.25),
+                letterSpacing: 4,
+              ),
+              filled: true,
+              fillColor: const Color(0xFF121214),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 48,
+            child: ElevatedButton(
+              onPressed: _submitting ? null : _submit,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF007AFF),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 0,
+              ),
+              child: _submitting
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Text(
+                      'Connect',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                      ),
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Connected info card ───────────────────────────────────────────────────────
+
+class _ConnectedInfoCard extends StatelessWidget {
+  final KestrelDevice? device;
+  const _ConnectedInfoCard({this.device});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E24),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          _InfoRow(
+            label: 'Connection',
+            value: 'Connected',
+            valueColor: const Color(0xFF00E676),
+            dot: const Color(0xFF00E676),
+            showDivider: true,
+          ),
+          if (device?.modelName != null)
+            _InfoRow(
+              label: 'Model',
+              value: device!.modelName!,
+              showDivider: true,
+            ),
+          if (device?.serialNumber != null)
+            _InfoRow(
+              label: 'Serial',
+              value: device!.serialNumber!,
+              showDivider: true,
+            ),
+          if (device?.firmwareVersion != null)
+            _InfoRow(
+              label: 'Firmware',
+              value: device!.firmwareVersion!,
+              showDivider: true,
+            ),
+          if (device?.hardwareVersion != null)
+            _InfoRow(
+              label: 'Hardware',
+              value: device!.hardwareVersion!,
+              showDivider: false,
+            ),
+          // Fallback if no info yet
+          if (device?.modelName == null && device?.serialNumber == null)
+            _InfoRow(
+              label: 'Address',
+              value: device?.address ?? '—',
+              showDivider: false,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Error card ────────────────────────────────────────────────────────────────
+
+class _ErrorCard extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  const _ErrorCard({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E24),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          const Icon(Icons.warning_amber_rounded,
+              color: Color(0xFFFF5252), size: 36),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.7),
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                Navigator.pop(context);
+                onRetry();
+              },
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF007AFF),
+                side: const BorderSide(color: Color(0xFF007AFF)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              child: const Text('Try Again'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Shared info row ───────────────────────────────────────────────────────────
+
+class _InfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color valueColor;
+  final Color? dot;
+  final bool showDivider;
+
+  const _InfoRow({
+    required this.label,
+    required this.value,
+    this.valueColor = Colors.white70,
+    this.dot,
+    required this.showDivider,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(label,
+                  style:
+                      const TextStyle(color: Colors.white, fontSize: 15)),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (dot != null) ...[
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: dot,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  Text(value,
+                      style: TextStyle(color: valueColor, fontSize: 15)),
+                ],
+              ),
+            ],
+          ),
+        ),
+        if (showDivider)
+          Divider(
+            height: 1,
+            indent: 16,
+            color: Colors.white.withValues(alpha: 0.06),
+          ),
+      ],
+    );
+  }
+}

@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 import 'providers/checklist_provider.dart';
 import 'providers/match_provider.dart';
+import 'features/kestrel_ble/providers/kestrel_provider.dart';
 import 'screens/main_navigation_container.dart';
 
 void main() async {
@@ -33,6 +34,9 @@ void main() async {
         ),
         ChangeNotifierProvider(
           create: (_) => MatchProvider(matchesBox),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => KestrelProvider(),
         ),
       ],
       child: const MyApp(),
