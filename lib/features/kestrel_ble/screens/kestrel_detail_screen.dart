@@ -7,6 +7,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../models/kestrel_device.dart';
 import '../providers/kestrel_provider.dart';
@@ -125,6 +126,7 @@ class KestrelDetailScreen extends StatelessWidget {
     switch (state) {
       case KestrelConnectionState.connecting:
       case KestrelConnectionState.discovering:
+      case KestrelConnectionState.synchronizing:
         return _ConnectingCard(state: state);
 
       case KestrelConnectionState.pinRequired:
@@ -201,7 +203,9 @@ class _ConnectingCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final label = state == KestrelConnectionState.connecting
         ? 'Connecting…'
-        : 'Discovering services…';
+        : state == KestrelConnectionState.synchronizing
+            ? 'Synchronizing data…'
+            : 'Discovering services…';
 
     return Container(
       padding: const EdgeInsets.all(28),
@@ -380,9 +384,95 @@ class _PinEntryCardState extends State<_PinEntryCard> {
 
 // ── Connected info card ───────────────────────────────────────────────────────
 
-class _ConnectedInfoCard extends StatelessWidget {
+class _ConnectedInfoCard extends StatefulWidget {
   final KestrelDevice? device;
   const _ConnectedInfoCard({this.device});
+
+  @override
+  State<_ConnectedInfoCard> createState() => _ConnectedInfoCardState();
+}
+
+class _ConnectedInfoCardState extends State<_ConnectedInfoCard> {
+  bool _isUpdatingLocation = false;
+
+  Future<void> _updateLatitudeFromGps() async {
+    setState(() {
+      _isUpdatingLocation = true;
+    });
+
+    try {
+      // Check permissions
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Location permissions are denied')),
+            );
+          }
+          setState(() {
+            _isUpdatingLocation = false;
+          });
+          return;
+        }
+      }
+      
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location permissions are permanently denied, we cannot request permissions.')),
+          );
+        }
+        setState(() {
+          _isUpdatingLocation = false;
+        });
+        return;
+      } 
+
+      // Get location
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Acquiring GPS location...')),
+        );
+      }
+      
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sending Latitude: ${position.latitude.toStringAsFixed(6)}...')),
+      );
+      
+      final provider = context.read<KestrelProvider>();
+      await provider.updateKestrelLatitude(position.latitude);
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Latitude updated successfully!'),
+          backgroundColor: Color(0xFF00E676),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: const Color(0xFFFF5252),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUpdatingLocation = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -400,37 +490,72 @@ class _ConnectedInfoCard extends StatelessWidget {
             dot: const Color(0xFF00E676),
             showDivider: true,
           ),
-          if (device?.modelName != null)
+          if (widget.device?.modelName != null)
             _InfoRow(
               label: 'Model',
-              value: device!.modelName!,
+              value: widget.device!.modelName!,
               showDivider: true,
             ),
-          if (device?.serialNumber != null)
+          if (widget.device?.serialNumber != null)
             _InfoRow(
               label: 'Serial',
-              value: device!.serialNumber!,
+              value: widget.device!.serialNumber!,
               showDivider: true,
             ),
-          if (device?.firmwareVersion != null)
+          if (widget.device?.firmwareVersion != null)
             _InfoRow(
               label: 'Firmware',
-              value: device!.firmwareVersion!,
+              value: widget.device!.firmwareVersion!,
               showDivider: true,
             ),
-          if (device?.hardwareVersion != null)
+          if (widget.device?.hardwareVersion != null)
             _InfoRow(
               label: 'Hardware',
-              value: device!.hardwareVersion!,
+              value: widget.device!.hardwareVersion!,
               showDivider: false,
             ),
           // Fallback if no info yet
-          if (device?.modelName == null && device?.serialNumber == null)
+          if (widget.device?.modelName == null && widget.device?.serialNumber == null)
             _InfoRow(
               label: 'Address',
-              value: device?.address ?? '—',
+              value: widget.device?.address ?? '—',
               showDivider: false,
             ),
+          
+          Divider(
+            height: 1,
+            color: Colors.white.withValues(alpha: 0.06),
+          ),
+          
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _isUpdatingLocation ? null : _updateLatitudeFromGps,
+                icon: _isUpdatingLocation 
+                    ? const SizedBox(
+                        width: 18, 
+                        height: 18, 
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                      )
+                    : const Icon(Icons.my_location, size: 18),
+                label: Text(
+                  _isUpdatingLocation ? 'Updating...' : 'Update Latitude from GPS',
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF007AFF),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  elevation: 0,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );

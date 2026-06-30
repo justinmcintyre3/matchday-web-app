@@ -8,6 +8,9 @@ import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import com.nkhome.link.ballistics.nkmassdata.NkKestrel
 import com.nkhome.link.ballistics.nkmassdata.k
+import com.nkhome.link.ballistics.nkmassdata.BallisticsEnvironment
+import android.content.Context
+import android.provider.Settings
 
 
 
@@ -15,7 +18,7 @@ import com.nkhome.link.ballistics.nkmassdata.k
 
 
 
-class KestrelJniPlugin(private val channel: MethodChannel) : MethodCallHandler, k {
+class KestrelJniPlugin(private val channel: MethodChannel, private val context: Context) : MethodCallHandler, k {
     private val kestrel: NkKestrel
     private val mainHandler = Handler(Looper.getMainLooper())
     
@@ -42,6 +45,27 @@ class KestrelJniPlugin(private val channel: MethodChannel) : MethodCallHandler, 
                 kestrel.connectJni()
                 isPolling = true
                 mainHandler.post(pollingRunnable)
+                result.success(null)
+            }
+            "getHostId" -> {
+                val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
+                val bytes = androidId.toByteArray()
+                var i2 = 0
+                for (i4 in bytes.indices) {
+                    i2 += (((i2 % 9) * 5) + bytes[i4] + i2 + 5) * 212
+                }
+                for (i5 in bytes.indices) {
+                    i2 += (((i2 % 2) * 18) + bytes[bytes.size - 1 - i5] + i2 + 6) * 1412
+                }
+                var i6 = i2 * 3
+                if (i6 < 0) {
+                    i6 = i2 * (-3)
+                }
+                val hostId = (i6 % 10000).toString()
+                result.success(hostId)
+            }
+            "sendCmdStopEncrypting" -> {
+                kestrel.sendCmdStopEncrypting()
                 result.success(null)
             }
             "disconnectJni" -> {
@@ -72,10 +96,40 @@ class KestrelJniPlugin(private val channel: MethodChannel) : MethodCallHandler, 
                 flushTxBytes()
                 result.success(null)
             }
+            "sendCmdGetTgtInfoSettings" -> {
+                kestrel.sendCmdGetTgtInfoSettings()
+                kestrel.updateComs()
+                flushTxBytes()
+                result.success(null)
+            }
+            "sendCmdGetGunTransferSettings" -> {
+                kestrel.sendCmdGetGunTransferSettings()
+                kestrel.updateComs()
+                flushTxBytes()
+                result.success(null)
+            }
+            "sendCmdGetBalInfoSettings" -> {
+                kestrel.sendCmdGetBalInfoSettings()
+                kestrel.updateComs()
+                flushTxBytes()
+                result.success(null)
+            }
             "sendRequestAuth" -> {
                 kestrel.sendRequestAuth()
                 kestrel.updateComs()
                 flushTxBytes()
+                result.success(null)
+            }
+            "sendSetEnvironment" -> {
+                val latitude = call.argument<Double>("latitude")
+                if (latitude != null) {
+                    val env = BallisticsEnvironment()
+                    env.initEnvironmentInvalid()
+                    env.latitude = latitude.toFloat()
+                    kestrel.sendSetEnvironment(env)
+                    kestrel.updateComs()
+                    flushTxBytes()
+                }
                 result.success(null)
             }
             else -> result.notImplemented()
@@ -108,7 +162,7 @@ class KestrelJniPlugin(private val channel: MethodChannel) : MethodCallHandler, 
     override fun c(z4: Boolean) { invokeFlutter("rcvAuthRequestAck", z4) } // rcvAuthRequestAck
 
     // Stub the rest for now
-    override fun A(z4: Boolean, i2: Int, i4: Int, i5: Int, iArr: IntArray?) {}
+    override fun A(z4: Boolean, i2: Int, i4: Int, i5: Int, iArr: IntArray?) { invokeFlutter("onGunTransferSettingsReceived", z4) }
     override fun B(str: String?) {}
     override fun E(str: String?) {}
     override fun F(z4: Boolean) {}
@@ -132,7 +186,7 @@ class KestrelJniPlugin(private val channel: MethodChannel) : MethodCallHandler, 
     override fun g0(iVar: Any?) {}
     override fun i(z4: Boolean, qVar: Any?) {}
     override fun j0(i2: Int) {}
-    override fun k(z4: Boolean, i2: Int, i4: Int, i5: Int, i6: Int) {}
+    override fun k(z4: Boolean, i2: Int, i4: Int, i5: Int, i6: Int) { invokeFlutter("onTgtInfoSettingsReceived", z4) }
     override fun k0(z4: Boolean) {}
     override fun m() {}
     override fun n0(z4: Boolean) {}
@@ -142,6 +196,6 @@ class KestrelJniPlugin(private val channel: MethodChannel) : MethodCallHandler, 
     override fun q(z4: Boolean) {}
     override fun t(i2: Int) {}
     override fun v(z4: Boolean) {}
-    override fun x(z4: Boolean, cVar: Any?) {}
+    override fun x(z4: Boolean, cVar: Any?) { invokeFlutter("onBalInfoSettingsReceived", z4) }
     override fun z(eVar: Any?) {}
 }

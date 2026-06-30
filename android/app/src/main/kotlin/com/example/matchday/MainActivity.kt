@@ -11,6 +11,6 @@ class MainActivity: FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
         // KestrelJniPlugin sets itself as the call handler inside its init block
-        KestrelJniPlugin(channel)
+        KestrelJniPlugin(channel, context)
     }
 }

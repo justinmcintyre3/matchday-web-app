@@ -1,0 +1,2 @@
+-keep class com.nkhome.link.ballistics.nkmassdata.** { *; }
+-keepclassmembers class com.nkhome.link.ballistics.nkmassdata.** { *; }

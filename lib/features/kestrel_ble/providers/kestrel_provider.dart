@@ -62,6 +62,8 @@ class KestrelProvider extends ChangeNotifier {
   // ──────────────────────────────────────────────────────────────────────────
   // State exposed to UI
   // ──────────────────────────────────────────────────────────────────────────
+  
+  bool _isAutoReconnectScheduled = false;
 
   /// Devices discovered during the current scan session.
   final List<KestrelDevice> scannedDevices = [];
@@ -100,8 +102,10 @@ class KestrelProvider extends ChangeNotifier {
 
   /// Connect to a [device] from the scan list.
   Future<void> connect(KestrelDevice device, {bool autoConnect = false}) async {
-    connectedDevice = device.copyWith(state: KestrelConnectionState.connecting);
-    notifyListeners();
+    if (!autoConnect) {
+      connectedDevice = device.copyWith(state: KestrelConnectionState.connecting);
+      notifyListeners();
+    }
     await _service.connect(device, autoConnect: autoConnect);
   }
 
@@ -127,23 +131,20 @@ class KestrelProvider extends ChangeNotifier {
 
   /// Attempt authentication with the provided PIN.
   Future<void> authenticateWithPin(String pin, {bool savePin = false}) async {
+    // Always keep the PIN in memory for session-level auto-reconnects.
+    connectedDevice = connectedDevice?.copyWith(pin: pin);
+    
     if (savePin) {
-      connectedDevice = connectedDevice?.copyWith(pin: pin);
-    } else if (connectedDevice != null) {
-      connectedDevice = KestrelDevice(
-        name: connectedDevice!.name,
-        address: connectedDevice!.address,
-        deviceType: connectedDevice!.deviceType,
-        state: connectedDevice!.state,
-        modelName: connectedDevice!.modelName,
-        serialNumber: connectedDevice!.serialNumber,
-        firmwareVersion: connectedDevice!.firmwareVersion,
-        hardwareVersion: connectedDevice!.hardwareVersion,
-        errorMessage: connectedDevice!.errorMessage,
-        pin: null, // explicitly wipe the pin
-      );
+      _saveDevice();
     }
+    
     await _service.authenticateWithPin(pin);
+  }
+
+  /// Override the Kestrel's latitude with the given value.
+  Future<void> updateKestrelLatitude(double latitude) async {
+    if (connectionState != KestrelConnectionState.connected) return;
+    await _service.updateLatitude(latitude);
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -175,13 +176,25 @@ class KestrelProvider extends ChangeNotifier {
     else if (state == KestrelConnectionState.pinRequired) {
       if (connectedDevice?.pin != null) {
         debugPrint('[KestrelProvider] Auto-authenticating with saved PIN...');
+        
+        // Temporarily set state to connecting so the UI doesn't flash the PIN screen
+        connectedDevice = connectedDevice!.copyWith(state: KestrelConnectionState.connecting);
+        notifyListeners();
+        
         authenticateWithPin(connectedDevice!.pin!, savePin: true);
+        return; // Skip the notifyListeners() at the end
       }
     }
     // Set up a pending connection if it drops unexpectedly
     else if (state == KestrelConnectionState.disconnected && connectedDevice != null) {
-      debugPrint('[KestrelProvider] Device disconnected. Setting up background auto-reconnect...');
-      Future.delayed(const Duration(seconds: 1), _autoReconnect);
+      if (!_isAutoReconnectScheduled) {
+        _isAutoReconnectScheduled = true;
+        debugPrint('[KestrelProvider] Device disconnected. Setting up background auto-reconnect...');
+        Future.delayed(const Duration(seconds: 1), () {
+          _isAutoReconnectScheduled = false;
+          _autoReconnect();
+        });
+      }
     }
 
     notifyListeners();

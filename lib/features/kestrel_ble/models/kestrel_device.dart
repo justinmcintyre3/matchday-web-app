@@ -20,6 +20,9 @@ enum KestrelConnectionState {
   /// Connected, privacy PIN required before data exchange.
   pinRequired,
 
+  /// Authenticating/Synchronizing data with Kestrel.
+  synchronizing,
+
   /// Fully authenticated and ready.
   connected,
 

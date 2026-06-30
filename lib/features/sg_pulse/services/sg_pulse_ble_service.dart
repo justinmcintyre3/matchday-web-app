@@ -104,7 +104,9 @@ class SgPulseBleService {
 
   /// Connects to a discovered [device].
   Future<void> connect(SgPulseDevice device, {bool autoConnect = false}) async {
-    await stopScan();
+    if (!autoConnect) {
+      await stopScan();
+    }
 
     final btDevice = BluetoothDevice.fromId(device.address);
     _connectedDevice = btDevice;

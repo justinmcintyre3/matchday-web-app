@@ -74,21 +74,59 @@ class KestrelBleService {
       if (isPrivacy) {
         onConnectionStateChanged?.call(KestrelConnectionState.pinRequired);
       } else {
-        _jni.sendRequestAuth();
+        if (!_hasSentAuthRequest) {
+          _hasSentAuthRequest = true;
+          _jni.sendRequestAuth();
+        }
       }
     });
 
-    _jni.onAuthComplete.listen((success) {
+    _jni.onPrivacyAuthAck.listen((success) {
       if (success) {
-        onConnectionStateChanged?.call(KestrelConnectionState.connected);
+        if (!_hasAcknowledgedPin) {
+          _hasAcknowledgedPin = true;
+          debugPrint('[KestrelBLE] PIN accepted, waiting for native auth complete...');
+          onConnectionStateChanged?.call(KestrelConnectionState.synchronizing);
+          _jni.sendRequestAuth();
+        }
       } else {
         onConnectionStateChanged?.call(KestrelConnectionState.error);
         disconnect();
       }
     });
+
+    _jni.onAuthComplete.listen((success) {
+      if (success) {
+        debugPrint('[KestrelBLE] Native Auth complete, starting sync chain...');
+        _jni.sendCmdGetTgtInfoSettings();
+      } else {
+        onConnectionStateChanged?.call(KestrelConnectionState.error);
+        disconnect();
+      }
+    });
+
+    _jni.onTgtInfoSettingsReceived.listen((_) {
+      debugPrint('[KestrelBLE] onTgtInfoSettingsReceived');
+      _jni.sendCmdGetGunTransferSettings();
+    });
+
+    _jni.onGunTransferSettingsReceived.listen((_) {
+      debugPrint('[KestrelBLE] onGunTransferSettingsReceived');
+      _jni.sendCmdGetBalInfoSettings();
+    });
+
+    _jni.onBalInfoSettingsReceived.listen((_) {
+      debugPrint('[KestrelBLE] onBalInfoSettingsReceived, sync complete!');
+      onConnectionStateChanged?.call(KestrelConnectionState.connected);
+    });
   }
   BluetoothDevice? _connectedDevice;
   BluetoothCharacteristic? _txCharacteristic;
+  bool _isAutoConnecting = false;
+  bool _hasSentAuthRequest = false;
+  bool _hasAcknowledgedPin = false;
+  bool _isAuthenticatingPin = false;
+  bool _isDiscovering = false;
 
   StreamSubscription<List<ScanResult>>? _scanSubscription;
   StreamSubscription<BluetoothConnectionState>? _connectionSubscription;
@@ -144,6 +182,12 @@ class KestrelBleService {
       final address = result.device.remoteId.str;
       if (_discovered.contains(address)) continue;
 
+      final debugName = result.device.platformName.isNotEmpty
+          ? result.device.platformName
+          : result.advertisementData.advName;
+          
+      debugPrint('[KestrelBLE] Scan result: $debugName ($address) - mfrData: ${result.advertisementData.manufacturerData.keys.toList()}');
+
       // Secondary check: manufacturer ID 0xEA (234) must be present
       final mfrData = result.advertisementData
           .manufacturerData[kestrelManufacturerId];
@@ -186,8 +230,16 @@ class KestrelBleService {
 
     final btDevice = BluetoothDevice.fromId(device.address);
     _connectedDevice = btDevice;
+    _isAutoConnecting = autoConnect;
+    _hasSentAuthRequest = false;
+    _hasAcknowledgedPin = false;
+    _isAuthenticatingPin = false;
 
-    onConnectionStateChanged?.call(KestrelConnectionState.connecting);
+    // Only show the connecting spinner immediately if this is a manual connection attempt.
+    // If it's a background auto-reconnect, stay in the disconnected state until the device is actually found.
+    if (!autoConnect) {
+      onConnectionStateChanged?.call(KestrelConnectionState.connecting);
+    }
 
     // Listen for connection state changes before connecting
     await _connectionSubscription?.cancel();
@@ -202,20 +254,29 @@ class KestrelBleService {
 
   void _onConnectionStateChange(BluetoothConnectionState state) {
     if (state == BluetoothConnectionState.connected) {
+      _isAutoConnecting = false;
       onConnectionStateChanged?.call(KestrelConnectionState.discovering);
       // Delay matches reference app (600 ms) before discoverServices
       Future.delayed(kestrelServiceDiscoveryDelay, _discoverServices);
     } else if (state == BluetoothConnectionState.disconnected) {
       _txCharacteristic = null;
-      onConnectionStateChanged?.call(KestrelConnectionState.disconnected);
+      _isDiscovering = false; // Reset debounce flag on natural drop
+      _jni.disconnectJni(); // CRITICAL: Reset the native state machine
+      if (!_isAutoConnecting) {
+        onConnectionStateChanged?.call(KestrelConnectionState.disconnected);
+      }
     }
   }
 
   Future<void> _discoverServices() async {
-    final device = _connectedDevice;
-    if (device == null) return;
-
+    if (_isDiscovering) return;
+    _isDiscovering = true;
+    
     try {
+      debugPrint('[KestrelBLE] Discovering services...');
+      final device = _connectedDevice;
+      if (device == null) return;
+
       final services = await device.discoverServices();
 
       for (final service in services) {
@@ -242,6 +303,7 @@ class KestrelBleService {
       // Begin Phase 2 Authentication Flow via JNI
       await Future.delayed(const Duration(milliseconds: 500));
       await _jni.connectJni();
+      await _jni.sendCmdStopEncrypting();
       await Future.delayed(const Duration(milliseconds: 200));
       await _jni.sendCmdGetPrivacyStatus();
     } catch (e) {
@@ -296,7 +358,17 @@ class KestrelBleService {
   }
 
   Future<void> authenticateWithPin(String pin) async {
-    await _jni.sendCmdPrivacyAuthenticate(pin, "");
+    if (_isAuthenticatingPin) return;
+    _isAuthenticatingPin = true;
+    // Fetch the 4-digit hashed Host ID computed in native code matching the Link App algorithm
+    final hostId = await _jni.getHostId();
+    debugPrint('[KestrelBLE] Authenticating with PIN: $pin and HostID: $hostId');
+    await _jni.sendCmdPrivacyAuthenticate(pin, hostId);
+  }
+
+  /// Sends a latitude update to the Kestrel's global environment
+  Future<void> updateLatitude(double latitude) async {
+    await _jni.sendSetEnvironment(latitude);
   }
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -304,6 +376,8 @@ class KestrelBleService {
   // ────────────────────────────────────────────────────────────────────────────
 
   Future<void> disconnect() async {
+    _isAutoConnecting = false;
+    _isDiscovering = false;
     await _jni.disconnectJni();
     await _rxSubscription?.cancel();
     await _connectionSubscription?.cancel();
