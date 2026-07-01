@@ -32,6 +32,9 @@ class KestrelJniService {
   final StreamController<void> _balInfoSettingsController = StreamController.broadcast();
   Stream<void> get onBalInfoSettingsReceived => _balInfoSettingsController.stream;
 
+  Stream<Map<String, dynamic>> get onBalFullSolution => _onBalFullSolutionController.stream;
+  final _onBalFullSolutionController = StreamController<Map<String, dynamic>>.broadcast();
+
   KestrelJniService() {
     _channel.setMethodCallHandler(_handleMethodCall);
   }
@@ -70,6 +73,10 @@ class KestrelJniService {
         break;
       case 'onBalInfoSettingsReceived':
         _balInfoSettingsController.add(null);
+        break;
+      case 'onBalFullSolution':
+        final map = Map<String, dynamic>.from(call.arguments as Map);
+        _onBalFullSolutionController.add(map);
         break;
     }
   }
@@ -119,6 +126,24 @@ class KestrelJniService {
   /// Sends a BallisticsEnvironment update to override the latitude
   Future<void> sendSetEnvironment(double latitude) async {
     await _channel.invokeMethod('sendSetEnvironment', {'latitude': latitude});
+  }
+
+  Future<void> sendCalcFullSolution({
+    required double targetRange,
+    required double directionOfFire,
+    required double windSpeed1,
+    required double windSpeed2,
+    required double windDirection,
+    required int targetNumber,
+  }) async {
+    await _channel.invokeMethod('sendCalcFullSolution', {
+      'targetRange': targetRange,
+      'directionOfFire': directionOfFire,
+      'windSpeed1': windSpeed1,
+      'windSpeed2': windSpeed2,
+      'windDirection': windDirection,
+      'targetNumber': targetNumber,
+    });
   }
 
   // Initialization Handshake Commands

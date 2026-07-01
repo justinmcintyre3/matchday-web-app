@@ -325,11 +325,25 @@ class TargetArray {
   String distance;
   String degreeOfFire;
   List<Target> targets;
+  double minWindSpeed;
+  double maxWindSpeed;
+  int windClockDirection;
+  double extrapolatedWindSpeed;
+  int extrapolatedClockDirection;
+  String elevationResult;
+  String windageResult;
 
   TargetArray({
     this.distance = '',
     this.degreeOfFire = '',
     required this.targets,
+    this.minWindSpeed = 0.0,
+    this.maxWindSpeed = 0.0,
+    this.windClockDirection = 12,
+    this.extrapolatedWindSpeed = 0.0,
+    this.extrapolatedClockDirection = 12,
+    this.elevationResult = '',
+    this.windageResult = '',
   });
 
   Map<String, dynamic> toMap() {
@@ -337,6 +351,13 @@ class TargetArray {
       'distance': distance,
       'degreeOfFire': degreeOfFire,
       'targets': targets.map((x) => x.toMap()).toList(),
+      'minWindSpeed': minWindSpeed,
+      'maxWindSpeed': maxWindSpeed,
+      'windClockDirection': windClockDirection,
+      'extrapolatedWindSpeed': extrapolatedWindSpeed,
+      'extrapolatedClockDirection': extrapolatedClockDirection,
+      'elevationResult': elevationResult,
+      'windageResult': windageResult,
     };
   }
 
@@ -345,6 +366,13 @@ class TargetArray {
       distance: map['distance'] ?? '',
       degreeOfFire: map['degreeOfFire'] ?? '',
       targets: List<Target>.from(map['targets']?.map((x) => Target.fromMap(x as Map)) ?? const []),
+      minWindSpeed: (map['minWindSpeed'] as num?)?.toDouble() ?? 0.0,
+      maxWindSpeed: (map['maxWindSpeed'] as num?)?.toDouble() ?? 0.0,
+      windClockDirection: map['windClockDirection']?.toInt() ?? 12,
+      extrapolatedWindSpeed: (map['extrapolatedWindSpeed'] as num?)?.toDouble() ?? 0.0,
+      extrapolatedClockDirection: map['extrapolatedClockDirection']?.toInt() ?? 12,
+      elevationResult: map['elevationResult'] ?? '',
+      windageResult: map['windageResult'] ?? '',
     );
   }
 }

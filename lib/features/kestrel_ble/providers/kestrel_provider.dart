@@ -35,7 +35,7 @@ class KestrelProvider extends ChangeNotifier {
         notifyListeners();
         
         // Give the UI a moment, then attempt auto-reconnect
-        Future.delayed(const Duration(milliseconds: 500), _autoReconnect);
+        Future.delayed(const Duration(milliseconds: 500), _startBackgroundScan);
       } catch (e) {
         debugPrint('[KestrelProvider] Error loading saved device: $e');
       }
@@ -49,21 +49,45 @@ class KestrelProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _autoReconnect() async {
-    if (connectedDevice == null || isConnected) return;
-    debugPrint('[KestrelProvider] Attempting auto-reconnect to ${connectedDevice?.name}');
+  // ──────────────────────────────────────────────────────────────────────────
+  // Auto-reconnect (scan-based)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  bool _isBackgroundScanning = false;
+
+  /// On disconnect, start a passive BLE scan. When the saved device is
+  /// spotted, connect immediately. This avoids hammering the BLE stack with
+  /// repeated GATT connection attempts.
+  Future<void> _startBackgroundScan() async {
+    if (_isBackgroundScanning || connectedDevice == null || isConnected) return;
+    _isBackgroundScanning = true;
+    final savedAddress = connectedDevice!.address;
+    debugPrint('[KestrelProvider] Starting background scan for $savedAddress');
+
+    _service.onScanResult = (device) {
+      if (device.address == savedAddress && !isConnected) {
+        debugPrint('[KestrelProvider] Found device in background scan — connecting');
+        _service.stopScan();
+        connect(connectedDevice!.copyWith(address: device.address));
+      }
+    };
+
     try {
-      await connect(connectedDevice!, autoConnect: true);
+      await _service.startScan();
     } catch (e) {
-      debugPrint('[KestrelProvider] Auto-reconnect failed: $e');
+      debugPrint('[KestrelProvider] Background scan error: $e');
+    } finally {
+      _isBackgroundScanning = false;
+      // Restore the normal scan result callback
+      _service.onScanResult = _onScanResult;
+      // If still not connected after scan timeout, retry
+      if (connectedDevice != null && !isConnected) {
+        debugPrint('[KestrelProvider] Background scan finished, device not found — retrying in 5s');
+        Future.delayed(const Duration(seconds: 5), _startBackgroundScan);
+      }
     }
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // State exposed to UI
-  // ──────────────────────────────────────────────────────────────────────────
-  
-  bool _isAutoReconnectScheduled = false;
 
   /// Devices discovered during the current scan session.
   final List<KestrelDevice> scannedDevices = [];
@@ -170,31 +194,22 @@ class KestrelProvider extends ChangeNotifier {
 
     // Save device on successful connection/auth
     if (state == KestrelConnectionState.connected) {
+      _isBackgroundScanning = false;
       _saveDevice();
     } 
     // Auto-authenticate if we already have the PIN saved
     else if (state == KestrelConnectionState.pinRequired) {
       if (connectedDevice?.pin != null) {
         debugPrint('[KestrelProvider] Auto-authenticating with saved PIN...');
-        
-        // Temporarily set state to connecting so the UI doesn't flash the PIN screen
         connectedDevice = connectedDevice!.copyWith(state: KestrelConnectionState.connecting);
         notifyListeners();
-        
         authenticateWithPin(connectedDevice!.pin!, savePin: true);
-        return; // Skip the notifyListeners() at the end
+        return;
       }
     }
-    // Set up a pending connection if it drops unexpectedly
+    // Device dropped — start a passive background scan instead of hammering connect()
     else if (state == KestrelConnectionState.disconnected && connectedDevice != null) {
-      if (!_isAutoReconnectScheduled) {
-        _isAutoReconnectScheduled = true;
-        debugPrint('[KestrelProvider] Device disconnected. Setting up background auto-reconnect...');
-        Future.delayed(const Duration(seconds: 1), () {
-          _isAutoReconnectScheduled = false;
-          _autoReconnect();
-        });
-      }
+      Future.delayed(const Duration(seconds: 1), _startBackgroundScan);
     }
 
     notifyListeners();
@@ -213,6 +228,28 @@ class KestrelProvider extends ChangeNotifier {
   void _updateState(KestrelConnectionState state) {
     connectedDevice = connectedDevice?.copyWith(state: state);
     notifyListeners();
+  }
+
+  /// Stream of ballistics full solution results from the Kestrel.
+  Stream<Map<String, dynamic>> get onBalFullSolution => _service.onBalFullSolution;
+
+  /// Sends a full ballistics solution request to the Kestrel.
+  Future<void> sendCalcFullSolution({
+    required double targetRange,
+    required double directionOfFire,
+    required double windSpeed1,
+    required double windSpeed2,
+    required double windDirection,
+    required int targetNumber,
+  }) async {
+    await _service.sendCalcFullSolution(
+      targetRange: targetRange,
+      directionOfFire: directionOfFire,
+      windSpeed1: windSpeed1,
+      windSpeed2: windSpeed2,
+      windDirection: windDirection,
+      targetNumber: targetNumber,
+    );
   }
 
   @override

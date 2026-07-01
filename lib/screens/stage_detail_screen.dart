@@ -6,6 +6,9 @@ import '../models/match.dart';
 import '../providers/match_provider.dart';
 import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 import 'package:flutter/services.dart';
+import '../features/kestrel_ble/providers/kestrel_provider.dart';
+import '../features/kestrel_ble/services/kestrel_ble_service.dart';
+import '../features/kestrel_ble/models/kestrel_device.dart';
 
 class StageDetailScreen extends StatefulWidget {
   final String matchId;
@@ -348,6 +351,231 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     );
   }
 
+  double _parseDof(String dofStr) {
+    final clean = dofStr.replaceAll(RegExp(r'[^0-9.]'), '');
+    return double.tryParse(clean) ?? 0.0;
+  }
+
+  void _extrapolateWindForArray(int arrayIdx) {
+    if (arrayIdx == 0) return;
+    if (_stage.targetArrays.isEmpty) return;
+    
+    final array0 = _stage.targetArrays[0];
+    final arrayN = _stage.targetArrays[arrayIdx];
+
+    double dof0 = _parseDof(array0.degreeOfFire);
+    double dofN = _parseDof(arrayN.degreeOfFire);
+    
+    double clockAngle0 = (array0.windClockDirection * 30.0) % 360.0;
+    double absoluteWindBearing = (dof0 + clockAngle0) % 360.0;
+    
+    double clockAngleN = (absoluteWindBearing - dofN) % 360.0;
+    if (clockAngleN < 0) clockAngleN += 360.0;
+    
+    int extrapolatedClock = (clockAngleN / 30.0).round();
+    if (extrapolatedClock == 0) extrapolatedClock = 12;
+
+    arrayN.extrapolatedWindSpeed = array0.maxWindSpeed;
+    arrayN.extrapolatedClockDirection = extrapolatedClock;
+  }
+
+  Widget _buildTargetArray0WindConfig(TargetArray array) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'WIND',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 11,
+            color: Colors.grey,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                initialValue: array.minWindSpeed == 0 ? '' : array.minWindSpeed.toString(),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                onTap: () => HapticFeedback.lightImpact(),
+                style: const TextStyle(fontSize: 12),
+                decoration: const InputDecoration(
+                  labelText: 'Min Speed',
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  labelStyle: TextStyle(fontSize: 10),
+                ),
+                onChanged: (val) {
+                  array.minWindSpeed = double.tryParse(val) ?? 0.0;
+                  for (int i = 1; i < _stage.targetArrays.length; i++) {
+                    _extrapolateWindForArray(i);
+                  }
+                  setState((){});
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextFormField(
+                initialValue: array.maxWindSpeed == 0 ? '' : array.maxWindSpeed.toString(),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                onTap: () => HapticFeedback.lightImpact(),
+                style: const TextStyle(fontSize: 12),
+                decoration: const InputDecoration(
+                  labelText: 'Max Speed',
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  labelStyle: TextStyle(fontSize: 10),
+                ),
+                onChanged: (val) {
+                  array.maxWindSpeed = double.tryParse(val) ?? 0.0;
+                  for (int i = 1; i < _stage.targetArrays.length; i++) {
+                    _extrapolateWindForArray(i);
+                  }
+                  setState((){});
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: DropdownButtonFormField<int>(
+                value: array.windClockDirection,
+                decoration: const InputDecoration(
+                  labelText: 'Dir (O\'clock)',
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  labelStyle: TextStyle(fontSize: 10),
+                ),
+                items: List.generate(12, (index) {
+                  final clock = index + 1;
+                  return DropdownMenuItem(
+                    value: clock,
+                    child: Text('$clock:00', style: const TextStyle(fontSize: 12)),
+                  );
+                }),
+                onChanged: (val) {
+                  if (val != null) {
+                    array.windClockDirection = val;
+                    for (int i = 1; i < _stage.targetArrays.length; i++) {
+                      _extrapolateWindForArray(i);
+                    }
+                    setState((){});
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTargetArrayNWindConfig(TargetArray array) {
+    final array0 = _stage.targetArrays.isNotEmpty ? _stage.targetArrays[0] : null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'EXTRAPOLATED WIND & BALLISTICS',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 11,
+            color: Colors.grey,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Wind Speed', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                    const SizedBox(height: 2),
+                    Text(array0 != null ? '${array0.minWindSpeed} - ${array0.maxWindSpeed} mph' : '---', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Direction', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                    const SizedBox(height: 2),
+                    Text('${array.extrapolatedClockDirection}:00', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (array.elevationResult.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF007AFF).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: const Color(0xFF007AFF).withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Elevation', style: TextStyle(fontSize: 10, color: Color(0xFF007AFF))),
+                        const SizedBox(height: 2),
+                        Text(array.elevationResult, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00E676).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: const Color(0xFF00E676).withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Windage', style: TextStyle(fontSize: 10, color: Color(0xFF00E676))),
+                        const SizedBox(height: 2),
+                        Text(array.windageResult, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
   // Adjust Flat shot list based on sum of targets shotsCount
   void _adjustShotResultsLength() {
     final int totalShotsNeeded =
@@ -382,9 +610,98 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     }
   }
 
-  void _syncToWatch() {
+  Future<void> _syncToWatch() async {
     _saveStage(exitScreen: false);
     context.read<MatchProvider>().syncActiveStageToWatch();
+
+    final kestrelProvider = context.read<KestrelProvider>();
+    if (kestrelProvider.connectionState != KestrelConnectionState.connected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Kestrel not connected. Synced to Watch only.')),
+      );
+      return;
+    }
+
+    if (_stage.targetArrays.isEmpty) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final array0 = _stage.targetArrays[0];
+      for (int i = 0; i < 10; i++) {
+        if (!mounted) return;
+        
+        final futureResult = kestrelProvider.onBalFullSolution
+            .firstWhere((data) => data['targetNumber'] == i)
+            .timeout(const Duration(seconds: 4));
+
+        double tRange = 25.0;
+        double dof = 0.0;
+        double wind1 = array0.minWindSpeed;
+        double wind2 = array0.maxWindSpeed;
+        double windDir = (array0.windClockDirection * 30.0) % 360.0;
+
+        if (i < _stage.targetArrays.length) {
+          final array = _stage.targetArrays[i];
+          tRange = double.tryParse(array.distance.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 100.0;
+          dof = _parseDof(array.degreeOfFire);
+          if (i > 0) {
+            wind1 = array.extrapolatedWindSpeed;
+            wind2 = array.extrapolatedWindSpeed;
+            windDir = (array.extrapolatedClockDirection * 30.0) % 360.0;
+          }
+        }
+
+        await kestrelProvider.sendCalcFullSolution(
+          targetRange: tRange,
+          directionOfFire: dof,
+          windSpeed1: wind1,
+          windSpeed2: wind2,
+          windDirection: windDir,
+          targetNumber: i,
+        );
+
+        final result = await futureResult;
+        
+        setState(() {
+           final double elevation = (result['elevation'] as num).toDouble();
+           final double w1 = (result['windage1'] as num).toDouble();
+           final double w2 = (result['windage2'] as num).toDouble();
+           
+           if (i < _stage.targetArrays.length) {
+             final array = _stage.targetArrays[i];
+             array.elevationResult = '${elevation.toStringAsFixed(2)} MIL';
+             array.windageResult = 'W1: ${w1.toStringAsFixed(2)} W2: ${w2.toStringAsFixed(2)} MIL';
+           }
+           
+           if (i == 0) {
+             _stage.windPlan.kestrelValue = w1.abs();
+             _stage.windPlan.kestrelDirection = w1 < 0 ? 'L' : (w1 > 0 ? 'R' : 'None');
+           }
+        });
+      }
+
+      _saveStage(exitScreen: false);
+      
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Synced to Watch and Kestrel!')),
+        );
+      }
+    } catch (e) {
+      debugPrint('[Kestrel Sync Error] $e');
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to sync with Kestrel. Timeout or disconnected.')),
+        );
+      }
+    }
   }
 
   @override
@@ -743,6 +1060,13 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                 );
                               },
                             ),
+                            const SizedBox(height: 12),
+                            const Divider(height: 1, color: Colors.white10),
+                            const SizedBox(height: 12),
+                            if (arrayIdx == 0)
+                              _buildTargetArray0WindConfig(array)
+                            else
+                              _buildTargetArrayNWindConfig(array),
                           ],
                         ),
                       );
@@ -883,7 +1207,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'WINDAGE FORECAST',
+                    'BALLISTICS',
                     style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 13,
@@ -944,7 +1268,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
               _syncToWatch();
             },
             icon: const Icon(Icons.sync),
-            label: const Text('Sync Configuration to Watch'),
+            label: const Text('Sync Configuration'),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.transparent,
               foregroundColor: const Color(0xFF007AFF),

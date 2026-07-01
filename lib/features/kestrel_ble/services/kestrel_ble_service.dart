@@ -120,6 +120,11 @@ class KestrelBleService {
       onConnectionStateChanged?.call(KestrelConnectionState.connected);
     });
   }
+
+  Stream<bool> get onGunTransferSettingsReceived => _jni.onGunTransferSettingsReceived;
+  Stream<void> get onBalInfoSettingsReceived => _jni.onBalInfoSettingsReceived;
+  Stream<Map<String, dynamic>> get onBalFullSolution => _jni.onBalFullSolution;
+
   BluetoothDevice? _connectedDevice;
   BluetoothCharacteristic? _txCharacteristic;
   bool _isAutoConnecting = false;
@@ -369,6 +374,24 @@ class KestrelBleService {
   /// Sends a latitude update to the Kestrel's global environment
   Future<void> updateLatitude(double latitude) async {
     await _jni.sendSetEnvironment(latitude);
+  }
+
+  Future<void> sendCalcFullSolution({
+    required double targetRange,
+    required double directionOfFire,
+    required double windSpeed1,
+    required double windSpeed2,
+    required double windDirection,
+    required int targetNumber,
+  }) async {
+    await _jni.sendCalcFullSolution(
+      targetRange: targetRange,
+      directionOfFire: directionOfFire,
+      windSpeed1: windSpeed1,
+      windSpeed2: windSpeed2,
+      windDirection: windDirection,
+      targetNumber: targetNumber,
+    );
   }
 
   // ────────────────────────────────────────────────────────────────────────────

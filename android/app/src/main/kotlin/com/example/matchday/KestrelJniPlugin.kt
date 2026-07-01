@@ -9,6 +9,7 @@ import io.flutter.plugin.common.MethodChannel.Result
 import com.nkhome.link.ballistics.nkmassdata.NkKestrel
 import com.nkhome.link.ballistics.nkmassdata.k
 import com.nkhome.link.ballistics.nkmassdata.BallisticsEnvironment
+import com.nkhome.link.ballistics.nkmassdata.BallisticsDataInput
 import android.content.Context
 import android.provider.Settings
 
@@ -132,6 +133,33 @@ class KestrelJniPlugin(private val channel: MethodChannel, private val context: 
                 }
                 result.success(null)
             }
+            "sendCalcFullSolution" -> {
+                val input = BallisticsDataInput()
+                input.setDefaultValues()
+                input.targetRange = call.argument<Double>("targetRange")?.toFloat() ?: 0f
+                input.rangeIsValid = 1
+
+                input.directionOfFire = call.argument<Double>("directionOfFire")?.toFloat() ?: 0f
+                input.dofIsValid = 1
+
+                input.windSpeed1 = call.argument<Double>("windSpeed1")?.toFloat() ?: 0f
+                input.windSpeed1IsValid = 1
+
+                input.windSpeed2 = call.argument<Double>("windSpeed2")?.toFloat() ?: 0f
+                input.windSpeed2IsValid = 1
+
+                input.windDirection = call.argument<Double>("windDirection")?.toFloat() ?: 0f
+                input.windDirectionIsValid = 1
+
+                input.targetNumber = call.argument<Int>("targetNumber")?.toByte() ?: 0.toByte()
+                input.useCurrentTarget = 0
+                input.targetNumIsValid = 1
+
+                kestrel.sendCalcFullSolution(input)
+                kestrel.updateComs()
+                flushTxBytes()
+                result.success(null)
+            }
             else -> result.notImplemented()
         }
     }
@@ -181,7 +209,15 @@ class KestrelJniPlugin(private val channel: MethodChannel, private val context: 
     override fun Z(f4: Float, f5: Float, f6: Float, i2: Int) {}
     override fun c0(z4: Boolean) {}
     override fun d(z4: Boolean) {}
-    override fun e0(f4: Float, f5: Float, f6: Float, f7: Float, f8: Float, f9: Float, i2: Int, i4: Int) {}
+    override fun e0(f4: Float, f5: Float, f6: Float, f7: Float, f8: Float, f9: Float, i2: Int, i4: Int) {
+        val data = mapOf(
+            "elevation" to f4,
+            "windage1" to f5,
+            "windage2" to f6,
+            "targetNumber" to i2
+        )
+        invokeFlutter("onBalFullSolution", data)
+    }
     override fun f(z4: Boolean) {}
     override fun g0(iVar: Any?) {}
     override fun i(z4: Boolean, qVar: Any?) {}
