@@ -1485,11 +1485,11 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   }) {
     String displayStr = '';
     if (direction == 'L') {
-      displayStr = '${value.toStringAsFixed(1)} L';
+      displayStr = '${value.toStringAsFixed(2)} L';
     } else if (direction == 'R') {
-      displayStr = '${value.toStringAsFixed(1)} R';
+      displayStr = '${value.toStringAsFixed(2)} R';
     } else {
-      displayStr = '0.0';
+      displayStr = '0.00';
     }
 
     return Column(
@@ -2186,8 +2186,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     if (widget.stageNumber > 1) {
       final val = _stage.windPlan.prevValue;
       final dir = _stage.windPlan.prevDirection;
-      if (dir == 'None') return '0.0 MIL';
-      return '${val.toStringAsFixed(1)} MIL $dir';
+      if (dir == 'None') return '0.00 MIL';
+      return '${val.toStringAsFixed(2)} MIL $dir';
     }
     return '---';
   }

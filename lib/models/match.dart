@@ -305,14 +305,14 @@ class WindPlan {
   });
 
   String get prevFormatted => prevDirection == 'None'
-      ? '0.0 MIL'
-      : '${prevValue.toStringAsFixed(1)} MIL $prevDirection';
+      ? '0.00 MIL'
+      : '${prevValue.toStringAsFixed(2)} MIL $prevDirection';
   String get kestrelFormatted => kestrelDirection == 'None'
-      ? '0.0 MIL'
-      : '${kestrelValue.toStringAsFixed(1)} MIL $kestrelDirection';
+      ? '0.00 MIL'
+      : '${kestrelValue.toStringAsFixed(2)} MIL $kestrelDirection';
   String get actualFormatted => actualDirection == 'None'
-      ? '0.0 MIL'
-      : '${actualValue.toStringAsFixed(1)} MIL $actualDirection';
+      ? '0.00 MIL'
+      : '${actualValue.toStringAsFixed(2)} MIL $actualDirection';
 
   Map<String, dynamic> toMap() {
     return {
