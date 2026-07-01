@@ -371,13 +371,15 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     return double.tryParse(clean) ?? 0.0;
   }
 
-  double snapToward(double val) {
-    return (val * 10).floor() / 10.0; // toward zero
+  double step(double v, int dir) {
+    return normalize(v + (0.1 * dir));
   }
 
-  double snapAway(double val) {
-    return ((val * 10).floor() / 10.0) + 0.1; // away from zero
+  double normalize(double v) {
+    return (v * 10).round() / 10.0;
   }
+
+  bool isZero(double v) => v.abs() < 0.00001;
 
   double _parseRangeYards(String distanceStr) {
     final clean = distanceStr.replaceAll(RegExp(r'[^0-9.]'), '');
@@ -1491,13 +1493,13 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     required String direction,
     required Function(double val, String dir) onChanged,
   }) {
-    String displayStr = '';
-    if (direction == 'L') {
-      displayStr = '${value.toStringAsFixed(2)} L';
-    } else if (direction == 'R') {
-      displayStr = '${value.toStringAsFixed(2)} R';
-    } else {
+    String displayStr;
+
+    if (value.abs() < 0.00001) {
       displayStr = '0.00';
+    } else {
+      final dir = value < 0 ? 'L' : 'R';
+      displayStr = '${value.abs().toStringAsFixed(2)} $dir';
     }
 
     return Column(
@@ -1516,19 +1518,12 @@ class _StageDetailScreenState extends State<StageDetailScreen>
               onPressed: () {
                 HapticFeedback.lightImpact();
 
-                if (direction == 'L') {
-                  final next = snapAway(value);
-                  onChanged(next, 'L');
-                } else if (direction == 'R') {
-                  final next = snapToward(value) - 0.1;
-                  if (next <= 0.0) {
-                    onChanged(0.0, 'None');
-                  } else {
-                    onChanged(next, 'R');
-                  }
-                } else {
-                  onChanged(0.1, 'L');
-                }
+                double next = step(value, -1);
+                next = normalize(next);
+
+                final dir = isZero(next) ? 'None' : (next < 0 ? 'L' : 'R');
+
+                onChanged(next, dir);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF121214),
@@ -1572,19 +1567,12 @@ class _StageDetailScreenState extends State<StageDetailScreen>
               onPressed: () {
                 HapticFeedback.lightImpact();
 
-                if (direction == 'R') {
-                  final next = snapAway(value);
-                  onChanged(next, 'R');
-                } else if (direction == 'L') {
-                  final next = snapToward(value) - 0.1;
-                  if (next <= 0.0) {
-                    onChanged(0.0, 'None');
-                  } else {
-                    onChanged(next, 'L');
-                  }
-                } else {
-                  onChanged(0.1, 'R');
-                }
+                double next = step(value, 1);
+                next = normalize(next);
+
+                final dir = isZero(next) ? 'None' : (next < 0 ? 'L' : 'R');
+
+                onChanged(next, dir);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF121214),
