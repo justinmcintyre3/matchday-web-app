@@ -34,8 +34,8 @@ class KestrelProvider extends ChangeNotifier {
         connectedDevice = KestrelDevice.fromJson(data);
         notifyListeners();
         
-        // Give the UI a moment, then attempt auto-reconnect
-        Future.delayed(const Duration(milliseconds: 500), _startBackgroundScan);
+        // Auto-connect to the saved device leveraging the OS Bluetooth stack
+        connect(connectedDevice!, autoConnect: true);
       } catch (e) {
         debugPrint('[KestrelProvider] Error loading saved device: $e');
       }
@@ -50,45 +50,8 @@ class KestrelProvider extends ChangeNotifier {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // Auto-reconnect (scan-based)
+  // Auto-reconnect
   // ──────────────────────────────────────────────────────────────────────────
-
-  bool _isBackgroundScanning = false;
-
-  /// On disconnect, start a passive BLE scan. When the saved device is
-  /// spotted, connect immediately. This avoids hammering the BLE stack with
-  /// repeated GATT connection attempts.
-  Future<void> _startBackgroundScan() async {
-    if (_isBackgroundScanning || connectedDevice == null || isConnected) return;
-    _isBackgroundScanning = true;
-    final savedAddress = connectedDevice!.address;
-    debugPrint('[KestrelProvider] Starting background scan for $savedAddress');
-
-    _service.onScanResult = (device) {
-      if (device.address == savedAddress && !isConnected) {
-        debugPrint('[KestrelProvider] Found device in background scan — connecting');
-        _service.stopScan();
-        connect(connectedDevice!.copyWith(address: device.address));
-      }
-    };
-
-    try {
-      await _service.startScan();
-    } catch (e) {
-      debugPrint('[KestrelProvider] Background scan error: $e');
-    } finally {
-      _isBackgroundScanning = false;
-      // Restore the normal scan result callback
-      _service.onScanResult = _onScanResult;
-      // If still not connected after scan timeout, retry
-      if (connectedDevice != null && !isConnected) {
-        debugPrint('[KestrelProvider] Background scan finished, device not found — retrying in 5s');
-        Future.delayed(const Duration(seconds: 5), _startBackgroundScan);
-      }
-    }
-  }
-
-
   /// Devices discovered during the current scan session.
   final List<KestrelDevice> scannedDevices = [];
 
@@ -194,7 +157,6 @@ class KestrelProvider extends ChangeNotifier {
 
     // Save device on successful connection/auth
     if (state == KestrelConnectionState.connected) {
-      _isBackgroundScanning = false;
       _saveDevice();
     } 
     // Auto-authenticate if we already have the PIN saved
@@ -207,9 +169,10 @@ class KestrelProvider extends ChangeNotifier {
         return;
       }
     }
-    // Device dropped — start a passive background scan instead of hammering connect()
+    // Device dropped — issue an autoConnect request to let the OS handle reconnection
     else if (state == KestrelConnectionState.disconnected && connectedDevice != null) {
-      Future.delayed(const Duration(seconds: 1), _startBackgroundScan);
+      debugPrint('[KestrelProvider] Natural disconnect. Issuing autoConnect request.');
+      connect(connectedDevice!, autoConnect: true);
     }
 
     notifyListeners();

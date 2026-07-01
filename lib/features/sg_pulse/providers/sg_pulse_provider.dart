@@ -19,9 +19,6 @@ class SgPulseProvider extends ChangeNotifier {
 
   final SgPulseBleService _service;
 
-  /// Guards against concurrent background scans stacking up.
-  bool _isBackgroundScanning = false;
-
   SgPulseProvider({SgPulseBleService? service})
       : _service = service ?? SgPulseBleService() {
     _service.onScanResult            = _onScanResult;
@@ -42,7 +39,7 @@ class SgPulseProvider extends ChangeNotifier {
       try {
         connectedDevice = SgPulseDevice.fromJsonString(saved);
         notifyListeners();
-        Future.delayed(const Duration(milliseconds: 500), _startBackgroundScan);
+        connect(connectedDevice!, autoConnect: true);
       } catch (e) {
         debugPrint('[SgPulseProvider] Error loading saved device: $e');
       }
@@ -53,36 +50,6 @@ class SgPulseProvider extends ChangeNotifier {
     if (connectedDevice != null) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_savedDeviceKey, connectedDevice!.toJsonString());
-    }
-  }
-
-  /// On disconnect, start a passive BLE scan. When the saved device is
-  /// spotted, connect immediately.
-  Future<void> _startBackgroundScan() async {
-    if (_isBackgroundScanning || connectedDevice == null || isConnected) return;
-    _isBackgroundScanning = true;
-    final savedAddress = connectedDevice!.address;
-    debugPrint('[SgPulseProvider] Starting background scan for $savedAddress');
-
-    _service.onScanResult = (device) {
-      if (device.address == savedAddress && !isConnected) {
-        debugPrint('[SgPulseProvider] Found device in background scan — connecting');
-        _service.stopScan();
-        connect(connectedDevice!.copyWith(address: device.address));
-      }
-    };
-
-    try {
-      await _service.startScan();
-    } catch (e) {
-      debugPrint('[SgPulseProvider] Background scan error: $e');
-    } finally {
-      _isBackgroundScanning = false;
-      _service.onScanResult = _onScanResult;
-      if (connectedDevice != null && !isConnected) {
-        debugPrint('[SgPulseProvider] Background scan finished, device not found — retrying in 5s');
-        Future.delayed(const Duration(seconds: 5), _startBackgroundScan);
-      }
     }
   }
 
@@ -180,12 +147,11 @@ class SgPulseProvider extends ChangeNotifier {
         SgPulseDevice(name: 'SG Pulse', address: '', state: state);
 
     if (state == SgPulseConnectionState.connected) {
-      _isBackgroundScanning = false;
       _saveDevice();
     } else if (state == SgPulseConnectionState.disconnected &&
         connectedDevice != null) {
-      // Start passive background scan — connect when device is spotted
-      Future.delayed(const Duration(seconds: 1), _startBackgroundScan);
+      debugPrint('[SgPulseProvider] Natural disconnect. Issuing autoConnect request.');
+      connect(connectedDevice!, autoConnect: true);
     }
 
     notifyListeners();
