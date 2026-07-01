@@ -39,14 +39,14 @@ class Match {
     List<String>? customEnvTags,
     List<String>? customTargetTypes,
     List<String>? deletedTargetTypes,
-  }) : deletedMentalTags = deletedMentalTags ?? [],
-       deletedSkillsTags = deletedSkillsTags ?? [],
-       deletedEnvTags = deletedEnvTags ?? [],
-       customMentalTags = customMentalTags ?? [],
-       customSkillsTags = customSkillsTags ?? [],
-       customEnvTags = customEnvTags ?? [],
-       customTargetTypes = customTargetTypes ?? [],
-       deletedTargetTypes = deletedTargetTypes ?? [];
+  })  : deletedMentalTags = deletedMentalTags ?? [],
+        deletedSkillsTags = deletedSkillsTags ?? [],
+        deletedEnvTags = deletedEnvTags ?? [],
+        customMentalTags = customMentalTags ?? [],
+        customSkillsTags = customSkillsTags ?? [],
+        customEnvTags = customEnvTags ?? [],
+        customTargetTypes = customTargetTypes ?? [],
+        deletedTargetTypes = deletedTargetTypes ?? [];
 
   int get totalHits {
     return stages.fold(0, (sum, stage) => sum + stage.hitCount);
@@ -97,18 +97,23 @@ class Match {
       date: DateTime.parse(map['date']),
       numStages: map['numStages']?.toInt() ?? 0,
       shotsPerStage: map['shotsPerStage']?.toInt() ?? 10,
-      stages: List<Stage>.from(map['stages']?.map((x) => Stage.fromMap(x as Map)) ?? const []),
+      stages: List<Stage>.from(
+          map['stages']?.map((x) => Stage.fromMap(x as Map)) ?? const []),
       winnerHits: map['winnerHits']?.toInt(),
       position: map['position']?.toInt(),
       matchNotes: map['matchNotes'],
-      deletedMentalTags: List<String>.from(map['deletedMentalTags'] ?? const []),
-      deletedSkillsTags: List<String>.from(map['deletedSkillsTags'] ?? const []),
+      deletedMentalTags:
+          List<String>.from(map['deletedMentalTags'] ?? const []),
+      deletedSkillsTags:
+          List<String>.from(map['deletedSkillsTags'] ?? const []),
       deletedEnvTags: List<String>.from(map['deletedEnvTags'] ?? const []),
       customMentalTags: List<String>.from(map['customMentalTags'] ?? const []),
       customSkillsTags: List<String>.from(map['customSkillsTags'] ?? const []),
       customEnvTags: List<String>.from(map['customEnvTags'] ?? const []),
-      customTargetTypes: List<String>.from(map['customTargetTypes'] ?? const []),
-      deletedTargetTypes: List<String>.from(map['deletedTargetTypes'] ?? const []),
+      customTargetTypes:
+          List<String>.from(map['customTargetTypes'] ?? const []),
+      deletedTargetTypes:
+          List<String>.from(map['deletedTargetTypes'] ?? const []),
     );
   }
 
@@ -172,7 +177,8 @@ class Stage {
 
   int get hitCount => shotResults.where((r) => r == 'hit').length;
   int get missCount => shotResults.where((r) => r == 'miss').length;
-  int get timeOutMissCount => shotResults.where((r) => r == 'timeOutMiss').length;
+  int get timeOutMissCount =>
+      shotResults.where((r) => r == 'timeOutMiss').length;
 
   Map<String, dynamic> toMap() {
     return {
@@ -196,11 +202,14 @@ class Stage {
 
   factory Stage.fromMap(Map<dynamic, dynamic> map) {
     final targetArraysList = map['targetArrays'] != null
-        ? List<TargetArray>.from(map['targetArrays']?.map((x) => TargetArray.fromMap(x as Map)) ?? const [])
+        ? List<TargetArray>.from(
+            map['targetArrays']?.map((x) => TargetArray.fromMap(x as Map)) ??
+                const [])
         : <TargetArray>[];
 
     if (targetArraysList.isEmpty && map['targets'] != null) {
-      final legacyTargets = List<Target>.from(map['targets']?.map((x) => Target.fromMap(x as Map)) ?? const []);
+      final legacyTargets = List<Target>.from(
+          map['targets']?.map((x) => Target.fromMap(x as Map)) ?? const []);
       if (legacyTargets.isNotEmpty) {
         final Map<String, List<Target>> groups = {};
         for (var t in legacyTargets) {
@@ -242,7 +251,8 @@ class Target {
   String size;
   String distance;
   String degreeOfFire;
-  String type; // IPSC, Sniper Head, Sniper Shoulders, Circles, Diamonds, Square, Pig, Coyote, Sasquatch, etc.
+  String
+      type; // IPSC, Sniper Head, Sniper Shoulders, Circles, Diamonds, Square, Pig, Coyote, Sasquatch, etc.
   int shotsCount; // number of shots for this target
 
   Target({
@@ -294,9 +304,15 @@ class WindPlan {
     this.actualDirection = 'None',
   });
 
-  String get prevFormatted => prevDirection == 'None' ? '0.0 MIL' : '${prevValue.toStringAsFixed(1)} MIL $prevDirection';
-  String get kestrelFormatted => kestrelDirection == 'None' ? '0.0 MIL' : '${kestrelValue.toStringAsFixed(1)} MIL $kestrelDirection';
-  String get actualFormatted => actualDirection == 'None' ? '0.0 MIL' : '${actualValue.toStringAsFixed(1)} MIL $actualDirection';
+  String get prevFormatted => prevDirection == 'None'
+      ? '0.0 MIL'
+      : '${prevValue.toStringAsFixed(1)} MIL $prevDirection';
+  String get kestrelFormatted => kestrelDirection == 'None'
+      ? '0.0 MIL'
+      : '${kestrelValue.toStringAsFixed(1)} MIL $kestrelDirection';
+  String get actualFormatted => actualDirection == 'None'
+      ? '0.0 MIL'
+      : '${actualValue.toStringAsFixed(1)} MIL $actualDirection';
 
   Map<String, dynamic> toMap() {
     return {
@@ -367,6 +383,31 @@ class TargetArray {
     return ((normalized / 15).round()) % 24;
   }
 
+  static String formatElevationMil(double mil) {
+    if (mil.abs() < 0.005) return '0.00 MIL';
+    final dir = mil < 0 ? 'U' : 'D';
+    return '${mil.abs().toStringAsFixed(2)} $dir MIL';
+  }
+
+  static String formatWindageMil(double mil) {
+    if (mil.abs() < 0.005) return '0.00 MIL';
+    final dir = mil < 0 ? 'R' : 'L';
+    return '${mil.abs().toStringAsFixed(2)} $dir MIL';
+  }
+
+  static String formatWindagePair(double w1, double w2) {
+    final formatted1 = formatWindageMil(w1);
+    if ((w1 - w2).abs() < 0.005) return formatted1;
+    return 'W1: $formatted1  W2: ${formatWindageMil(w2)}';
+  }
+
+  static String formatWindSpeedRange(double minMph, double maxMph) {
+    if ((minMph - maxMph).abs() < 0.005) {
+      return '${minMph.toStringAsFixed(minMph.truncateToDouble() == minMph ? 0 : 1)} mph';
+    }
+    return '$minMph - $maxMph mph';
+  }
+
   TargetArray({
     this.distance = '',
     this.degreeOfFire = '',
@@ -375,7 +416,7 @@ class TargetArray {
     this.maxWindSpeed = 0.0,
     this.windClockDirection = 0,
     this.extrapolatedWindSpeed = 0.0,
-    this.extrapolatedClockDirection = 12,
+    this.extrapolatedClockDirection = 0,
     this.elevationResult = '',
     this.windageResult = '',
   });
@@ -399,14 +440,18 @@ class TargetArray {
     return TargetArray(
       distance: map['distance'] ?? '',
       degreeOfFire: map['degreeOfFire'] ?? '',
-      targets: List<Target>.from(map['targets']?.map((x) => Target.fromMap(x as Map)) ?? const []),
+      targets: List<Target>.from(
+          map['targets']?.map((x) => Target.fromMap(x as Map)) ?? const []),
       minWindSpeed: (map['minWindSpeed'] as num?)?.toDouble() ?? 0.0,
       maxWindSpeed: (map['maxWindSpeed'] as num?)?.toDouble() ?? 0.0,
       windClockDirection: TargetArray.migrateWindClockSlot(
         map['windClockDirection']?.toInt() ?? 12,
       ),
-      extrapolatedWindSpeed: (map['extrapolatedWindSpeed'] as num?)?.toDouble() ?? 0.0,
-      extrapolatedClockDirection: map['extrapolatedClockDirection']?.toInt() ?? 12,
+      extrapolatedWindSpeed:
+          (map['extrapolatedWindSpeed'] as num?)?.toDouble() ?? 0.0,
+      extrapolatedClockDirection: TargetArray.migrateWindClockSlot(
+        map['extrapolatedClockDirection']?.toInt() ?? 0,
+      ),
       elevationResult: map['elevationResult'] ?? '',
       windageResult: map['windageResult'] ?? '',
     );
