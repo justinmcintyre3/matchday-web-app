@@ -371,6 +371,14 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     return double.tryParse(clean) ?? 0.0;
   }
 
+  double snapToward(double val) {
+    return (val * 10).floor() / 10.0; // toward zero
+  }
+
+  double snapAway(double val) {
+    return ((val * 10).floor() / 10.0) + 0.1; // away from zero
+  }
+
   double _parseRangeYards(String distanceStr) {
     final clean = distanceStr.replaceAll(RegExp(r'[^0-9.]'), '');
     return double.tryParse(clean) ?? 100.0;
@@ -1507,15 +1515,17 @@ class _StageDetailScreenState extends State<StageDetailScreen>
             ElevatedButton(
               onPressed: () {
                 HapticFeedback.lightImpact();
-                if (direction == 'R') {
-                  double newVal = value - 0.1;
-                  if (newVal < 0.05) {
+
+                if (direction == 'L') {
+                  final next = snapAway(value);
+                  onChanged(next, 'L');
+                } else if (direction == 'R') {
+                  final next = snapToward(value) - 0.1;
+                  if (next <= 0.0) {
                     onChanged(0.0, 'None');
                   } else {
-                    onChanged(newVal, 'R');
+                    onChanged(next, 'R');
                   }
-                } else if (direction == 'L') {
-                  onChanged((value + 0.1).clamp(0.0, 5.0), 'L');
                 } else {
                   onChanged(0.1, 'L');
                 }
@@ -1529,8 +1539,10 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8)),
               ),
-              child: const Text('L',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              child: const Text(
+                'L',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
             ),
 
             // Value display
@@ -1559,15 +1571,17 @@ class _StageDetailScreenState extends State<StageDetailScreen>
             ElevatedButton(
               onPressed: () {
                 HapticFeedback.lightImpact();
-                if (direction == 'L') {
-                  double newVal = value - 0.1;
-                  if (newVal < 0.05) {
+
+                if (direction == 'R') {
+                  final next = snapAway(value);
+                  onChanged(next, 'R');
+                } else if (direction == 'L') {
+                  final next = snapToward(value) - 0.1;
+                  if (next <= 0.0) {
                     onChanged(0.0, 'None');
                   } else {
-                    onChanged(newVal, 'L');
+                    onChanged(next, 'L');
                   }
-                } else if (direction == 'R') {
-                  onChanged((value + 0.1).clamp(0.0, 5.0), 'R');
                 } else {
                   onChanged(0.1, 'R');
                 }
@@ -1581,8 +1595,10 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8)),
               ),
-              child: const Text('R',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              child: const Text(
+                'R',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
             ),
           ],
         ),
