@@ -333,13 +333,47 @@ class TargetArray {
   String elevationResult;
   String windageResult;
 
+  /// 0–23 clock slots: 0 = 12:00, 1 = 12:30, 2 = 1:00, … (15° steps).
+  static int migrateWindClockSlot(int value) {
+    if (value >= 0 && value <= 23) return value;
+    if (value == 12) return 0;
+    if (value >= 1 && value <= 11) return value * 2;
+    return 0;
+  }
+
+  static String formatClockSlot(int slot) {
+    final normalized = slot % 24;
+    final totalMinutes = normalized * 30;
+    final hour = (totalMinutes ~/ 60) % 12;
+    final minute = totalMinutes % 60;
+    final displayHour = hour == 0 ? 12 : hour;
+    return minute == 0 ? '$displayHour:00' : '$displayHour:30';
+  }
+
+  /// Kestrel Link [F1]: clock position → relative wind degrees (12:00 = 0°).
+  static double clockSlotToDegrees(int slot) {
+    final normalized = slot % 24;
+    final totalMinutes = normalized * 30;
+    final hour = (totalMinutes ~/ 60) % 12;
+    final minute = totalMinutes % 60;
+    final clockHour = hour == 0 ? 0.0 : hour.toDouble();
+    var degrees = clockHour * 30.0;
+    if (minute == 30) degrees += 15.0;
+    return degrees % 360.0;
+  }
+
+  static int degreesToClockSlot(double degrees) {
+    final normalized = ((degrees % 360) + 360) % 360;
+    return ((normalized / 15).round()) % 24;
+  }
+
   TargetArray({
     this.distance = '',
     this.degreeOfFire = '',
     required this.targets,
     this.minWindSpeed = 0.0,
     this.maxWindSpeed = 0.0,
-    this.windClockDirection = 12,
+    this.windClockDirection = 0,
     this.extrapolatedWindSpeed = 0.0,
     this.extrapolatedClockDirection = 12,
     this.elevationResult = '',
@@ -368,7 +402,9 @@ class TargetArray {
       targets: List<Target>.from(map['targets']?.map((x) => Target.fromMap(x as Map)) ?? const []),
       minWindSpeed: (map['minWindSpeed'] as num?)?.toDouble() ?? 0.0,
       maxWindSpeed: (map['maxWindSpeed'] as num?)?.toDouble() ?? 0.0,
-      windClockDirection: map['windClockDirection']?.toInt() ?? 12,
+      windClockDirection: TargetArray.migrateWindClockSlot(
+        map['windClockDirection']?.toInt() ?? 12,
+      ),
       extrapolatedWindSpeed: (map['extrapolatedWindSpeed'] as num?)?.toDouble() ?? 0.0,
       extrapolatedClockDirection: map['extrapolatedClockDirection']?.toInt() ?? 12,
       elevationResult: map['elevationResult'] ?? '',

@@ -363,20 +363,23 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   double _absoluteWindBearingForArray(int arrayIdx) {
     if (_stage.targetArrays.isEmpty) return 0.0;
     final array0 = _stage.targetArrays[0];
-    if (arrayIdx == 0) {
-      final dof = _parseDof(array0.degreeOfFire);
-      return (dof + array0.windClockDirection * 30.0) % 360.0;
-    }
+    final slot0 = TargetArray.migrateWindClockSlot(array0.windClockDirection);
+    final wd0 = TargetArray.clockSlotToDegrees(slot0);
+    if (arrayIdx == 0) return wd0;
+
+    final dof0 = _parseDof(array0.degreeOfFire);
     final array = _stage.targetArrays[arrayIdx];
-    final dof = _parseDof(array.degreeOfFire);
-    return (dof + array.extrapolatedClockDirection * 30.0) % 360.0;
+    final dofN = _parseDof(array.degreeOfFire);
+    var relativeWd = (wd0 + dof0 - dofN) % 360.0;
+    if (relativeWd < 0) relativeWd += 360.0;
+    return relativeWd;
   }
 
   Future<Map<String, dynamic>> _sendAndWaitForBalSolution({
     required KestrelProvider provider,
     required int targetNumber,
     required Future<void> Function() send,
-    Duration timeout = const Duration(seconds: 8),
+    Duration timeout = const Duration(seconds: 4),
   }) async {
     final completer = Completer<Map<String, dynamic>>();
     late StreamSubscription<Map<String, dynamic>> subscription;
@@ -397,24 +400,106 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   void _extrapolateWindForArray(int arrayIdx) {
     if (arrayIdx == 0) return;
     if (_stage.targetArrays.isEmpty) return;
-    
+
     final array0 = _stage.targetArrays[0];
     final arrayN = _stage.targetArrays[arrayIdx];
-
-    double dof0 = _parseDof(array0.degreeOfFire);
-    double dofN = _parseDof(arrayN.degreeOfFire);
-    
-    double clockAngle0 = (array0.windClockDirection * 30.0) % 360.0;
-    double absoluteWindBearing = (dof0 + clockAngle0) % 360.0;
-    
-    double clockAngleN = (absoluteWindBearing - dofN) % 360.0;
-    if (clockAngleN < 0) clockAngleN += 360.0;
-    
-    int extrapolatedClock = (clockAngleN / 30.0).round();
-    if (extrapolatedClock == 0) extrapolatedClock = 12;
+    final relativeWd = _absoluteWindBearingForArray(arrayIdx);
 
     arrayN.extrapolatedWindSpeed = array0.maxWindSpeed;
-    arrayN.extrapolatedClockDirection = extrapolatedClock;
+    arrayN.extrapolatedClockDirection = TargetArray.degreesToClockSlot(relativeWd);
+  }
+
+  bool _hasBalSolution(Map<String, dynamic> result) {
+    return result['elevation'] != null;
+  }
+
+  void _applyBalResultToArray(int arrayIdx, Map<String, dynamic> result) {
+    final elevation = (result['elevation'] as num).toDouble();
+    final w1 = (result['windage1'] as num).toDouble();
+    final w2 = (result['windage2'] as num).toDouble();
+
+    final array = _stage.targetArrays[arrayIdx];
+    array.elevationResult = '${elevation.toStringAsFixed(2)} MIL';
+    array.windageResult =
+        'W1: ${w1.toStringAsFixed(2)} W2: ${w2.toStringAsFixed(2)} MIL';
+
+    if (arrayIdx == 0) {
+      _stage.windPlan.kestrelValue = w1.abs();
+      _stage.windPlan.kestrelDirection =
+          w1 < 0 ? 'L' : (w1 > 0 ? 'R' : 'None');
+    }
+  }
+
+  Widget _buildBalisticsResultsRow(TargetArray array) {
+    if (array.elevationResult.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8.0),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF007AFF).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(
+                  color: const Color(0xFF007AFF).withValues(alpha: 0.3),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Elevation',
+                    style: TextStyle(fontSize: 10, color: Color(0xFF007AFF)),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    array.elevationResult,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF00E676).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(
+                  color: const Color(0xFF00E676).withValues(alpha: 0.3),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Windage',
+                    style: TextStyle(fontSize: 10, color: Color(0xFF00E676)),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    array.windageResult,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildTargetArray0WindConfig(TargetArray array) {
@@ -480,7 +565,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
             const SizedBox(width: 8),
             Expanded(
               child: DropdownButtonFormField<int>(
-                value: array.windClockDirection,
+                value: TargetArray.migrateWindClockSlot(array.windClockDirection),
                 decoration: const InputDecoration(
                   labelText: 'Dir (O\'clock)',
                   isDense: true,
@@ -488,11 +573,13 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                   contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                   labelStyle: TextStyle(fontSize: 10),
                 ),
-                items: List.generate(12, (index) {
-                  final clock = index + 1;
+                items: List.generate(24, (index) {
                   return DropdownMenuItem(
-                    value: clock,
-                    child: Text('$clock:00', style: const TextStyle(fontSize: 12)),
+                    value: index,
+                    child: Text(
+                      TargetArray.formatClockSlot(index),
+                      style: const TextStyle(fontSize: 12),
+                    ),
                   );
                 }),
                 onChanged: (val) {
@@ -501,13 +588,14 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                     for (int i = 1; i < _stage.targetArrays.length; i++) {
                       _extrapolateWindForArray(i);
                     }
-                    setState((){});
+                    setState(() {});
                   }
                 },
               ),
             ),
           ],
         ),
+        _buildBalisticsResultsRow(array),
       ],
     );
   }
@@ -558,58 +646,21 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                   children: [
                     const Text('Direction', style: TextStyle(fontSize: 10, color: Colors.grey)),
                     const SizedBox(height: 2),
-                    Text('${array.extrapolatedClockDirection}:00', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    Text(
+                      TargetArray.formatClockSlot(
+                        TargetArray.migrateWindClockSlot(
+                          array.extrapolatedClockDirection,
+                        ),
+                      ),
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
                   ],
                 ),
               ),
             ),
           ],
         ),
-        if (array.elevationResult.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 8.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF007AFF).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: const Color(0xFF007AFF).withValues(alpha: 0.3)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Elevation', style: TextStyle(fontSize: 10, color: Color(0xFF007AFF))),
-                        const SizedBox(height: 2),
-                        Text(array.elevationResult, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF00E676).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: const Color(0xFF00E676).withValues(alpha: 0.3)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Windage', style: TextStyle(fontSize: 10, color: Color(0xFF00E676))),
-                        const SizedBox(height: 2),
-                        Text(array.windageResult, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+        _buildBalisticsResultsRow(array),
       ],
     );
   }
@@ -676,7 +727,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
         _extrapolateWindForArray(i);
       }
 
-      // Phase 1: push target inputs to each Kestrel slot (cmd 137).
+      // Push target inputs then read solution (Link app cmd 137 — one round trip per slot).
+      // Reference app polls ~1s; we allow 4s per slot. Phase-2 calc is fallback only.
       for (int i = 0; i < targetCount; i++) {
         if (!mounted) return;
 
@@ -688,11 +740,12 @@ class _StageDetailScreenState extends State<StageDetailScreen>
         final wind2 = i == 0 ? array0.maxWindSpeed : array.extrapolatedWindSpeed;
 
         debugPrint(
-          '[Kestrel Sync] Phase 1 target $i: rng=${rangeYards}yd dof=$dof '
-          'wind=$wind1-$wind2 mph dir=$windDir',
+          '[Kestrel Sync] target $i: rng=${rangeYards}yd dof=$dof '
+          'wind=$wind1-$wind2 mph wd=${windDir.toStringAsFixed(0)}° '
+          '(${TargetArray.formatClockSlot(TargetArray.degreesToClockSlot(windDir))})',
         );
 
-        await _sendAndWaitForBalSolution(
+        var result = await _sendAndWaitForBalSolution(
           provider: kestrelProvider,
           targetNumber: i,
           send: () => kestrelProvider.sendCmdSetBalFullInputs(
@@ -704,36 +757,18 @@ class _StageDetailScreenState extends State<StageDetailScreen>
             windDirection: windDir,
           ),
         );
-      }
 
-      // Phase 2: trigger calc for each slot and read elevation/windage back.
-      for (int i = 0; i < targetCount; i++) {
-        if (!mounted) return;
+        if (!_hasBalSolution(result)) {
+          debugPrint('[Kestrel Sync] target $i: no solution from set inputs, trying calc');
+          result = await _sendAndWaitForBalSolution(
+            provider: kestrelProvider,
+            targetNumber: i,
+            timeout: const Duration(seconds: 3),
+            send: () => kestrelProvider.sendCalcFullSolution(targetNumber: i),
+          );
+        }
 
-        debugPrint('[Kestrel Sync] Phase 2 calc target $i');
-
-        final result = await _sendAndWaitForBalSolution(
-          provider: kestrelProvider,
-          targetNumber: i,
-          send: () => kestrelProvider.sendCalcFullSolution(targetNumber: i),
-        );
-
-        setState(() {
-          final double elevation = (result['elevation'] as num).toDouble();
-          final double w1 = (result['windage1'] as num).toDouble();
-          final double w2 = (result['windage2'] as num).toDouble();
-
-          final array = _stage.targetArrays[i];
-          array.elevationResult = '${elevation.toStringAsFixed(2)} MIL';
-          array.windageResult =
-              'W1: ${w1.toStringAsFixed(2)} W2: ${w2.toStringAsFixed(2)} MIL';
-
-          if (i == 0) {
-            _stage.windPlan.kestrelValue = w1.abs();
-            _stage.windPlan.kestrelDirection =
-                w1 < 0 ? 'L' : (w1 > 0 ? 'R' : 'None');
-          }
-        });
+        setState(() => _applyBalResultToArray(i, result));
       }
 
       _saveStage(exitScreen: false);
