@@ -64,6 +64,8 @@ class KestrelBleService {
 
   // Internal state
   final KestrelJniService _jni = KestrelJniService();
+  bool _isResettingHostPin = false;
+  String? _currentPin;
 
   KestrelBleService() {
     _jni.onTxBytes.listen((bytes) {
@@ -83,15 +85,27 @@ class KestrelBleService {
 
     _jni.onPrivacyAuthAck.listen((success) {
       if (success) {
-        if (!_hasAcknowledgedPin) {
+        if (_isResettingHostPin && _currentPin != null) {
+          debugPrint('[KestrelBLE] Reset successful. Setting new Host PIN...');
+          _isResettingHostPin = false;
+          // After a successful reset, we immediately re-authenticate with our actual hostId
+          authenticateWithPin(_currentPin!);
+        } else if (!_hasAcknowledgedPin) {
           _hasAcknowledgedPin = true;
           debugPrint('[KestrelBLE] PIN accepted, waiting for native auth complete...');
           onConnectionStateChanged?.call(KestrelConnectionState.synchronizing);
           _jni.sendRequestAuth();
         }
       } else {
-        onConnectionStateChanged?.call(KestrelConnectionState.error);
-        disconnect();
+        if (!_isResettingHostPin && _currentPin != null) {
+          debugPrint('[KestrelBLE] Auth failed. Attempting Host PIN reset...');
+          // NACK received. If we haven't tried a reset yet, try it now
+          authenticateWithPin(_currentPin!, resetHostPin: true);
+        } else {
+          debugPrint('[KestrelBLE] Auth failed even after reset (or reset failed). Disconnecting.');
+          onConnectionStateChanged?.call(KestrelConnectionState.error);
+          disconnect();
+        }
       }
     });
 
@@ -131,7 +145,6 @@ class KestrelBleService {
   bool _isAutoConnecting = false;
   bool _hasSentAuthRequest = false;
   bool _hasAcknowledgedPin = false;
-  bool _isAuthenticatingPin = false;
   bool _isDiscovering = false;
 
   StreamSubscription<List<ScanResult>>? _scanSubscription;
@@ -239,7 +252,6 @@ class KestrelBleService {
     _isAutoConnecting = autoConnect;
     _hasSentAuthRequest = false;
     _hasAcknowledgedPin = false;
-    _isAuthenticatingPin = false;
 
     // Only show the connecting spinner immediately if this is a manual connection attempt.
     // If it's a background auto-reconnect, stay in the disconnected state until the device is actually found.
@@ -363,11 +375,13 @@ class KestrelBleService {
     }
   }
 
-  Future<void> authenticateWithPin(String pin) async {
-    if (_isAuthenticatingPin) return;
-    _isAuthenticatingPin = true;
+  Future<void> authenticateWithPin(String pin, {bool resetHostPin = false}) async {
+    _currentPin = pin;
+    _isResettingHostPin = resetHostPin;
+    
     // Fetch the 4-digit hashed Host ID computed in native code matching the Link App algorithm
-    final hostId = await _jni.getHostId();
+    // If we are resetting the host PIN, we send an empty string for hostId.
+    final hostId = resetHostPin ? "" : await _jni.getHostId();
     debugPrint('[KestrelBLE] Authenticating with PIN: $pin and HostID: $hostId');
     await _jni.sendCmdPrivacyAuthenticate(pin, hostId);
   }
