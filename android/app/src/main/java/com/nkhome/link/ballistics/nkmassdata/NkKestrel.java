@@ -249,7 +249,35 @@ public class NkKestrel extends NkMassData {
     public void updateBalFullSolution(float f4, float f5, float f6, float f7, float f8, float f9, float f10, float f11, float f12, float f13, float f14, float f15, float f16, float f17, float f18, float f19, float f20, float f21, float f22, float f23, float f24, float f25, float f26, float f27, int i2, int i4, int i5) {
         k kVar = this.mListener;
         if (kVar != null) {
-            kVar.z(null);
+            e obj = new e();
+            obj.TargetRange = f4;
+            obj.InclinationAngle = f5;
+            obj.Dof = f6;
+            obj.Elevation = f7;
+            obj.Wnd1 = f8;
+            obj.Wnd2 = f9;
+            obj.TargetSpeed = f10;
+            obj.WindSpeed1 = f11;
+            obj.WindSpeed2 = f12;
+            obj.WindDirection = f13;
+            obj.Latitude = f14;
+            obj.Lead = f15;
+            obj.Velocity = f16;
+            obj.Energy = f17;
+            obj.ToF = f18;
+            obj.MaxOrd = f19;
+            obj.Drop = f20;
+            obj.Vcor = f21;
+            obj.Hcor = f22;
+            obj.SpinD = f23;
+            obj.AJump = f24;
+            obj.Trace = f25;
+            obj.RTrans = f26;
+            obj.RSubs = f27;
+            obj.TgtMvmtDir = i2;
+            obj.TargetNumber = i4;
+            obj.SolutionId = i5;
+            kVar.z(obj);
         }
     }
 

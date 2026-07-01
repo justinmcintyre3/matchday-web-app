@@ -233,23 +233,32 @@ class KestrelProvider extends ChangeNotifier {
   /// Stream of ballistics full solution results from the Kestrel.
   Stream<Map<String, dynamic>> get onBalFullSolution => _service.onBalFullSolution;
 
-  /// Sends a full ballistics solution request to the Kestrel.
-  Future<void> sendCalcFullSolution({
-    required double targetRange,
-    required double directionOfFire,
-    required double windSpeed1,
-    required double windSpeed2,
-    required double windDirection,
+  Stream<bool> get onCalcFullSolnAck => _service.onCalcFullSolnAck;
+
+  Future<void> sendCmdSetBalFullInputs({
     required int targetNumber,
+    required double targetRangeYards,
+    required double directionOfFire,
+    required double windSpeed1Mph,
+    required double windSpeed2Mph,
+    required double windDirection,
+    double inclinationAngle = 0,
+    double targetSpeedMph = 0,
   }) async {
-    await _service.sendCalcFullSolution(
-      targetRange: targetRange,
-      directionOfFire: directionOfFire,
-      windSpeed1: windSpeed1,
-      windSpeed2: windSpeed2,
-      windDirection: windDirection,
+    await _service.sendCmdSetBalFullInputs(
       targetNumber: targetNumber,
+      targetRangeYards: targetRangeYards,
+      directionOfFire: directionOfFire,
+      windSpeed1Mph: windSpeed1Mph,
+      windSpeed2Mph: windSpeed2Mph,
+      windDirection: windDirection,
+      inclinationAngle: inclinationAngle,
+      targetSpeedMph: targetSpeedMph,
     );
+  }
+
+  Future<void> sendCalcFullSolution({required int targetNumber}) async {
+    await _service.sendCalcFullSolution(targetNumber: targetNumber);
   }
 
   @override

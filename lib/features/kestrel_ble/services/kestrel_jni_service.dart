@@ -35,6 +35,9 @@ class KestrelJniService {
   Stream<Map<String, dynamic>> get onBalFullSolution => _onBalFullSolutionController.stream;
   final _onBalFullSolutionController = StreamController<Map<String, dynamic>>.broadcast();
 
+  final StreamController<bool> _calcFullSolnAckController = StreamController.broadcast();
+  Stream<bool> get onCalcFullSolnAck => _calcFullSolnAckController.stream;
+
   KestrelJniService() {
     _channel.setMethodCallHandler(_handleMethodCall);
   }
@@ -76,7 +79,14 @@ class KestrelJniService {
         break;
       case 'onBalFullSolution':
         final map = Map<String, dynamic>.from(call.arguments as Map);
+        debugPrint('[KestrelJni] onBalFullSolution target=${map['targetNumber']}');
         _onBalFullSolutionController.add(map);
+        break;
+      case 'onCalcFullSolnAck':
+        _calcFullSolnAckController.add(call.arguments as bool);
+        break;
+      case 'onSetRemoteSolnAck':
+        debugPrint('[KestrelJni] onSetRemoteSolnAck: ${call.arguments}');
         break;
     }
   }
@@ -128,20 +138,32 @@ class KestrelJniService {
     await _channel.invokeMethod('sendSetEnvironment', {'latitude': latitude});
   }
 
-  Future<void> sendCalcFullSolution({
-    required double targetRange,
-    required double directionOfFire,
-    required double windSpeed1,
-    required double windSpeed2,
-    required double windDirection,
+  /// Phase 1: push target slot data to the Kestrel (cmd 137 / setBalFullInputs).
+  Future<void> sendCmdSetBalFullInputs({
     required int targetNumber,
+    required double targetRangeYards,
+    required double directionOfFire,
+    required double windSpeed1Mph,
+    required double windSpeed2Mph,
+    required double windDirection,
+    double inclinationAngle = 0,
+    double targetSpeedMph = 0,
   }) async {
-    await _channel.invokeMethod('sendCalcFullSolution', {
-      'targetRange': targetRange,
+    await _channel.invokeMethod('sendCmdSetBalFullInputs', {
+      'targetNumber': targetNumber,
+      'targetRangeYards': targetRangeYards,
       'directionOfFire': directionOfFire,
-      'windSpeed1': windSpeed1,
-      'windSpeed2': windSpeed2,
+      'windSpeed1Mph': windSpeed1Mph,
+      'windSpeed2Mph': windSpeed2Mph,
       'windDirection': windDirection,
+      'inclinationAngle': inclinationAngle,
+      'targetSpeedMph': targetSpeedMph,
+    });
+  }
+
+  /// Phase 2: trigger ballistics calc for a target slot already written to the Kestrel.
+  Future<void> sendCalcFullSolution({required int targetNumber}) async {
+    await _channel.invokeMethod('sendCalcFullSolution', {
       'targetNumber': targetNumber,
     });
   }
@@ -168,5 +190,7 @@ class KestrelJniService {
     _tgtInfoSettingsController.close();
     _gunTransferSettingsController.close();
     _balInfoSettingsController.close();
+    _onBalFullSolutionController.close();
+    _calcFullSolnAckController.close();
   }
 }

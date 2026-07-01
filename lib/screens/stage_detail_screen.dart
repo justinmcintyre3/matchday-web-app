@@ -7,7 +7,6 @@ import '../providers/match_provider.dart';
 import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 import 'package:flutter/services.dart';
 import '../features/kestrel_ble/providers/kestrel_provider.dart';
-import '../features/kestrel_ble/services/kestrel_ble_service.dart';
 import '../features/kestrel_ble/models/kestrel_device.dart';
 
 class StageDetailScreen extends StatefulWidget {
@@ -356,6 +355,45 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     return double.tryParse(clean) ?? 0.0;
   }
 
+  double _parseRangeYards(String distanceStr) {
+    final clean = distanceStr.replaceAll(RegExp(r'[^0-9.]'), '');
+    return double.tryParse(clean) ?? 100.0;
+  }
+
+  double _absoluteWindBearingForArray(int arrayIdx) {
+    if (_stage.targetArrays.isEmpty) return 0.0;
+    final array0 = _stage.targetArrays[0];
+    if (arrayIdx == 0) {
+      final dof = _parseDof(array0.degreeOfFire);
+      return (dof + array0.windClockDirection * 30.0) % 360.0;
+    }
+    final array = _stage.targetArrays[arrayIdx];
+    final dof = _parseDof(array.degreeOfFire);
+    return (dof + array.extrapolatedClockDirection * 30.0) % 360.0;
+  }
+
+  Future<Map<String, dynamic>> _sendAndWaitForBalSolution({
+    required KestrelProvider provider,
+    required int targetNumber,
+    required Future<void> Function() send,
+    Duration timeout = const Duration(seconds: 8),
+  }) async {
+    final completer = Completer<Map<String, dynamic>>();
+    late StreamSubscription<Map<String, dynamic>> subscription;
+    subscription = provider.onBalFullSolution.listen((data) {
+      final slot = (data['targetNumber'] as num?)?.toInt();
+      if (slot == targetNumber && !completer.isCompleted) {
+        completer.complete(data);
+      }
+    });
+    try {
+      await send();
+      return await completer.future.timeout(timeout);
+    } finally {
+      await subscription.cancel();
+    }
+  }
+
   void _extrapolateWindForArray(int arrayIdx) {
     if (arrayIdx == 0) return;
     if (_stage.targetArrays.isEmpty) return;
@@ -631,57 +669,70 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     );
 
     try {
+      final targetCount = _stage.targetArrays.length.clamp(1, 10);
       final array0 = _stage.targetArrays[0];
-      for (int i = 0; i < 10; i++) {
+
+      for (int i = 1; i < targetCount; i++) {
+        _extrapolateWindForArray(i);
+      }
+
+      // Phase 1: push target inputs to each Kestrel slot (cmd 137).
+      for (int i = 0; i < targetCount; i++) {
         if (!mounted) return;
-        
-        final futureResult = kestrelProvider.onBalFullSolution
-            .firstWhere((data) => data['targetNumber'] == i)
-            .timeout(const Duration(seconds: 4));
 
-        double tRange = 25.0;
-        double dof = 0.0;
-        double wind1 = array0.minWindSpeed;
-        double wind2 = array0.maxWindSpeed;
-        double windDir = (array0.windClockDirection * 30.0) % 360.0;
+        final array = _stage.targetArrays[i];
+        final rangeYards = _parseRangeYards(array.distance);
+        final dof = _parseDof(array.degreeOfFire);
+        final windDir = _absoluteWindBearingForArray(i);
+        final wind1 = i == 0 ? array0.minWindSpeed : array.extrapolatedWindSpeed;
+        final wind2 = i == 0 ? array0.maxWindSpeed : array.extrapolatedWindSpeed;
 
-        if (i < _stage.targetArrays.length) {
-          final array = _stage.targetArrays[i];
-          tRange = double.tryParse(array.distance.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 100.0;
-          dof = _parseDof(array.degreeOfFire);
-          if (i > 0) {
-            wind1 = array.extrapolatedWindSpeed;
-            wind2 = array.extrapolatedWindSpeed;
-            windDir = (array.extrapolatedClockDirection * 30.0) % 360.0;
-          }
-        }
-
-        await kestrelProvider.sendCalcFullSolution(
-          targetRange: tRange,
-          directionOfFire: dof,
-          windSpeed1: wind1,
-          windSpeed2: wind2,
-          windDirection: windDir,
-          targetNumber: i,
+        debugPrint(
+          '[Kestrel Sync] Phase 1 target $i: rng=${rangeYards}yd dof=$dof '
+          'wind=$wind1-$wind2 mph dir=$windDir',
         );
 
-        final result = await futureResult;
-        
+        await _sendAndWaitForBalSolution(
+          provider: kestrelProvider,
+          targetNumber: i,
+          send: () => kestrelProvider.sendCmdSetBalFullInputs(
+            targetNumber: i,
+            targetRangeYards: rangeYards,
+            directionOfFire: dof,
+            windSpeed1Mph: wind1,
+            windSpeed2Mph: wind2,
+            windDirection: windDir,
+          ),
+        );
+      }
+
+      // Phase 2: trigger calc for each slot and read elevation/windage back.
+      for (int i = 0; i < targetCount; i++) {
+        if (!mounted) return;
+
+        debugPrint('[Kestrel Sync] Phase 2 calc target $i');
+
+        final result = await _sendAndWaitForBalSolution(
+          provider: kestrelProvider,
+          targetNumber: i,
+          send: () => kestrelProvider.sendCalcFullSolution(targetNumber: i),
+        );
+
         setState(() {
-           final double elevation = (result['elevation'] as num).toDouble();
-           final double w1 = (result['windage1'] as num).toDouble();
-           final double w2 = (result['windage2'] as num).toDouble();
-           
-           if (i < _stage.targetArrays.length) {
-             final array = _stage.targetArrays[i];
-             array.elevationResult = '${elevation.toStringAsFixed(2)} MIL';
-             array.windageResult = 'W1: ${w1.toStringAsFixed(2)} W2: ${w2.toStringAsFixed(2)} MIL';
-           }
-           
-           if (i == 0) {
-             _stage.windPlan.kestrelValue = w1.abs();
-             _stage.windPlan.kestrelDirection = w1 < 0 ? 'L' : (w1 > 0 ? 'R' : 'None');
-           }
+          final double elevation = (result['elevation'] as num).toDouble();
+          final double w1 = (result['windage1'] as num).toDouble();
+          final double w2 = (result['windage2'] as num).toDouble();
+
+          final array = _stage.targetArrays[i];
+          array.elevationResult = '${elevation.toStringAsFixed(2)} MIL';
+          array.windageResult =
+              'W1: ${w1.toStringAsFixed(2)} W2: ${w2.toStringAsFixed(2)} MIL';
+
+          if (i == 0) {
+            _stage.windPlan.kestrelValue = w1.abs();
+            _stage.windPlan.kestrelDirection =
+                w1 < 0 ? 'L' : (w1 > 0 ? 'R' : 'None');
+          }
         });
       }
 

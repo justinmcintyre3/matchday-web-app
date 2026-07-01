@@ -124,6 +124,7 @@ class KestrelBleService {
   Stream<bool> get onGunTransferSettingsReceived => _jni.onGunTransferSettingsReceived;
   Stream<void> get onBalInfoSettingsReceived => _jni.onBalInfoSettingsReceived;
   Stream<Map<String, dynamic>> get onBalFullSolution => _jni.onBalFullSolution;
+  Stream<bool> get onCalcFullSolnAck => _jni.onCalcFullSolnAck;
 
   BluetoothDevice? _connectedDevice;
   BluetoothCharacteristic? _txCharacteristic;
@@ -376,22 +377,32 @@ class KestrelBleService {
     await _jni.sendSetEnvironment(latitude);
   }
 
-  Future<void> sendCalcFullSolution({
-    required double targetRange,
-    required double directionOfFire,
-    required double windSpeed1,
-    required double windSpeed2,
-    required double windDirection,
+  /// Phase 1: write target inputs to a Kestrel slot (yards/mph/degrees from UI).
+  Future<void> sendCmdSetBalFullInputs({
     required int targetNumber,
+    required double targetRangeYards,
+    required double directionOfFire,
+    required double windSpeed1Mph,
+    required double windSpeed2Mph,
+    required double windDirection,
+    double inclinationAngle = 0,
+    double targetSpeedMph = 0,
   }) async {
-    await _jni.sendCalcFullSolution(
-      targetRange: targetRange,
-      directionOfFire: directionOfFire,
-      windSpeed1: windSpeed1,
-      windSpeed2: windSpeed2,
-      windDirection: windDirection,
+    await _jni.sendCmdSetBalFullInputs(
       targetNumber: targetNumber,
+      targetRangeYards: targetRangeYards,
+      directionOfFire: directionOfFire,
+      windSpeed1Mph: windSpeed1Mph,
+      windSpeed2Mph: windSpeed2Mph,
+      windDirection: windDirection,
+      inclinationAngle: inclinationAngle,
+      targetSpeedMph: targetSpeedMph,
     );
+  }
+
+  /// Phase 2: request ballistics solution for a slot already on the Kestrel.
+  Future<void> sendCalcFullSolution({required int targetNumber}) async {
+    await _jni.sendCalcFullSolution(targetNumber: targetNumber);
   }
 
   // ────────────────────────────────────────────────────────────────────────────

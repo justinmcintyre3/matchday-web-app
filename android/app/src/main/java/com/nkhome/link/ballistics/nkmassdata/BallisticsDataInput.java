@@ -108,4 +108,30 @@ public class BallisticsDataInput {
     public void setWindSpeed2(float f4) {
         this.windSpeed2 = f4;
     }
+
+    /** Sets validity flags using the same ranges as the Kestrel Link app validators. */
+    public void applyDefaultValidation() {
+        this.rangeIsValid = isRangeValid(this.targetRange) ? (byte) 1 : (byte) 0;
+        this.incAngleIsValid = isInRange(this.inclinationAngle, -90.0f, 90.0f) ? (byte) 1 : (byte) 0;
+        this.dofIsValid = isInRange(this.directionOfFire, 0.0f, 359.0f) ? (byte) 1 : (byte) 0;
+        this.targetNumIsValid = isTargetNumberValid(this.targetNumber) ? (byte) 1 : (byte) 0;
+        this.targetSpeedIsValid = isInRange(this.targetSpeed, 0.0f, 50.0f) ? (byte) 1 : (byte) 0;
+        this.windSpeed1IsValid = isInRange(this.windSpeed1, 0.0f, 50.0f) ? (byte) 1 : (byte) 0;
+        this.windSpeed2IsValid = isInRange(this.windSpeed2, 0.0f, 50.0f) ? (byte) 1 : (byte) 0;
+        this.windDirectionIsValid = isInRange(this.windDirection, 0.0f, 359.0f) ? (byte) 1 : (byte) 0;
+        this.latitudeIsValid = isInRange(this.latitude, -90.0f, 90.0f) ? (byte) 1 : (byte) 0;
+        this.tgtMvmtDirIsValid = (byte) 1;
+    }
+
+    private static boolean isInRange(float value, float min, float max) {
+        return value >= min && value <= max;
+    }
+
+    private static boolean isTargetNumberValid(float targetNumber) {
+        return targetNumber >= 0.0f && targetNumber <= 9.0f;
+    }
+
+    private static boolean isRangeValid(float rangeMeters) {
+        return rangeMeters >= 0.0f && rangeMeters <= 3657.6f;
+    }
 }
