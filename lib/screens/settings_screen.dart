@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:watch_connectivity/watch_connectivity.dart';
 import 'package:provider/provider.dart';
 import 'device_detail_screen.dart';
 import '../features/kestrel_ble/providers/kestrel_provider.dart';
@@ -11,6 +10,7 @@ import '../features/sg_pulse/providers/sg_pulse_provider.dart';
 import '../features/sg_pulse/models/sg_pulse_device.dart';
 import '../features/sg_pulse/screens/sg_pulse_scan_screen.dart';
 import '../features/sg_pulse/screens/sg_pulse_detail_screen.dart';
+import '../providers/match_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -20,7 +20,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final _wc = WatchConnectivity();
   bool? _isReachable;
   bool? _isPaired;
   bool _loading = true;
@@ -38,10 +37,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       });
     }
     try {
-      final reachable = await _wc.isReachable;
+      final wc = context.read<MatchProvider>().watchConnectivity;
+      final reachable = await wc.isReachable;
       bool? paired;
       try {
-        paired = await _wc.isPaired;
+        paired = await wc.isPaired;
       } catch (_) {
         paired = null;
       }

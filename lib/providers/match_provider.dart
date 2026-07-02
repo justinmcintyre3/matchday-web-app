@@ -11,6 +11,7 @@ class MatchProvider with ChangeNotifier {
   int? _activeStageIndex;
 
   final _watchConnectivity = WatchConnectivity();
+  WatchConnectivity get watchConnectivity => _watchConnectivity;
   final _watchResultController = StreamController<WatchResultEvent>.broadcast();
   final _watchLiveUpdateController = StreamController<WatchLiveUpdateEvent>.broadcast();
   final _watchTimerStartedController = StreamController<void>.broadcast();
@@ -396,7 +397,7 @@ class MatchProvider with ChangeNotifier {
   }
 
   void _initWatchConnectivity() {
-    _watchConnectivity.messageStream.listen((message) {
+    void handleIncoming(Map<String, dynamic> message) {
       debugPrint('Incoming watch message: $message');
       if (message['type'] == 'stage_result') {
         final timeLeft = message['timeLeft'] as int?;
@@ -429,6 +430,14 @@ class MatchProvider with ChangeNotifier {
       } else if (message['type'] == 'timer_started') {
         _watchTimerStartedController.add(null);
       }
+    }
+
+    _watchConnectivity.messageStream.listen((message) {
+      handleIncoming(Map<String, dynamic>.from(message));
+    });
+    
+    _watchConnectivity.contextStream.listen((contextMap) {
+      handleIncoming(Map<String, dynamic>.from(contextMap));
     });
   }
 

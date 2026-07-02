@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:watch_connectivity/watch_connectivity.dart';
+import 'package:provider/provider.dart';
+import '../providers/match_provider.dart';
 
 class DeviceDetailScreen extends StatefulWidget {
   final String deviceName;
@@ -17,8 +18,6 @@ class DeviceDetailScreen extends StatefulWidget {
 }
 
 class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
-  final _wc = WatchConnectivity();
-
   bool? _isReachable;
   bool? _isPaired;
   bool _loading = true;
@@ -32,11 +31,12 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   Future<void> _loadStatus() async {
     if (mounted) setState(() => _loading = true);
     try {
-      final reachable = await _wc.isReachable;
+      final wc = context.read<MatchProvider>().watchConnectivity;
+      final reachable = await wc.isReachable;
       // isPaired is supported on iOS (WatchKit); on Android it may throw.
       bool? paired;
       try {
-        paired = await _wc.isPaired;
+        paired = await wc.isPaired;
       } catch (_) {
         paired = null;
       }
