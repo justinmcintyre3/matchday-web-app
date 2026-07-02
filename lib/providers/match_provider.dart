@@ -14,7 +14,7 @@ class MatchProvider with ChangeNotifier {
   WatchConnectivity get watchConnectivity => _watchConnectivity;
   final _watchResultController = StreamController<WatchResultEvent>.broadcast();
   final _watchLiveUpdateController = StreamController<WatchLiveUpdateEvent>.broadcast();
-  final _watchTimerStartedController = StreamController<void>.broadcast();
+  final _watchTimerStartedController = StreamController<int?>.broadcast();
 
   MatchProvider(this._box) {
     _loadMatches();
@@ -26,7 +26,7 @@ class MatchProvider with ChangeNotifier {
   int? get activeStageIndex => _activeStageIndex;
   Stream<WatchResultEvent> get watchResultStream => _watchResultController.stream;
   Stream<WatchLiveUpdateEvent> get watchLiveUpdateStream => _watchLiveUpdateController.stream;
-  Stream<void> get watchTimerStartedStream => _watchTimerStartedController.stream;
+  Stream<int?> get watchTimerStartedStream => _watchTimerStartedController.stream;
 
   Match? get activeMatch {
     if (_activeMatchId == null) return null;
@@ -428,7 +428,8 @@ class MatchProvider with ChangeNotifier {
           ));
         }
       } else if (message['type'] == 'timer_started') {
-        _watchTimerStartedController.add(null);
+        final timeLeft = message['timeLeft'] as int?;
+        _watchTimerStartedController.add(timeLeft);
       }
     }
 

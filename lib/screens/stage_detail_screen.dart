@@ -29,8 +29,11 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   late TabController _tabController;
   StreamSubscription<WatchResultEvent>? _watchSubscription;
   StreamSubscription<WatchLiveUpdateEvent>? _liveUpdateSubscription;
-  StreamSubscription<void>? _timerStartedSubscription;
+  StreamSubscription<int?>? _timerStartedSubscription;
   Timer? _remainingTimeTimer;
+  Timer? _shootTimer;
+  int? _currentShootTimeMs;
+  bool _isShootTimerRunning = false;
 
   // Controllers for text inputs
   final _stageNameController = TextEditingController();
@@ -116,6 +119,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
           _heartRateController.text = '${event.avgHeartRate}';
         });
 
+        _shootTimer?.cancel();
+        _isShootTimerRunning = false;
+
         // Switch to Review tab automatically
         _tabController.animateTo(2);
 
@@ -153,21 +159,37 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       if (matchProvider.activeMatchId == widget.matchId &&
           matchProvider.activeStage?.stageNumber == widget.stageNumber) {
         setState(() {
-          _stage.timeRemaining = event.timeLeft;
           _stage.avgHeartRate = event.heartRate;
-          _stage.timedOut = (event.timeLeft == 0);
-
-          _timeRemainingController.text = '${event.timeLeft}';
           _heartRateController.text = '${event.heartRate}';
         });
       }
     });
 
     _timerStartedSubscription =
-        matchProvider.watchTimerStartedStream.listen((_) {
+        matchProvider.watchTimerStartedStream.listen((timeLeft) {
       if (!mounted) return;
       if (matchProvider.activeMatchId == widget.matchId &&
           matchProvider.activeStage?.stageNumber == widget.stageNumber) {
+        
+        _shootTimer?.cancel();
+        if (timeLeft != null) {
+          setState(() {
+            _currentShootTimeMs = timeLeft * 1000;
+            _isShootTimerRunning = true;
+          });
+          
+          _shootTimer = Timer.periodic(const Duration(milliseconds: 10), (timer) {
+            setState(() {
+              if (_currentShootTimeMs != null && _currentShootTimeMs! > 0) {
+                _currentShootTimeMs = _currentShootTimeMs! - 10;
+              } else {
+                _shootTimer?.cancel();
+                _isShootTimerRunning = false;
+              }
+            });
+          });
+        }
+        
         // Switch to Shoot tab automatically when timer starts on watch
         _tabController.animateTo(1);
       }
@@ -290,6 +312,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     _liveUpdateSubscription?.cancel();
     _timerStartedSubscription?.cancel();
     _remainingTimeTimer?.cancel();
+    _shootTimer?.cancel();
     _stageNameController.dispose();
     _mentalErrorsController.dispose();
     _skillsErrorsController.dispose();
@@ -1594,6 +1617,14 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     );
   }
 
+  String _formatTimeMs(int ms) {
+    final seconds = ms ~/ 1000;
+    final milliseconds = (ms % 1000) ~/ 10;
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}.${milliseconds.toString().padLeft(2, '0')}';
+  }
+
   // SHOOT TAB - CLEAN TELEMETRY
   Widget _buildShootTab() {
     return Container(
@@ -1656,7 +1687,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                             color: Color(0xFF007AFF), size: 24),
                         const SizedBox(height: 6),
                         Text(
-                          '${_stage.timeRemaining}s left',
+                          _isShootTimerRunning && _currentShootTimeMs != null
+                              ? _formatTimeMs(_currentShootTimeMs!)
+                              : '${_stage.timeRemaining}s left',
                           style: const TextStyle(
                               fontWeight: FontWeight.bold, fontSize: 16),
                         ),
@@ -1675,7 +1708,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                           style: const TextStyle(
                               fontWeight: FontWeight.bold, fontSize: 16),
                         ),
-                        const Text('Avg Heart Rate',
+                        const Text('Live Heart Rate',
                             style: TextStyle(color: Colors.grey, fontSize: 11)),
                       ],
                     ),
