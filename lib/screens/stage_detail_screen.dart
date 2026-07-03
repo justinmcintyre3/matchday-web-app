@@ -170,26 +170,33 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       if (!mounted) return;
       if (matchProvider.activeMatchId == widget.matchId &&
           matchProvider.activeStage?.stageNumber == widget.stageNumber) {
-        
         _shootTimer?.cancel();
         if (timeLeft != null) {
+          // Deduct 300ms to compensate for BLE transmission latency
+          final durationMs = (timeLeft * 1000) - 300;
+          final targetEndTime =
+              DateTime.now().add(Duration(milliseconds: durationMs));
           setState(() {
-            _currentShootTimeMs = timeLeft * 1000;
+            _currentShootTimeMs = durationMs;
             _isShootTimerRunning = true;
           });
-          
-          _shootTimer = Timer.periodic(const Duration(milliseconds: 10), (timer) {
+
+          _shootTimer =
+              Timer.periodic(const Duration(milliseconds: 10), (timer) {
+            final now = DateTime.now();
+            final remainingMs = targetEndTime.difference(now).inMilliseconds;
             setState(() {
-              if (_currentShootTimeMs != null && _currentShootTimeMs! > 0) {
-                _currentShootTimeMs = _currentShootTimeMs! - 10;
+              if (remainingMs > 0) {
+                _currentShootTimeMs = remainingMs;
               } else {
+                _currentShootTimeMs = 0;
                 _shootTimer?.cancel();
                 _isShootTimerRunning = false;
               }
             });
           });
         }
-        
+
         // Switch to Shoot tab automatically when timer starts on watch
         _tabController.animateTo(1);
       }
@@ -1618,8 +1625,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   }
 
   String _formatTimeMs(int ms) {
-    final seconds = ms ~/ 1000;
-    final milliseconds = (ms % 1000) ~/ 10;
+    final displayMs = ms > 0 ? ms + 999 : 0;
+    final seconds = displayMs ~/ 1000;
+    final milliseconds = (displayMs % 1000) ~/ 10;
     final m = seconds ~/ 60;
     final s = seconds % 60;
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}.${milliseconds.toString().padLeft(2, '0')}';
