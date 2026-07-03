@@ -19,6 +19,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
   int _selectedIndex = 0;
   StreamSubscription? _latMismatchSub;
   StreamSubscription? _sgPulseBatteryLowSub;
+  StreamSubscription? _kestrelBatteryLowSub;
 
   final List<Widget> _screens = [
     const MatchesListScreen(),
@@ -37,12 +38,18 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
       if (!mounted) return;
       _showSgPulseBatteryLowDialog(batteryLevel);
     });
+
+    _kestrelBatteryLowSub = context.read<KestrelProvider>().onBatteryLow.listen((batteryLevel) {
+      if (!mounted) return;
+      _showKestrelBatteryLowDialog(batteryLevel);
+    });
   }
 
   @override
   void dispose() {
     _latMismatchSub?.cancel();
     _sgPulseBatteryLowSub?.cancel();
+    _kestrelBatteryLowSub?.cancel();
     super.dispose();
   }
 
@@ -96,6 +103,36 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
           TextButton(
             onPressed: () {
               context.read<SgPulseProvider>().silenceBatteryLowWarning();
+              Navigator.pop(ctx);
+            },
+            child: const Text('Ignore', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+            },
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _showKestrelBatteryLowDialog(int batteryLevel) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Kestrel Battery Low'),
+        content: Text(
+          'Your Kestrel battery is at $batteryLevel%.\n\n'
+          'Please connect your device to a charger / swap batteries.\n'
+          'Press "Ignore" to mute this warning until the next full charge.'
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              context.read<KestrelProvider>().silenceBatteryLowWarning();
               Navigator.pop(ctx);
             },
             child: const Text('Ignore', style: TextStyle(color: Colors.grey)),

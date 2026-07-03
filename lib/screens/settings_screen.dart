@@ -245,7 +245,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       subtitle: Text(
                         kestrelConnected 
-                          ? '${kestrel.modelDisplay} • Connected'
+                          ? '${kestrel.modelDisplay} • Connected${kestrel.batteryLevel != null ? ' • ${kestrel.batteryLevel}%' : ''}'
                           : '${kestrel.modelDisplay} • Disconnected',
                         style: TextStyle(
                           color: kestrelConnected ? const Color(0xFF00E676) : Colors.white38,

@@ -17,18 +17,26 @@ import '../services/kestrel_ble_service.dart';
 
 class KestrelProvider extends ChangeNotifier {
   static const _savedDeviceKey = 'saved_kestrel_device';
+  static const _batteryWarningThresholdKey = 'kestrel_battery_warning_threshold';
   final KestrelBleService _service;
 
   bool _hasCheckedLatitudeThisSession = false;
+  bool _hasWarnedBatteryThisSession = false;
 
   final StreamController<double> _latitudeMismatchController = StreamController.broadcast();
   Stream<double> get onLatitudeMismatch => _latitudeMismatchController.stream;
+
+  final StreamController<int> _batteryLowController = StreamController.broadcast();
+  Stream<int> get onBatteryLow => _batteryLowController.stream;
+
+  int batteryWarningThreshold = 25;
 
   KestrelProvider({KestrelBleService? service})
       : _service = service ?? KestrelBleService() {
     _service.onScanResult = _onScanResult;
     _service.onConnectionStateChanged = _onConnectionStateChanged;
     _service.onRxData = _onRxData;
+    _service.onBatteryLevelReceived = _onBatteryLevelReceived;
     
     _service.onEnvironmentReceived.listen((env) {
       final kestrelLat = env['latitude'] as double?;
@@ -98,6 +106,7 @@ class KestrelProvider extends ChangeNotifier {
 
   Future<void> _initPrefs() async {
     final prefs = await SharedPreferences.getInstance();
+    batteryWarningThreshold = prefs.getInt(_batteryWarningThresholdKey) ?? 25;
     final savedJson = prefs.getString(_savedDeviceKey);
     if (savedJson != null) {
       try {
@@ -304,9 +313,47 @@ class KestrelProvider extends ChangeNotifier {
     await _service.sendCalcFullSolution(targetNumber: targetNumber);
   }
 
+  Future<void> _onBatteryLevelReceived(int batteryLevel) async {
+    if (connectedDevice == null) return;
+    connectedDevice = connectedDevice!.copyWith(batteryLevel: batteryLevel);
+    _saveDevice();
+    notifyListeners();
+
+    final prefs = await SharedPreferences.getInstance();
+    
+    if (batteryLevel < batteryWarningThreshold) {
+      if (!_hasWarnedBatteryThisSession) {
+        _hasWarnedBatteryThisSession = true;
+        final silenced = prefs.getBool('silence_kestrel_battery_low') ?? false;
+        debugPrint('[KestrelProvider] Battery is low: $batteryLevel%. silenced: $silenced');
+        if (!silenced) {
+          _batteryLowController.add(batteryLevel);
+        }
+      }
+    } else {
+      // Clear ignore if battery is >= threshold
+      debugPrint('[KestrelProvider] Battery is healthy: $batteryLevel%. Clearing silence flag.');
+      await prefs.setBool('silence_kestrel_battery_low', false);
+    }
+  }
+
+  Future<void> silenceBatteryLowWarning() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('silence_kestrel_battery_low', true);
+  }
+
+  Future<void> setBatteryWarningThreshold(int value) async {
+    batteryWarningThreshold = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_batteryWarningThresholdKey, value);
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _service.dispose();
+    _latitudeMismatchController.close();
+    _batteryLowController.close();
     super.dispose();
   }
 }

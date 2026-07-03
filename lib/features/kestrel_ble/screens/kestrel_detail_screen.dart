@@ -112,6 +112,11 @@ class KestrelDetailScreen extends StatelessWidget {
 
           // ── State-specific content ──────────────────────────────────────
           _buildStateContent(context, state, device, provider),
+
+          if (device != null) ...[
+            const SizedBox(height: 16),
+            _BatteryThresholdCard(provider: provider),
+          ],
         ],
       ),
     );
@@ -490,6 +495,12 @@ class _ConnectedInfoCardState extends State<_ConnectedInfoCard> {
             dot: const Color(0xFF00E676),
             showDivider: true,
           ),
+          if (widget.device?.batteryLevel != null)
+            _InfoRow(
+              label: 'Battery',
+              value: '${widget.device!.batteryLevel}%',
+              showDivider: true,
+            ),
           if (widget.device?.modelName != null)
             _InfoRow(
               label: 'Model',
@@ -732,6 +743,117 @@ class _DisconnectedCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _BatteryThresholdCard extends StatelessWidget {
+  final KestrelProvider provider;
+  const _BatteryThresholdCard({required this.provider});
+
+  void _showConfigureDialog(BuildContext context) {
+    int tempVal = provider.batteryWarningThreshold;
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('CONFIGURE BATTERY THRESHOLD'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'When the Kestrel battery level falls below this percentage, you will be prompted to charge it or swap batteries.',
+                style: TextStyle(fontSize: 12, color: Colors.grey, height: 1.4),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                initialValue: '${provider.batteryWarningThreshold}',
+                keyboardType: TextInputType.number,
+                autofocus: true,
+                onChanged: (val) {
+                  final parsed = int.tryParse(val);
+                  if (parsed != null && parsed >= 0 && parsed <= 100) {
+                    tempVal = parsed;
+                  }
+                },
+                decoration: const InputDecoration(
+                  labelText: 'Battery Warning Threshold (%)',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                provider.setBatteryWarningThreshold(tempVal);
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF007AFF),
+                  foregroundColor: Colors.white),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          _showConfigureDialog(context);
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF007AFF).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.battery_alert, color: Color(0xFF007AFF), size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Battery Alert Threshold',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Prompt when battery is below ${provider.batteryWarningThreshold}%',
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: Colors.white24, size: 20),
+            ],
+          ),
+        ),
       ),
     );
   }

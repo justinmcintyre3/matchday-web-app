@@ -26,6 +26,7 @@ import 'kestrel_jni_service.dart';
 typedef KestrelScanResultCallback = void Function(KestrelDevice device);
 typedef KestrelConnectionCallback = void Function(KestrelConnectionState state);
 typedef KestrelRxCallback = void Function(List<int> bytes);
+typedef KestrelBatteryCallback = void Function(int batteryLevel);
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Model code → device type mapping
@@ -61,6 +62,7 @@ class KestrelBleService {
   KestrelScanResultCallback? onScanResult;
   KestrelConnectionCallback? onConnectionStateChanged;
   KestrelRxCallback? onRxData;
+  KestrelBatteryCallback? onBatteryLevelReceived;
 
   // Internal state
   final KestrelJniService _jni = KestrelJniService();
@@ -296,8 +298,19 @@ class KestrelBleService {
       if (device == null) return;
 
       final services = await device.discoverServices();
+      BluetoothCharacteristic? batteryChar;
 
       for (final service in services) {
+        final serviceUuid = service.serviceUuid.str.toLowerCase();
+        if (serviceUuid == '180f' || serviceUuid == '0000180f-0000-1000-8000-00805f9b34fb') {
+          for (final char in service.characteristics) {
+            final charUuid = char.characteristicUuid.str.toLowerCase();
+            if (charUuid == '2a19' || charUuid == '00002a19-0000-1000-8000-00805f9b34fb') {
+              batteryChar = char;
+            }
+          }
+        }
+
         for (final char in service.characteristics) {
           final uuid = char.characteristicUuid.str.toLowerCase();
 
@@ -317,6 +330,19 @@ class KestrelBleService {
       await device.requestConnectionPriority(
         connectionPriorityRequest: ConnectionPriority.high,
       );
+
+      // Read battery in background so it doesn't delay JNI auth
+      if (batteryChar != null) {
+        batteryChar.read().then((bytes) {
+          if (bytes.isNotEmpty) {
+            final level = bytes[0];
+            debugPrint('[KestrelBLE] Battery level read: $level%');
+            onBatteryLevelReceived?.call(level);
+          }
+        }).catchError((e) {
+          debugPrint('[KestrelBLE] Failed to read battery level: $e');
+        });
+      }
 
       // Begin Phase 2 Authentication Flow via JNI
       await Future.delayed(const Duration(milliseconds: 500));

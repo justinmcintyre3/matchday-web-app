@@ -52,6 +52,7 @@ class KestrelDevice {
   final String? serialNumber;
   final String? firmwareVersion;
   final String? hardwareVersion;
+  final int? batteryLevel;
   
   // Stored for auto-reconnect
   final String? pin;
@@ -67,6 +68,7 @@ class KestrelDevice {
     this.serialNumber,
     this.firmwareVersion,
     this.hardwareVersion,
+    this.batteryLevel,
     this.pin,
     this.errorMessage,
   });
@@ -82,6 +84,7 @@ class KestrelDevice {
       serialNumber: json['serialNumber'] as String?,
       firmwareVersion: json['firmwareVersion'] as String?,
       hardwareVersion: json['hardwareVersion'] as String?,
+      batteryLevel: json['batteryLevel'] as int?,
       pin: json['pin'] as String?,
     );
   }
@@ -96,6 +99,7 @@ class KestrelDevice {
       'serialNumber': serialNumber,
       'firmwareVersion': firmwareVersion,
       'hardwareVersion': hardwareVersion,
+      'batteryLevel': batteryLevel,
       'pin': pin,
     };
   }
@@ -125,6 +129,7 @@ class KestrelDevice {
     String? serialNumber,
     String? firmwareVersion,
     String? hardwareVersion,
+    int? batteryLevel,
     String? pin,
     String? errorMessage,
   }) {
@@ -137,6 +142,7 @@ class KestrelDevice {
       serialNumber: serialNumber ?? this.serialNumber,
       firmwareVersion: firmwareVersion ?? this.firmwareVersion,
       hardwareVersion: hardwareVersion ?? this.hardwareVersion,
+      batteryLevel: batteryLevel ?? this.batteryLevel,
       pin: pin ?? this.pin,
       errorMessage: errorMessage ?? this.errorMessage,
     );
