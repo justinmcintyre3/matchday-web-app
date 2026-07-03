@@ -138,6 +138,10 @@ class Stage {
   String environmentalErrors;
   int timeLimit; // in seconds
   int numPositions; // number of positions
+  List<double> shotTimes; // elapsed time in seconds for each shot
+  int plannedRoundCount; // total round count planned for this stage
+  List<String> shotTargetsSequence; // sequence of targets in shooting order
+  List<double> shotRolls; // roll in degrees for each shot
 
   Stage({
     required this.stageNumber,
@@ -155,6 +159,10 @@ class Stage {
     this.environmentalErrors = '',
     this.timeLimit = 105,
     this.numPositions = 1,
+    this.shotTimes = const [],
+    this.plannedRoundCount = 10,
+    this.shotTargetsSequence = const [],
+    this.shotRolls = const [],
   });
 
   List<Target> get targets {
@@ -197,6 +205,10 @@ class Stage {
       'environmentalErrors': environmentalErrors,
       'timeLimit': timeLimit,
       'numPositions': numPositions,
+      'shotTimes': shotTimes,
+      'plannedRoundCount': plannedRoundCount,
+      'shotTargetsSequence': shotTargetsSequence,
+      'shotRolls': shotRolls,
     };
   }
 
@@ -242,6 +254,10 @@ class Stage {
       environmentalErrors: map['environmentalErrors'] ?? '',
       timeLimit: map['timeLimit']?.toInt() ?? 105,
       numPositions: map['numPositions']?.toInt() ?? 1,
+      shotTimes: List<double>.from(map['shotTimes'] ?? const []),
+      plannedRoundCount: map['plannedRoundCount']?.toInt() ?? 10,
+      shotTargetsSequence: List<String>.from(map['shotTargetsSequence'] ?? const []),
+      shotRolls: List<double>.from(map['shotRolls'] ?? const []),
     );
   }
 }

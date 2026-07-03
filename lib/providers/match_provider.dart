@@ -175,6 +175,10 @@ class MatchProvider with ChangeNotifier {
           environmentalErrors: oldStage.environmentalErrors,
           timeLimit: oldStage.timeLimit,
           numPositions: oldStage.numPositions,
+          shotTimes: oldStage.shotTimes,
+          plannedRoundCount: oldStage.plannedRoundCount,
+          shotTargetsSequence: oldStage.shotTargetsSequence,
+          shotRolls: oldStage.shotRolls,
         );
       }
 
@@ -396,6 +400,20 @@ class MatchProvider with ChangeNotifier {
     }
   }
 
+  Future<void> stopWatchTimer() async {
+    try {
+      final isSupported = await _watchConnectivity.isSupported;
+      if (!isSupported) return;
+
+      await _watchConnectivity.sendMessage({
+        'type': 'stop_timer',
+      });
+      debugPrint('Sent stop_timer command to watch');
+    } catch (e) {
+      debugPrint('Error sending stop_timer to watch: $e');
+    }
+  }
+
   void _initWatchConnectivity() {
     void handleIncoming(Map<String, dynamic> message) {
       debugPrint('Incoming watch message: $message');
@@ -403,12 +421,14 @@ class MatchProvider with ChangeNotifier {
         final timeLeft = message['timeLeft'] as int?;
         final avgHeartRate = message['avgHeartRate'] as int?;
         final lastSetTime = message['lastSetTime'] as int?;
+        final stoppedByPhone = message['stoppedByPhone'] as bool? ?? false;
 
         if (timeLeft != null && avgHeartRate != null) {
           final event = WatchResultEvent(
             timeLeft: timeLeft,
             avgHeartRate: avgHeartRate,
             lastSetTime: lastSetTime ?? 105,
+            stoppedByPhone: stoppedByPhone,
           );
           _handleWatchResult(event);
         }
@@ -470,11 +490,13 @@ class WatchResultEvent {
   final int timeLeft;
   final int avgHeartRate;
   final int lastSetTime;
+  final bool stoppedByPhone;
 
   WatchResultEvent({
     required this.timeLeft,
     required this.avgHeartRate,
     required this.lastSetTime,
+    this.stoppedByPhone = false,
   });
 }
 

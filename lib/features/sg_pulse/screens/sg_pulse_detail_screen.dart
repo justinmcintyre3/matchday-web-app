@@ -4,6 +4,7 @@
 // If disconnected: shows a "Waiting to reconnect" card with a manual
 // Connect button and a Forget Device option.
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -14,8 +15,37 @@ import '../models/sg_pulse_device.dart';
 import '../models/pulse_snapshot.dart';
 import '../providers/sg_pulse_provider.dart';
 
-class SgPulseDetailScreen extends StatelessWidget {
+class SgPulseDetailScreen extends StatefulWidget {
   const SgPulseDetailScreen({super.key});
+
+  @override
+  State<SgPulseDetailScreen> createState() => _SgPulseDetailScreenState();
+}
+
+class _SgPulseDetailScreenState extends State<SgPulseDetailScreen> {
+  int _localShotCount = 0;
+  StreamSubscription<void>? _localShotSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    final provider = context.read<SgPulseProvider>();
+    provider.latestSnapshot = null;
+    _localShotSubscription = provider.shotDetectedStream.listen((_) {
+      if (mounted) {
+        setState(() {
+          _localShotCount++;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _localShotSubscription?.cancel();
+    context.read<SgPulseProvider>().latestSnapshot = null;
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -91,9 +121,20 @@ class SgPulseDetailScreen extends StatelessWidget {
               state == SgPulseConnectionState.discovering)
             _ConnectingCard(state: state)
           else if (state == SgPulseConnectionState.connected)
-            _LiveDataSection(provider: provider)
+            _LiveDataSection(
+              provider: provider,
+              shotCount: _localShotCount,
+              onResetShotCount: () {
+                setState(() {
+                  _localShotCount = 0;
+                });
+              },
+            )
           else
             _DisconnectedCard(device: device, provider: provider),
+
+          const SizedBox(height: 16),
+          _RollThresholdCard(provider: provider),
         ],
       ),
     );
@@ -278,17 +319,27 @@ class _DisconnectedCard extends StatelessWidget {
 
 class _LiveDataSection extends StatelessWidget {
   final SgPulseProvider provider;
-  const _LiveDataSection({required this.provider});
+  final int shotCount;
+  final VoidCallback onResetShotCount;
+
+  const _LiveDataSection({
+    required this.provider,
+    required this.shotCount,
+    required this.onResetShotCount,
+  });
 
   @override
   Widget build(BuildContext context) {
     final snapshot = provider.latestSnapshot;
-    final shotCount = provider.shotCount;
 
     return Column(
       children: [
         // Shot counter
-        _ShotCountCard(shotCount: shotCount, provider: provider),
+        _ShotCountCard(
+          shotCount: shotCount,
+          provider: provider,
+          onReset: onResetShotCount,
+        ),
         const SizedBox(height: 12),
 
         // IMU gauges
@@ -303,7 +354,13 @@ class _LiveDataSection extends StatelessWidget {
 class _ShotCountCard extends StatelessWidget {
   final int shotCount;
   final SgPulseProvider provider;
-  const _ShotCountCard({required this.shotCount, required this.provider});
+  final VoidCallback onReset;
+
+  const _ShotCountCard({
+    required this.shotCount,
+    required this.provider,
+    required this.onReset,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -357,7 +414,7 @@ class _ShotCountCard extends StatelessWidget {
           TextButton(
             onPressed: () {
               HapticFeedback.lightImpact();
-              provider.clearSession();
+              onReset();
             },
             child: Text(
               'Reset',
@@ -418,7 +475,23 @@ class _AxisGauge extends StatelessWidget {
   Widget build(BuildContext context) {
     // Normalize -180..180 to 0..1 for progress display
     final normalized = ((value + 180) / 360).clamp(0.0, 1.0);
-    final color = const Color(0xFF007AFF);
+    
+    // Truncate to 1 decimal place without rounding
+    final sign = value < 0 ? -1.0 : 1.0;
+    final truncatedValue = sign * ((value.abs() * 10).floor() / 10.0);
+    
+    Color color = const Color(0xFF007AFF);
+    if (label == 'Roll') {
+      final provider = context.read<SgPulseProvider>();
+      final threshold = provider.rollThreshold;
+      if (truncatedValue.abs() <= threshold) {
+        color = const Color(0xFF30D158); // green
+      } else {
+        color = truncatedValue < 0
+            ? const Color(0xFFFF453A) // red (canted left)
+            : const Color(0xFF0A84FF); // blue (canted right)
+      }
+    }
 
     return Column(
       children: [
@@ -429,7 +502,7 @@ class _AxisGauge extends StatelessWidget {
             painter: _ArcPainter(value: normalized, color: color),
             child: Center(
               child: Text(
-                value.toStringAsFixed(1),
+                label == 'Roll' ? truncatedValue.toStringAsFixed(1) : value.toStringAsFixed(1),
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 11,
@@ -486,6 +559,117 @@ class _ArcPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_ArcPainter old) => old.value != value;
+}
+
+class _RollThresholdCard extends StatelessWidget {
+  final SgPulseProvider provider;
+  const _RollThresholdCard({required this.provider});
+
+  void _showConfigureDialog(BuildContext context) {
+    double tempVal = provider.rollThreshold;
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('CONFIGURE ROLL THRESHOLD'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Values within ±Threshold degrees are considered acceptable firearm cant and will display as green. Exceeding this threshold will display as red (canted left) or blue (canted right).',
+                style: TextStyle(fontSize: 12, color: Colors.grey, height: 1.4),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                initialValue: '${provider.rollThreshold}',
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                autofocus: true,
+                onChanged: (val) {
+                  final parsed = double.tryParse(val);
+                  if (parsed != null && parsed > 0) {
+                    tempVal = parsed;
+                  }
+                },
+                decoration: const InputDecoration(
+                  labelText: 'Threshold in Degrees (e.g. 0.3)',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                provider.setRollThreshold(tempVal);
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF007AFF),
+                  foregroundColor: Colors.white),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          _showConfigureDialog(context);
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF007AFF).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.info_outline, color: Color(0xFF007AFF), size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Roll Threshold (Cant Limit)',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Acceptable deviation limit: ±${provider.rollThreshold}°',
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: Colors.white24, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 

@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import '../features/kestrel_ble/providers/kestrel_provider.dart';
 import '../features/kestrel_ble/models/kestrel_device.dart';
 import '../widgets/wind_clock_picker.dart';
+import '../features/sg_pulse/providers/sg_pulse_provider.dart';
 
 class StageDetailScreen extends StatefulWidget {
   final String matchId;
@@ -34,6 +35,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   Timer? _shootTimer;
   int? _currentShootTimeMs;
   bool _isShootTimerRunning = false;
+  StreamSubscription<void>? _shotSubscription;
+  bool _stoppedByLimit = false;
+  final _shootScrollController = ScrollController();
 
   // Controllers for text inputs
   final _stageNameController = TextEditingController();
@@ -109,18 +113,33 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       // Check if we are currently looking at the active stage
       if (matchProvider.activeMatchId == widget.matchId &&
           matchProvider.activeStage?.stageNumber == widget.stageNumber) {
+        _shootTimer?.cancel();
+        _shotSubscription?.cancel();
+        _isShootTimerRunning = false;
+
         // Update local text fields
         setState(() {
-          _stage.timeRemaining = event.timeLeft;
-          _stage.avgHeartRate = event.avgHeartRate;
-          _stage.timedOut = (event.timeLeft == 0);
+          final isStoppedEarly = event.stoppedByPhone || _stoppedByLimit;
+          if (isStoppedEarly) {
+            // Keep phone's precise remaining time, only update heart rate
+            _stage.avgHeartRate = event.avgHeartRate;
+            _heartRateController.text = '${event.avgHeartRate}';
+          } else {
+            _stage.timeRemaining = event.timeLeft;
+            _stage.avgHeartRate = event.avgHeartRate;
+            _stage.timedOut = (event.timeLeft == 0);
 
-          _timeRemainingController.text = '${event.timeLeft}';
-          _heartRateController.text = '${event.avgHeartRate}';
+            _timeRemainingController.text = '${event.timeLeft}';
+            _heartRateController.text = '${event.avgHeartRate}';
+          }
+          if (event.timeLeft == 0) {
+            _markUntakenShotsAsTimedOut();
+          }
+          _stoppedByLimit = false; // Reset early stop flag
         });
 
-        _shootTimer?.cancel();
-        _isShootTimerRunning = false;
+        // Save stage immediately after telemetry sync!
+        _saveStage(exitScreen: false);
 
         // Switch to Review tab automatically
         _tabController.animateTo(2);
@@ -138,7 +157,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
             ),
             content: Text(
               'Received telemetry from watch:\n'
-              '- Time Remaining: ${event.timeLeft} seconds\n'
+              '- Time Remaining: ${_stage.timeRemaining} seconds\n'
               '- Average Heart Rate: ${event.avgHeartRate} BPM\n\n'
               'Please complete the stage review.',
             ),
@@ -171,6 +190,16 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       if (matchProvider.activeMatchId == widget.matchId &&
           matchProvider.activeStage?.stageNumber == widget.stageNumber) {
         _shootTimer?.cancel();
+        _shotSubscription?.cancel();
+
+        setState(() {
+          _stage.shotTimes = [];
+          _stage.shotRolls = [];
+          _stage.shotResults = List.filled(_stage.shotResults.length, 'miss');
+          _stoppedByLimit = false;
+        });
+        context.read<SgPulseProvider>().clearSession();
+
         if (timeLeft != null) {
           // Deduct 300ms to compensate for BLE transmission latency
           final durationMs = (timeLeft * 1000) - 300;
@@ -179,6 +208,35 @@ class _StageDetailScreenState extends State<StageDetailScreen>
           setState(() {
             _currentShootTimeMs = durationMs;
             _isShootTimerRunning = true;
+          });
+
+          final sgPulseProvider = context.read<SgPulseProvider>();
+          _shotSubscription = sgPulseProvider.shotDetectedStream.listen((_) {
+            if (_isShootTimerRunning && _currentShootTimeMs != null) {
+              final elapsedSeconds = (durationMs - _currentShootTimeMs!) / 1000.0;
+              final currentRoll = sgPulseProvider.latestSnapshot?.roll ?? 0.0;
+              setState(() {
+                _stage.shotTimes.add(elapsedSeconds);
+                _stage.shotRolls.add(currentRoll);
+              });
+
+              // Auto scroll to bottom
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (_shootScrollController.hasClients) {
+                  _shootScrollController.animateTo(
+                    _shootScrollController.position.maxScrollExtent,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
+                  );
+                }
+              });
+
+              final totalShotsNeeded =
+                  _stage.targets.fold<int>(0, (sum, t) => sum + t.shotsCount);
+              if (_stage.shotTimes.length >= totalShotsNeeded) {
+                _stopStageEarly();
+              }
+            }
           });
 
           _shootTimer =
@@ -191,7 +249,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
               } else {
                 _currentShootTimeMs = 0;
                 _shootTimer?.cancel();
+                _shotSubscription?.cancel();
                 _isShootTimerRunning = false;
+                _markUntakenShotsAsTimedOut();
               }
             });
           });
@@ -270,6 +330,10 @@ class _StageDetailScreenState extends State<StageDetailScreen>
         environmentalErrors: currentStage.environmentalErrors,
         timeLimit: currentStage.timeLimit,
         numPositions: currentStage.numPositions,
+        plannedRoundCount: currentStage.plannedRoundCount,
+        shotTargetsSequence: List<String>.from(currentStage.shotTargetsSequence),
+        shotTimes: List<double>.from(currentStage.shotTimes),
+        shotRolls: List<double>.from(currentStage.shotRolls),
       );
 
       // Automatically prefill previous stage's actual windage if this is a fresh stage
@@ -320,14 +384,68 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     _timerStartedSubscription?.cancel();
     _remainingTimeTimer?.cancel();
     _shootTimer?.cancel();
+    _shotSubscription?.cancel();
     _stageNameController.dispose();
     _mentalErrorsController.dispose();
     _skillsErrorsController.dispose();
     _envErrorsController.dispose();
     _timeRemainingController.dispose();
     _heartRateController.dispose();
+    _shootScrollController.dispose();
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _stopStageEarly() async {
+    if (!_isShootTimerRunning) return;
+    final int remainingSeconds = (_currentShootTimeMs! / 1000.0).ceil();
+    _stoppedByLimit = true;
+    _shootTimer?.cancel();
+    _shotSubscription?.cancel();
+    setState(() {
+      _isShootTimerRunning = false;
+      _stage.timeRemaining = remainingSeconds;
+      _timeRemainingController.text = '$remainingSeconds';
+    });
+    await context.read<MatchProvider>().stopWatchTimer();
+  }
+
+  void _markUntakenShotsAsTimedOut() {
+    final int shotsTaken = _stage.shotTimes.length;
+    setState(() {
+      for (int i = shotsTaken; i < _stage.shotResults.length; i++) {
+        _stage.shotResults[i] = 'timeOutMiss';
+      }
+    });
+  }
+
+  List<int> _getShotIndicesForTarget(int arrayIdx, int targetIdx) {
+    final String key = '${arrayIdx}_$targetIdx';
+    final List<int> indices = [];
+    for (int i = 0; i < _stage.shotTargetsSequence.length; i++) {
+      if (_stage.shotTargetsSequence[i] == key) {
+        indices.add(i);
+      }
+    }
+    return indices;
+  }
+
+  String _getTargetNameForShotIndex(int shotIndex) {
+    if (shotIndex >= 0 && shotIndex < _stage.shotTargetsSequence.length) {
+      final key = _stage.shotTargetsSequence[shotIndex];
+      final parts = key.split('_');
+      if (parts.length == 2) {
+        final int arrayIdx = int.parse(parts[0]);
+        final int targetIdx = int.parse(parts[1]);
+        if (arrayIdx < _stage.targetArrays.length) {
+          final array = _stage.targetArrays[arrayIdx];
+          if (targetIdx < array.targets.length) {
+            return 'Array ${arrayIdx + 1} - T${targetIdx + 1} (${array.distance.isEmpty ? "---" : array.distance})';
+          }
+        }
+      }
+    }
+    return 'Shot ${shotIndex + 1}';
   }
 
   void _startRemainingTimeAutoIncrement(int delta) {
@@ -763,8 +881,40 @@ class _StageDetailScreenState extends State<StageDetailScreen>
 
   // Adjust Flat shot list based on sum of targets shotsCount
   void _adjustShotResultsLength() {
-    final int totalShotsNeeded =
-        _stage.targets.fold(0, (sum, t) => sum + t.shotsCount);
+    // 1. Filter out invalid keys from sequence (e.g. if arrays/targets were deleted)
+    final List<String> validSequence = [];
+    for (var key in _stage.shotTargetsSequence) {
+      final parts = key.split('_');
+      if (parts.length == 2) {
+        final int arrayIdx = int.parse(parts[0]);
+        final int targetIdx = int.parse(parts[1]);
+        if (arrayIdx >= 0 && arrayIdx < _stage.targetArrays.length) {
+          final array = _stage.targetArrays[arrayIdx];
+          if (targetIdx >= 0 && targetIdx < array.targets.length) {
+            validSequence.add(key);
+          }
+        }
+      }
+    }
+    _stage.shotTargetsSequence = validSequence;
+
+    // 2. Reset all targets shotsCount to 0
+    for (var array in _stage.targetArrays) {
+      for (var target in array.targets) {
+        target.shotsCount = 0;
+      }
+    }
+
+    // 3. Count occurrences in sequence and update shotsCount
+    for (var key in _stage.shotTargetsSequence) {
+      final parts = key.split('_');
+      final int arrayIdx = int.parse(parts[0]);
+      final int targetIdx = int.parse(parts[1]);
+      _stage.targetArrays[arrayIdx].targets[targetIdx].shotsCount++;
+    }
+
+    // 4. Adjust flat shot list sizes
+    final int totalShotsNeeded = _stage.shotTargetsSequence.length;
     if (_stage.shotResults.length < totalShotsNeeded) {
       _stage.shotResults.addAll(List.generate(
         totalShotsNeeded - _stage.shotResults.length,
@@ -772,6 +922,12 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       ));
     } else if (_stage.shotResults.length > totalShotsNeeded) {
       _stage.shotResults = _stage.shotResults.sublist(0, totalShotsNeeded);
+    }
+    if (_stage.shotTimes.length > totalShotsNeeded) {
+      _stage.shotTimes = _stage.shotTimes.sublist(0, totalShotsNeeded);
+    }
+    if (_stage.shotRolls.length > totalShotsNeeded) {
+      _stage.shotRolls = _stage.shotRolls.sublist(0, totalShotsNeeded);
     }
     _stage.numTargets = _stage.targets.length;
   }
@@ -926,7 +1082,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
               icon: const Icon(Icons.arrow_back),
               onPressed: () {
                 HapticFeedback.lightImpact();
-                Navigator.pop(context);
+                _saveStage(exitScreen: true);
               },
             ),
             title: Text(_stage.name.isNotEmpty
@@ -1240,7 +1396,19 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                       const SizedBox(width: 5),
                                       Expanded(
                                         flex: 4,
-                                        child: _buildShotsButton(target),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                          decoration: BoxDecoration(
+                                            border: Border.all(color: Colors.white10),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Center(
+                                            child: Text(
+                                              '${target.shotsCount} ${target.shotsCount == 1 ? 'Shot' : 'Shots'}',
+                                              style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                            ),
+                                          ),
+                                        ),
                                       ),
                                       const SizedBox(width: 2),
                                       IconButton(
@@ -1302,7 +1470,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Text(
-                    'STAGE TIME CONFIGURATION',
+                    'STAGE CONFIGURATION',
                     style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 13,
@@ -1396,6 +1564,73 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                         ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Stage Round Count',
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white70),
+                      ),
+                      InkWell(
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          _showRoundsPickerDialog();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF121214),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.white10),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.ads_click,
+                                  size: 16, color: Color(0xFFFF9500)),
+                              const SizedBox(width: 6),
+                              Text(
+                                '${_stage.plannedRoundCount} Rounds',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.arrow_drop_down,
+                                  size: 16, color: Colors.grey),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      _showCofSetupDialog();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF007AFF).withValues(alpha: 0.1),
+                      foregroundColor: const Color(0xFF007AFF),
+                      side: const BorderSide(color: Color(0xFF007AFF), width: 1),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    icon: const Icon(Icons.route_outlined),
+                    label: Text(
+                      _stage.shotTargetsSequence.isEmpty
+                          ? 'Configure Course of Fire (COF)'
+                          : 'Configure Course of Fire (COF) (${_stage.shotTargetsSequence.length} / ${_stage.plannedRoundCount} mapped)',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ),
                   const SizedBox(height: 16),
                   Container(
@@ -1633,55 +1868,58 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}.${milliseconds.toString().padLeft(2, '0')}';
   }
 
-  // SHOOT TAB - CLEAN TELEMETRY
   Widget _buildShootTab() {
+    final showShotList = _stage.shotTimes.isNotEmpty;
+
     return Container(
       color: const Color(0xFF121214),
       padding: const EdgeInsets.all(24.0),
       alignment: Alignment.center,
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisAlignment: showShotList ? MainAxisAlignment.start : MainAxisAlignment.center,
         children: [
-          // Pulse target decoration
-          Container(
-            height: 120,
-            width: 120,
-            decoration: BoxDecoration(
-              color: const Color(0xFF007AFF).withValues(alpha: 0.05),
-              shape: BoxShape.circle,
-              border: Border.all(
-                  color: const Color(0xFF007AFF).withValues(alpha: 0.3),
-                  width: 3),
-            ),
-            child: const Center(
-              child: Icon(
-                Icons.watch,
-                size: 60,
-                color: Color(0xFF007AFF),
+          if (!showShotList) ...[
+            // Pulse target decoration
+            Container(
+              height: 120,
+              width: 120,
+              decoration: BoxDecoration(
+                color: const Color(0xFF007AFF).withValues(alpha: 0.05),
+                shape: BoxShape.circle,
+                border: Border.all(
+                    color: const Color(0xFF007AFF).withValues(alpha: 0.3),
+                    width: 3),
+              ),
+              child: const Center(
+                child: Icon(
+                  Icons.watch,
+                  size: 60,
+                  color: Color(0xFF007AFF),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 36),
-          const Text(
-            'ACTIVE RECORDING MODE',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.5,
-              color: Colors.white,
+            const SizedBox(height: 36),
+            const Text(
+              'ACTIVE RECORDING MODE',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.5,
+                color: Colors.white,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Run the timer on your watch app. Telemetry payload (elapsed time, heart rate) will automatically stream and populate the review section when you stop the watch.',
-            textAlign: TextAlign.center,
-            style:
-                TextStyle(color: Colors.grey[500], fontSize: 14, height: 1.4),
-          ),
-          const SizedBox(height: 48),
+            const SizedBox(height: 12),
+            Text(
+              'Run the timer on your watch app. Telemetry payload (elapsed time, heart rate) will automatically stream and populate the review section when you stop the watch.',
+              textAlign: TextAlign.center,
+              style:
+                  TextStyle(color: Colors.grey[500], fontSize: 14, height: 1.4),
+            ),
+            const SizedBox(height: 48),
+          ],
 
           // Watch telemetry state card
-          if (_stage.timeRemaining > 0 || _stage.avgHeartRate > 0)
+          if (_stage.timeRemaining > 0 || _stage.avgHeartRate > 0 || _isShootTimerRunning)
             Card(
               child: Padding(
                 padding: const EdgeInsets.symmetric(
@@ -1724,6 +1962,106 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                 ),
               ),
             ),
+
+          if (showShotList) ...[
+            const SizedBox(height: 24),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'SHOT DETECTIONS',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF007AFF),
+                  letterSpacing: 1.0,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView.builder(
+                controller: _shootScrollController,
+                itemCount: _stage.shotTimes.length,
+                itemBuilder: (context, index) {
+                  final shotTime = _stage.shotTimes[index];
+                  final split = index == 0 ? shotTime : shotTime - _stage.shotTimes[index - 1];
+                  final targetName = _getTargetNameForShotIndex(index);
+                  final roll = index < _stage.shotRolls.length ? _stage.shotRolls[index] : 0.0;
+                  
+                  final rollThreshold = context.read<SgPulseProvider>().rollThreshold;
+                  final sign = roll < 0 ? -1.0 : 1.0;
+                  final truncatedRoll = sign * ((roll.abs() * 10).floor() / 10.0);
+                  final isWithinThreshold = truncatedRoll.abs() <= rollThreshold;
+                  final rollColor = isWithinThreshold
+                      ? const Color(0xFF30D158)
+                      : (truncatedRoll < 0 ? const Color(0xFFFF453A) : const Color(0xFF0A84FF));
+
+                  return Card(
+                    margin: const EdgeInsets.symmetric(vertical: 4.0),
+                    color: Colors.white.withValues(alpha: 0.02),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8.0),
+                      side: const BorderSide(color: Colors.white10, width: 1.0),
+                    ),
+                    child: ListTile(
+                      dense: true,
+                      leading: CircleAvatar(
+                        radius: 12,
+                        backgroundColor: const Color(0xFF007AFF).withValues(alpha: 0.1),
+                        child: Text(
+                          '${index + 1}',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF007AFF),
+                          ),
+                        ),
+                      ),
+                      title: Text(
+                        targetName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          fontSize: 13,
+                        ),
+                      ),
+                      subtitle: roll == 0.0
+                          ? null
+                          : Text(
+                              'Roll: ${truncatedRoll.toStringAsFixed(1)}° ${truncatedRoll < 0 ? "Left" : "Right"}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: rollColor,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${shotTime.toStringAsFixed(2)}s',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            '+${split.toStringAsFixed(2)}s',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[500],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1731,8 +2069,6 @@ class _StageDetailScreenState extends State<StageDetailScreen>
 
   // REVIEW TAB - TARGET SPECIFIC SHOT LOGS
   Widget _buildReviewTab() {
-    int flatIndexOffset = 0;
-
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -1811,8 +2147,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                     // Targets list inside array
                     ...List.generate(array.targets.length, (targetIdxInside) {
                       final target = array.targets[targetIdxInside];
-                      final int currentOffset = flatIndexOffset;
-                      flatIndexOffset += target.shotsCount;
+                      final List<int> shotIndices = _getShotIndicesForTarget(arrayIdx, targetIdxInside);
 
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 6.0),
@@ -1866,8 +2201,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                               spacing: 12,
                               runSpacing: 12,
                               children:
-                                  List.generate(target.shotsCount, (shotIdx) {
-                                final globalShotIdx = currentOffset + shotIdx;
+                                  List.generate(shotIndices.length, (shotIdx) {
+                                final globalShotIdx = shotIndices[shotIdx];
 
                                 // Safety bounds check
                                 if (globalShotIdx >=
@@ -1897,54 +2232,86 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                   icon = Icons.timer_outlined;
                                 }
 
-                                return InkWell(
-                                  onTap: () {
-                                    HapticFeedback.lightImpact();
-                                    setState(() {
-                                      if (result == 'miss') {
-                                        _stage.shotResults[globalShotIdx] =
-                                            'hit';
-                                      } else if (result == 'hit') {
-                                        _stage.shotResults[globalShotIdx] =
-                                            'timeOutMiss';
-                                      } else {
-                                        _stage.shotResults[globalShotIdx] =
-                                            'miss';
-                                      }
-                                    });
-                                  },
-                                  borderRadius: BorderRadius.circular(25),
-                                  child: Container(
-                                    width: 48,
-                                    height: 48,
-                                    decoration: BoxDecoration(
-                                      color: bgColor,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: textColor.withValues(alpha: 0.3),
-                                        width: 1.5,
-                                      ),
-                                    ),
-                                    child: Center(
-                                      child: Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Text(
-                                            'Shot ${shotIdx + 1}',
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
-                                              color: textColor,
-                                            ),
+                                final roll = globalShotIdx < _stage.shotRolls.length
+                                    ? _stage.shotRolls[globalShotIdx]
+                                    : 0.0;
+                                final sign = roll < 0 ? -1.0 : 1.0;
+                                final truncatedRoll = sign * ((roll.abs() * 10).floor() / 10.0);
+                                final rollText = roll == 0.0
+                                    ? '---'
+                                    : '${truncatedRoll.toStringAsFixed(1)}°${truncatedRoll < 0 ? "L" : "R"}';
+                                final rollThreshold = context.read<SgPulseProvider>().rollThreshold;
+                                final isWithinThreshold = truncatedRoll.abs() <= rollThreshold;
+                                final rollColor = roll == 0.0
+                                    ? Colors.grey
+                                    : (isWithinThreshold
+                                        ? const Color(0xFF30D158)
+                                        : (truncatedRoll < 0 ? const Color(0xFFFF453A) : const Color(0xFF0A84FF)));
+
+                                return Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    InkWell(
+                                      onTap: () {
+                                        HapticFeedback.lightImpact();
+                                        setState(() {
+                                          if (result == 'miss') {
+                                            _stage.shotResults[globalShotIdx] =
+                                                'hit';
+                                          } else if (result == 'hit') {
+                                            _stage.shotResults[globalShotIdx] =
+                                                'timeOutMiss';
+                                          } else {
+                                            _stage.shotResults[globalShotIdx] =
+                                                'miss';
+                                          }
+                                        });
+                                      },
+                                      borderRadius: BorderRadius.circular(25),
+                                      child: Container(
+                                        width: 48,
+                                        height: 48,
+                                        decoration: BoxDecoration(
+                                          color: bgColor,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: textColor.withValues(alpha: 0.3),
+                                            width: 1.5,
                                           ),
-                                          if (icon != null)
-                                            Icon(icon,
-                                                size: 12, color: textColor),
-                                        ],
+                                        ),
+                                        child: Center(
+                                          child: Column(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              Text(
+                                                _stage.shotTimes.length > globalShotIdx
+                                                    ? '${_stage.shotTimes[globalShotIdx].toStringAsFixed(1)}s'
+                                                    : 'S${shotIdx + 1}',
+                                                style: TextStyle(
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: textColor,
+                                                ),
+                                              ),
+                                              if (icon != null)
+                                                Icon(icon,
+                                                    size: 11, color: textColor),
+                                            ],
+                                          ),
+                                        ),
                                       ),
                                     ),
-                                  ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      rollText,
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                        color: rollColor,
+                                      ),
+                                    ),
+                                  ],
                                 );
                               }),
                             ),
@@ -2162,10 +2529,16 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                         _stage.environmentalErrors = '';
                         _stage.windPlan.actualValue = 0.0;
                         _stage.windPlan.actualDirection = 'None';
-
-                        // Reset all shot results to 'miss' (preserves configured shot counts)
-                        _stage.shotResults =
-                            List.filled(_stage.shotResults.length, 'miss');
+                        // Reset COF sequence, shot times, rolls, and restore default target shot counts
+                        _stage.shotTargetsSequence = [];
+                        _stage.shotTimes = [];
+                        _stage.shotRolls = [];
+                        for (var array in _stage.targetArrays) {
+                          for (var target in array.targets) {
+                            target.shotsCount = 1;
+                          }
+                        }
+                        _adjustShotResultsLength();
 
                         // Clear text controllers and tag lists
                         _mentalErrorsController.clear();
@@ -2469,34 +2842,66 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     );
   }
 
-  Widget _buildShotsButton(Target target) {
-    return InkWell(
-      onTap: () {
-        HapticFeedback.lightImpact();
-        _showShotsSelector(target);
-      },
-      child: InputDecorator(
-        decoration: const InputDecoration(
-          labelText: 'Shots',
-          labelStyle: TextStyle(fontSize: 10),
-          isDense: true,
-          border: OutlineInputBorder(),
-          contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              '${target.shotsCount}',
-              style: const TextStyle(
-                fontSize: 12,
-                color: Colors.white,
+  void _showRoundsPickerDialog() {
+    int tempRounds = _stage.plannedRoundCount;
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('STAGE ROUND COUNT'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Enter the total number of rounds planned for this stage.',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
               ),
+              const SizedBox(height: 16),
+              TextFormField(
+                initialValue: '$tempRounds',
+                keyboardType: TextInputType.number,
+                autofocus: true,
+                onChanged: (val) {
+                  final parsed = int.tryParse(val);
+                  if (parsed != null && parsed > 0) {
+                    tempRounds = parsed;
+                  }
+                },
+                decoration: const InputDecoration(
+                  labelText: 'Round Count',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
             ),
-            const Icon(Icons.arrow_drop_down, size: 14, color: Colors.grey),
+            ElevatedButton(
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                setState(() {
+                  _stage.plannedRoundCount = tempRounds;
+                  // Adjust sequence if it exceeds the new planned round count
+                  if (_stage.shotTargetsSequence.length > _stage.plannedRoundCount) {
+                    _stage.shotTargetsSequence = _stage.shotTargetsSequence.sublist(0, _stage.plannedRoundCount);
+                    _adjustShotResultsLength();
+                  }
+                });
+                _saveStage(exitScreen: false);
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF007AFF),
+                  foregroundColor: Colors.white),
+              child: const Text('Save'),
+            ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -2740,100 +3145,254 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     );
   }
 
-  void _showShotsSelector(Target target) {
-    showModalBottomSheet(
+  void _showCofSetupDialog() {
+    List<String> tempSequence = List.from(_stage.shotTargetsSequence);
+
+    showDialog(
       context: context,
-      backgroundColor: const Color(0xFF1E1E24),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
-        ),
-      ),
       builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(2),
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final isFull = tempSequence.length >= _stage.plannedRoundCount;
+
+            return AlertDialog(
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('COF TARGET SELECTOR'),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Tap targets in shooting order. Total limit: ${_stage.plannedRoundCount} rounds.',
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
                   ),
-                ),
+                ],
               ),
-              const SizedBox(height: 16),
-              const Text(
-                'SELECT NUMBER OF SHOTS',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                  letterSpacing: 1.2,
-                  color: Color(0xFF007AFF),
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 6,
-                  crossAxisSpacing: 10,
-                  mainAxisSpacing: 10,
-                  childAspectRatio: 1.0,
-                ),
-                itemCount: 12,
-                itemBuilder: (context, index) {
-                  final shots = index + 1;
-                  final isSelected = target.shotsCount == shots;
-                  return InkWell(
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      setState(() {
-                        target.shotsCount = shots;
-                        _adjustShotResultsLength();
-                      });
-                      Navigator.pop(context);
-                    },
-                    child: Container(
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Status & Progress Bar
+                    Container(
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: isSelected
-                            ? const Color(0xFF007AFF).withValues(alpha: 0.2)
-                            : const Color(0xFF121214),
+                        color: const Color(0xFF121214),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: isSelected
-                              ? const Color(0xFF007AFF)
-                              : Colors.white10,
-                        ),
+                        border: Border.all(color: Colors.white10),
                       ),
-                      child: Center(
-                        child: Text(
-                          '$shots',
-                          style: TextStyle(
-                            color: isSelected
-                                ? const Color(0xFF007AFF)
-                                : Colors.white,
-                            fontSize: 16,
-                            fontWeight: isSelected
-                                ? FontWeight.bold
-                                : FontWeight.normal,
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Course of Fire Sequence',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                              Text(
+                                '${tempSequence.length} / ${_stage.plannedRoundCount}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  color: isFull ? const Color(0xFF00E676) : Colors.white,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
+                          const SizedBox(height: 8),
+                          if (tempSequence.isEmpty)
+                            const Text(
+                              'No targets tapped yet.',
+                              style: TextStyle(color: Colors.grey, fontSize: 11),
+                            )
+                          else
+                            SizedBox(
+                              height: 32,
+                              child: ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: tempSequence.length,
+                                itemBuilder: (context, index) {
+                                  final key = tempSequence[index];
+                                  final parts = key.split('_');
+                                  String label = '?';
+                                  if (parts.length == 2) {
+                                    final int aIdx = int.parse(parts[0]);
+                                    final int tIdx = int.parse(parts[1]);
+                                    if (aIdx < _stage.targetArrays.length &&
+                                        tIdx < _stage.targetArrays[aIdx].targets.length) {
+                                      label = 'A${aIdx + 1}-T${tIdx + 1}';
+                                    }
+                                  }
+                                  return Container(
+                                    margin: const EdgeInsets.only(right: 6),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF007AFF).withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(
+                                          color: const Color(0xFF007AFF).withValues(alpha: 0.3)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Text(
+                                          '${index + 1}. ',
+                                          style: const TextStyle(
+                                              color: Colors.grey,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                        Text(
+                                          label,
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                        ],
                       ),
                     ),
-                  );
-                },
+                    const SizedBox(height: 16),
+
+                    // Target arrays selection
+                    if (_stage.targetArrays.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24.0),
+                        child: Text(
+                          'Please define target arrays first on the Plan page.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      )
+                    else
+                      Flexible(
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: _stage.targetArrays.length,
+                          itemBuilder: (context, arrayIdx) {
+                            final array = _stage.targetArrays[arrayIdx];
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              color: Colors.white.withValues(alpha: 0.01),
+                              child: Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'ARRAY ${arrayIdx + 1} (${array.distance.isEmpty ? "---" : array.distance})',
+                                      style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF007AFF)),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: List.generate(array.targets.length, (targetIdx) {
+                                        final target = array.targets[targetIdx];
+                                        final key = '${arrayIdx}_$targetIdx';
+                                        
+                                        // Count occurrences in current temp sequence
+                                        final count = tempSequence.where((k) => k == key).length;
+
+                                        return ElevatedButton(
+                                          onPressed: isFull
+                                              ? null
+                                              : () {
+                                                  HapticFeedback.lightImpact();
+                                                  setDialogState(() {
+                                                    tempSequence.add(key);
+                                                  });
+                                                },
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: count > 0
+                                                ? const Color(0xFF00E676).withValues(alpha: 0.15)
+                                                : Colors.white.withValues(alpha: 0.05),
+                                            side: BorderSide(
+                                              color: count > 0
+                                                  ? const Color(0xFF00E676).withValues(alpha: 0.4)
+                                                  : Colors.white10,
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 12, vertical: 8),
+                                          ),
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                'A${arrayIdx + 1}-T${targetIdx + 1} (${target.type})',
+                                                style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.bold),
+                                              ),
+                                              if (count > 0)
+                                                Text(
+                                                  '$count ${count == 1 ? "shot" : "shots"}',
+                                                  style: const TextStyle(
+                                                      color: Color(0xFF00E676),
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.bold),
+                                                ),
+                                            ],
+                                          ),
+                                        );
+                                      }),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 12),
-            ],
-          ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    setDialogState(() {
+                      tempSequence.clear();
+                    });
+                  },
+                  style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+                  child: const Text('Reset'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    setState(() {
+                      _stage.shotTargetsSequence = tempSequence;
+                      _adjustShotResultsLength();
+                    });
+                    _saveStage(exitScreen: false);
+                    Navigator.pop(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF007AFF),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -3274,6 +3833,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       setState(() {
         _stage.timeLimit = result;
       });
+      _syncToWatch();
     }
   }
 

@@ -7,6 +7,7 @@
 // UI watches: scannedDevices, connectedDevice, connectionState,
 //             isScanning, latestSnapshot, shotCount
 
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -16,9 +17,13 @@ import '../services/sg_pulse_ble_service.dart';
 
 class SgPulseProvider extends ChangeNotifier {
   static const _savedDeviceKey = 'saved_sg_pulse_device';
+  static const _rollThresholdKey = 'sg_pulse_roll_threshold';
 
   final SgPulseBleService _service;
-
+  
+  final _shotDetectedController = StreamController<void>.broadcast();
+  Stream<void> get shotDetectedStream => _shotDetectedController.stream;
+ 
   SgPulseProvider({SgPulseBleService? service})
       : _service = service ?? SgPulseBleService() {
     _service.onScanResult            = _onScanResult;
@@ -34,6 +39,7 @@ class SgPulseProvider extends ChangeNotifier {
 
   Future<void> _initPrefs() async {
     final prefs = await SharedPreferences.getInstance();
+    rollThreshold = prefs.getDouble(_rollThresholdKey) ?? 0.3;
     final saved = prefs.getString(_savedDeviceKey);
     if (saved != null) {
       try {
@@ -68,6 +74,9 @@ class SgPulseProvider extends ChangeNotifier {
 
   /// Running shot count for this session.
   int shotCount = 0;
+
+  /// Firearm roll threshold (capping cant limit)
+  double rollThreshold = 0.3;
 
   /// Temporary flag to trigger visual shot feedback in UI.
   bool isShotFlashing = false;
@@ -131,6 +140,14 @@ class SgPulseProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Update firearm roll threshold limit
+  Future<void> setRollThreshold(double value) async {
+    rollThreshold = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_rollThresholdKey, value);
+    notifyListeners();
+  }
+
   // ──────────────────────────────────────────────────────────────────────────
   // Service callbacks (private)
   // ──────────────────────────────────────────────────────────────────────────
@@ -165,6 +182,7 @@ class SgPulseProvider extends ChangeNotifier {
   void _onShotDetected() {
     shotCount++;
     isShotFlashing = true;
+    _shotDetectedController.add(null);
     notifyListeners();
     debugPrint('[SgPulseProvider] Shot detected! Total: $shotCount');
     
@@ -194,6 +212,7 @@ class SgPulseProvider extends ChangeNotifier {
   @override
   void dispose() {
     _service.dispose();
+    _shotDetectedController.close();
     super.dispose();
   }
 }
