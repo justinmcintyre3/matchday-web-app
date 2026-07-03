@@ -232,7 +232,7 @@ class _KestrelDeviceTile extends StatelessWidget {
           ),
         ),
         subtitle: Text(
-          'Kestrel ${device.deviceType} · ${device.address}',
+          '${device.modelDisplay} · ${device.address}',
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.4),
             fontSize: 12,

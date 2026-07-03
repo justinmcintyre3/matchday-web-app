@@ -38,6 +38,15 @@ class KestrelJniService {
   final StreamController<bool> _calcFullSolnAckController = StreamController.broadcast();
   Stream<bool> get onCalcFullSolnAck => _calcFullSolnAckController.stream;
 
+  final StreamController<Map<String, dynamic>> _onEnvironmentReceivedController = StreamController.broadcast();
+  Stream<Map<String, dynamic>> get onEnvironmentReceived => _onEnvironmentReceivedController.stream;
+
+  final StreamController<String?> _onDeviceNameReceivedController = StreamController.broadcast();
+  Stream<String?> get onDeviceNameReceived => _onDeviceNameReceivedController.stream;
+
+  final StreamController<String?> _onDeviceSNReceivedController = StreamController.broadcast();
+  Stream<String?> get onDeviceSNReceived => _onDeviceSNReceivedController.stream;
+
   KestrelJniService() {
     _channel.setMethodCallHandler(_handleMethodCall);
   }
@@ -74,6 +83,11 @@ class KestrelJniService {
       case 'onGunTransferSettingsReceived':
         _gunTransferSettingsController.add(call.arguments as bool);
         break;
+      case 'onEnvironmentReceived':
+        final map = Map<String, dynamic>.from(call.arguments as Map);
+        debugPrint('[KestrelJni] onEnvironmentReceived: $map');
+        _onEnvironmentReceivedController.add(map);
+        break;
       case 'onBalInfoSettingsReceived':
         _balInfoSettingsController.add(null);
         break;
@@ -87,6 +101,14 @@ class KestrelJniService {
         break;
       case 'onSetRemoteSolnAck':
         debugPrint('[KestrelJni] onSetRemoteSolnAck: ${call.arguments}');
+        break;
+      case 'onDeviceNameReceived':
+        debugPrint('[KestrelJni] onDeviceNameReceived: ${call.arguments}');
+        _onDeviceNameReceivedController.add(call.arguments as String?);
+        break;
+      case 'onDeviceSNReceived':
+        debugPrint('[KestrelJni] onDeviceSNReceived: ${call.arguments}');
+        _onDeviceSNReceivedController.add(call.arguments as String?);
         break;
     }
   }
@@ -136,6 +158,22 @@ class KestrelJniService {
   /// Sends a BallisticsEnvironment update to override the latitude
   Future<void> sendSetEnvironment(double latitude) async {
     await _channel.invokeMethod('sendSetEnvironment', {'latitude': latitude});
+  }
+
+  /// Requests the Kestrel to send its current environment settings.
+  /// The results will arrive via the [onEnvironmentReceived] stream.
+  Future<void> sendCmdGetEnvironment() async {
+    await _channel.invokeMethod('sendCmdGetEnvironment');
+  }
+
+  /// Requests the Kestrel to send its device name.
+  Future<void> sendCmdGetDeviceName() async {
+    await _channel.invokeMethod('sendCmdGetDeviceName');
+  }
+
+  /// Requests the Kestrel to send its serial number.
+  Future<void> sendCmdGetDeviceSerialNum() async {
+    await _channel.invokeMethod('sendCmdGetDeviceSerialNum');
   }
 
   /// Phase 1: push target slot data to the Kestrel (cmd 137 / setBalFullInputs).

@@ -391,6 +391,30 @@ class KestrelBleService {
     await _jni.sendSetEnvironment(latitude);
   }
 
+  /// Requests the Kestrel to send its current environment settings.
+  Future<void> getEnvironment() async {
+    await _jni.sendCmdGetEnvironment();
+  }
+
+  /// Requests the Kestrel to send its device name.
+  Future<void> getDeviceName() async {
+    await _jni.sendCmdGetDeviceName();
+  }
+
+  /// Requests the Kestrel to send its serial number.
+  Future<void> getDeviceSerialNum() async {
+    await _jni.sendCmdGetDeviceSerialNum();
+  }
+
+  /// Stream of environment data received from the Kestrel.
+  Stream<Map<String, dynamic>> get onEnvironmentReceived => _jni.onEnvironmentReceived;
+
+  /// Stream of device name received from the Kestrel.
+  Stream<String?> get onDeviceNameReceived => _jni.onDeviceNameReceived;
+
+  /// Stream of device serial number received from the Kestrel.
+  Stream<String?> get onDeviceSNReceived => _jni.onDeviceSNReceived;
+
   /// Phase 1: write target inputs to a Kestrel slot (yards/mph/degrees from UI).
   Future<void> sendCmdSetBalFullInputs({
     required int targetNumber,

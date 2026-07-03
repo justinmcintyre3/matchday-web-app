@@ -6,8 +6,10 @@
 // UI calls:   startScan()  connect()  disconnect()
 // UI watches: scannedDevices, connectedDevice, connectionState, isScanning
 
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/kestrel_device.dart';
@@ -17,12 +19,81 @@ class KestrelProvider extends ChangeNotifier {
   static const _savedDeviceKey = 'saved_kestrel_device';
   final KestrelBleService _service;
 
+  bool _hasCheckedLatitudeThisSession = false;
+
+  final StreamController<double> _latitudeMismatchController = StreamController.broadcast();
+  Stream<double> get onLatitudeMismatch => _latitudeMismatchController.stream;
+
   KestrelProvider({KestrelBleService? service})
       : _service = service ?? KestrelBleService() {
     _service.onScanResult = _onScanResult;
     _service.onConnectionStateChanged = _onConnectionStateChanged;
     _service.onRxData = _onRxData;
+    
+    _service.onEnvironmentReceived.listen((env) {
+      final kestrelLat = env['latitude'] as double?;
+      debugPrint('[KestrelProvider] onEnvironmentReceived stream got latitude: $kestrelLat, checkedThisSession: $_hasCheckedLatitudeThisSession');
+      if (kestrelLat != null && !_hasCheckedLatitudeThisSession) {
+        _hasCheckedLatitudeThisSession = true;
+        _checkLatitudeMismatch(kestrelLat);
+      }
+    });
+    
+    _service.onDeviceNameReceived.listen((name) {
+      debugPrint('[KestrelProvider] onDeviceNameReceived: $name');
+      if (name != null && name.trim().isNotEmpty && connectedDevice != null) {
+        connectedDevice = connectedDevice!.copyWith(modelName: name.trim());
+        _saveDevice();
+        notifyListeners();
+      }
+    });
+
+    _service.onDeviceSNReceived.listen((sn) {
+      debugPrint('[KestrelProvider] onDeviceSNReceived: $sn');
+      if (sn != null && sn.trim().isNotEmpty && connectedDevice != null) {
+        connectedDevice = connectedDevice!.copyWith(serialNumber: sn.trim());
+        _saveDevice();
+        notifyListeners();
+      }
+    });
+
     _initPrefs();
+  }
+
+  Future<void> _checkLatitudeMismatch(double kestrelLat) async {
+    final prefs = await SharedPreferences.getInstance();
+    final silenced = prefs.getBool('silence_kestrel_latitude_mismatch') ?? false;
+    debugPrint('[KestrelProvider] Mismatch check started. silenced: $silenced');
+    if (silenced) return;
+
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    debugPrint('[KestrelProvider] Location services enabled: $serviceEnabled');
+    if (!serviceEnabled) return;
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    debugPrint('[KestrelProvider] Location permission: $permission');
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      debugPrint('[KestrelProvider] Location permission after request: $permission');
+      if (permission == LocationPermission.denied) return;
+    }
+    if (permission == LocationPermission.deniedForever) return;
+
+    final position = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.low));
+    final phoneLat = position.latitude;
+    final diff = (kestrelLat - phoneLat).abs();
+    debugPrint('[KestrelProvider] Kestrel Lat: $kestrelLat, Phone Lat: $phoneLat, Diff: $diff');
+
+    if (diff > 0.1) {
+      debugPrint('[KestrelProvider] Significant mismatch detected! Emitting onLatitudeMismatch.');
+      // Mismatch is significant
+      _latitudeMismatchController.add(kestrelLat);
+    }
+  }
+
+  Future<void> silenceLatitudeMismatch() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('silence_kestrel_latitude_mismatch', true);
   }
 
   Future<void> _initPrefs() async {
@@ -132,6 +203,8 @@ class KestrelProvider extends ChangeNotifier {
   Future<void> updateKestrelLatitude(double latitude) async {
     if (connectionState != KestrelConnectionState.connected) return;
     await _service.updateLatitude(latitude);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('silence_kestrel_latitude_mismatch', false);
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -158,6 +231,13 @@ class KestrelProvider extends ChangeNotifier {
     // Save device on successful connection/auth
     if (state == KestrelConnectionState.connected) {
       _saveDevice();
+      debugPrint('[KestrelProvider] Connected! Requesting device name & serial number...');
+      _service.getDeviceName();
+      _service.getDeviceSerialNum();
+      if (!_hasCheckedLatitudeThisSession) {
+        debugPrint('[KestrelProvider] Requesting environment...');
+        _service.getEnvironment();
+      }
     } 
     // Auto-authenticate if we already have the PIN saved
     else if (state == KestrelConnectionState.pinRequired) {

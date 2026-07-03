@@ -100,6 +100,21 @@ class KestrelDevice {
     };
   }
 
+  /// Helper to display a clean model name (e.g. "Kestrel Elite", "Kestrel 5700", "Kestrel")
+  /// avoiding redundant "Kestrel Kestrel" labels.
+  String get modelDisplay {
+    if (modelName != null && modelName!.isNotEmpty) {
+      if (modelName!.toLowerCase().startsWith('kestrel')) {
+        return modelName!;
+      }
+      return 'Kestrel $modelName';
+    }
+    if (deviceType == 'Kestrel' || deviceType == 'Unknown') {
+      return 'Kestrel';
+    }
+    return 'Kestrel $deviceType';
+  }
+
   /// Returns a copy with the specified fields overridden.
   KestrelDevice copyWith({
     String? name,

@@ -129,6 +129,24 @@ class KestrelJniPlugin(private val channel: MethodChannel, private val context: 
                 }
                 result.success(null)
             }
+            "sendCmdGetEnvironment" -> {
+                kestrel.sendGetEnvironment()
+                kestrel.updateComs()
+                flushTxBytes()
+                result.success(null)
+            }
+            "sendCmdGetDeviceName" -> {
+                kestrel.sendGetDeviceName()
+                kestrel.updateComs()
+                flushTxBytes()
+                result.success(null)
+            }
+            "sendCmdGetDeviceSerialNum" -> {
+                kestrel.sendGetDeviceSerialNum()
+                kestrel.updateComs()
+                flushTxBytes()
+                result.success(null)
+            }
             "sendCmdSetBalFullInputs" -> {
                 val input = buildBalFullInputs(call)
                 if (input == null) {
@@ -238,8 +256,12 @@ class KestrelJniPlugin(private val channel: MethodChannel, private val context: 
         invokeFlutter("onGunTransferSettingsReceived", z4)
     }
 
-    override fun B(str: String?) {}
-    override fun E(str: String?) {}
+    override fun B(str: String?) {
+        invokeFlutter("onDeviceSNReceived", str)
+    }
+    override fun E(str: String?) {
+        invokeFlutter("onDeviceNameReceived", str)
+    }
     override fun F(z4: Boolean) {}
     override fun I(z4: Boolean) {
         invokeFlutter("onSetRemoteSolnAck", z4)
@@ -262,7 +284,15 @@ class KestrelJniPlugin(private val channel: MethodChannel, private val context: 
         i5: Int,
         i6: Int,
         i7: Int,
-    ) {}
+    ) {
+        invokeFlutter("onEnvironmentReceived", mapOf(
+            "latitude" to f4,
+            "dryBulbTemp" to f5,
+            "stationPress" to f6,
+            "relativeHum" to f7,
+            "densityAltitude" to f8
+        ))
+    }
 
     override fun S(z4: Boolean, pVar: Any?) {}
     override fun U(i2: Int, d4: Double, bVar: Any?) {}

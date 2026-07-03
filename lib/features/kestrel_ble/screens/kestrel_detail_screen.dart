@@ -96,8 +96,8 @@ class KestrelDetailScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  device?.deviceType != null
-                      ? 'Kestrel ${device!.deviceType}'
+                  device != null
+                      ? device.modelDisplay
                       : 'Ballistics Device',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.45),
