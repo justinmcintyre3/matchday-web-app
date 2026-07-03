@@ -6,6 +6,7 @@ import '../models/match.dart';
 import '../providers/match_provider.dart';
 import 'stage_detail_screen.dart';
 import 'match_summary_screen.dart';
+import '../widgets/global_app_bar.dart';
 
 class MatchDetailScreen extends StatelessWidget {
   final String matchId;
@@ -34,7 +35,7 @@ class MatchDetailScreen extends StatelessWidget {
 
         if (match.id.isEmpty) {
           return Scaffold(
-            appBar: AppBar(title: const Text('Error')),
+            appBar: GlobalAppBar(title: const Text('Error')),
             body: const Center(child: Text('Match not found.')),
           );
         }
@@ -56,14 +57,7 @@ class MatchDetailScreen extends StatelessWidget {
             : 0.0;
 
         return Scaffold(
-          appBar: AppBar(
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: () {
-                HapticFeedback.lightImpact();
-                Navigator.pop(context);
-              },
-            ),
+          appBar: GlobalAppBar(
             title: Text(match.name),
             actions: [
               IconButton(

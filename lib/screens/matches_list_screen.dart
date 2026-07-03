@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../models/match.dart';
 import '../providers/match_provider.dart';
 import 'match_detail_screen.dart';
+import '../widgets/global_app_bar.dart';
 
 class MatchesListScreen extends StatefulWidget {
   const MatchesListScreen({super.key});
@@ -18,7 +19,7 @@ class _MatchesListScreenState extends State<MatchesListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: GlobalAppBar(
         title: const Text('My Matches'),
         actions: [
           IconButton(

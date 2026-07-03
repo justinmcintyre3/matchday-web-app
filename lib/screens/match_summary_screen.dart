@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/match.dart';
 import '../providers/match_provider.dart';
+import '../widgets/global_app_bar.dart';
 
 class MatchSummaryScreen extends StatefulWidget {
   final String matchId;
@@ -161,14 +162,7 @@ class _MatchSummaryScreenState extends State<MatchSummaryScreen> {
           }
         },
         child: Scaffold(
-          appBar: AppBar(
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: () {
-                HapticFeedback.lightImpact();
-                Navigator.pop(context);
-              },
-            ),
+          appBar: GlobalAppBar(
             title: const Text('Match Summary'),
             actions: [
               TextButton(

@@ -6,6 +6,7 @@ import '../models/checklist_group.dart';
 import '../providers/checklist_provider.dart';
 import 'checklist_detail_screen.dart';
 import 'package:intl/intl.dart';
+import '../widgets/global_app_bar.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -15,7 +16,7 @@ class HomeScreen extends StatelessWidget {
     return Consumer<ChecklistProvider>(
       builder: (context, provider, child) {
         return Scaffold(
-          appBar: AppBar(
+          appBar: GlobalAppBar(
             title: const Text('Checklist Groups'),
             actions: [
               IconButton(

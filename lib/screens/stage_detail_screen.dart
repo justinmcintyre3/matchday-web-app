@@ -10,6 +10,7 @@ import '../features/kestrel_ble/providers/kestrel_provider.dart';
 import '../features/kestrel_ble/models/kestrel_device.dart';
 import '../widgets/wind_clock_picker.dart';
 import '../features/sg_pulse/providers/sg_pulse_provider.dart';
+import '../widgets/global_app_bar.dart';
 
 class StageDetailScreen extends StatefulWidget {
   final String matchId;
@@ -1088,14 +1089,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
           }
         },
         child: Scaffold(
-          appBar: AppBar(
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: () {
-                HapticFeedback.lightImpact();
-                _saveStage(exitScreen: true);
-              },
-            ),
+          appBar: GlobalAppBar(
             title: Text(_stage.name.isNotEmpty
                 ? _stage.name
                 : 'Stage ${widget.stageNumber} Setup'),

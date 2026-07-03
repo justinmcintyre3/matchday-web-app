@@ -12,6 +12,8 @@ class MatchProvider with ChangeNotifier {
 
   final _watchConnectivity = WatchConnectivity();
   WatchConnectivity get watchConnectivity => _watchConnectivity;
+  bool _isWatchConnected = false;
+  bool get isWatchConnected => _isWatchConnected;
   final _watchResultController = StreamController<WatchResultEvent>.broadcast();
   final _watchLiveUpdateController = StreamController<WatchLiveUpdateEvent>.broadcast();
   final _watchTimerStartedController = StreamController<int?>.broadcast();
@@ -460,6 +462,21 @@ class MatchProvider with ChangeNotifier {
     
     _watchConnectivity.contextStream.listen((contextMap) {
       handleIncoming(Map<String, dynamic>.from(contextMap));
+    });
+
+    Timer.periodic(const Duration(seconds: 3), (timer) async {
+      try {
+        final isSupported = await _watchConnectivity.isSupported;
+        if (isSupported) {
+          final isReachable = await _watchConnectivity.isReachable;
+          final isPaired = await _watchConnectivity.isPaired;
+          final connected = isReachable && isPaired;
+          if (connected != _isWatchConnected) {
+            _isWatchConnected = connected;
+            notifyListeners();
+          }
+        }
+      } catch (_) {}
     });
   }
 

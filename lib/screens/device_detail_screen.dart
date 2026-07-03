@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/match_provider.dart';
+import '../widgets/global_app_bar.dart';
 
 class DeviceDetailScreen extends StatefulWidget {
   final String deviceName;
@@ -55,7 +56,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: GlobalAppBar(
         title: Text(widget.deviceName),
         actions: [
           IconButton(

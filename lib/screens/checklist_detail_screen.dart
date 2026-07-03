@@ -6,6 +6,7 @@ import '../models/checklist_item.dart';
 import '../providers/checklist_provider.dart';
 import 'package:confetti/confetti.dart';
 import 'dart:math';
+import '../widgets/global_app_bar.dart';
 
 class ChecklistDetailScreen extends StatefulWidget {
   final String groupId;
@@ -104,7 +105,7 @@ class _ChecklistDetailScreenState extends State<ChecklistDetailScreen> {
         return Stack(
           children: [
             Scaffold(
-              appBar: AppBar(
+              appBar: GlobalAppBar(
                 title: Text(group.title),
                 actions: [
                   if (_showResetButton)
