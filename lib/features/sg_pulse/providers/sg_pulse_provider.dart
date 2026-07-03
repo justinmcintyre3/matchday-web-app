@@ -105,6 +105,9 @@ class SgPulseProvider extends ChangeNotifier {
   /// Temporary flag to trigger visual shot feedback in UI.
   bool isShotFlashing = false;
 
+  /// Tracks the last shot timestamp to debounce double-triggers
+  DateTime? _lastShotTime;
+
   SgPulseConnectionState get connectionState =>
       connectedDevice?.state ?? SgPulseConnectionState.disconnected;
 
@@ -275,6 +278,13 @@ class SgPulseProvider extends ChangeNotifier {
   }
 
   void _onShotDetected() {
+    final now = DateTime.now();
+    if (_lastShotTime != null && now.difference(_lastShotTime!).inMilliseconds < 100) {
+      debugPrint('[SgPulseProvider] Debounced duplicate shot detection');
+      return;
+    }
+    _lastShotTime = now;
+
     shotCount++;
     isShotFlashing = true;
     _shotDetectedController.add(null);
@@ -292,6 +302,7 @@ class SgPulseProvider extends ChangeNotifier {
   void clearSession() {
     shotCount = 0;
     isShotFlashing = false;
+    _lastShotTime = null;
     _angleHistory.clear();
     _stabilityHistory.clear();
     notifyListeners();

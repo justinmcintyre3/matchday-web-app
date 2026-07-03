@@ -275,6 +275,11 @@ class KestrelBleService {
   void _onConnectionStateChange(BluetoothConnectionState state) {
     if (state == BluetoothConnectionState.connected) {
       _isAutoConnecting = false;
+      if (_isDiscovering) {
+        debugPrint('[KestrelBLE] Already discovering/connected. Ignoring duplicate connection event.');
+        return;
+      }
+      _isDiscovering = true;
       onConnectionStateChanged?.call(KestrelConnectionState.discovering);
       // Delay matches reference app (600 ms) before discoverServices
       Future.delayed(kestrelServiceDiscoveryDelay, _discoverServices);
@@ -289,7 +294,6 @@ class KestrelBleService {
   }
 
   Future<void> _discoverServices() async {
-    if (_isDiscovering) return;
     _isDiscovering = true;
     
     try {
@@ -352,6 +356,7 @@ class KestrelBleService {
       await _jni.sendCmdGetPrivacyStatus();
     } catch (e) {
       debugPrint('[KestrelBLE] Service discovery error: $e');
+      _isDiscovering = false;
       onConnectionStateChanged?.call(KestrelConnectionState.error);
     }
   }

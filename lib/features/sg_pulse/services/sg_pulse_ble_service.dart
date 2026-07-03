@@ -48,6 +48,7 @@ class SgPulseBleService {
   StreamSubscription<List<int>>?              _shotSubscription;
   Timer? _scanTimer;
   bool _isAutoConnecting = false;
+  bool _isDiscoveringOrConnected = false;
 
   /// Tracks addresses already surfaced to avoid duplicates.
   final Set<String> _discovered = {};
@@ -114,6 +115,7 @@ class SgPulseBleService {
     final btDevice = BluetoothDevice.fromId(device.address);
     _connectedDevice = btDevice;
     _isAutoConnecting = autoConnect;
+    _isDiscoveringOrConnected = false;
 
     if (!autoConnect) {
       onConnectionStateChanged?.call(SgPulseConnectionState.connecting);
@@ -134,9 +136,15 @@ class SgPulseBleService {
   void _onConnectionStateChange(BluetoothConnectionState state) {
     if (state == BluetoothConnectionState.connected) {
       _isAutoConnecting = false;
+      if (_isDiscoveringOrConnected) {
+        debugPrint('[SgPulseBLE] Already discovering/connected. Ignoring duplicate connection event.');
+        return;
+      }
+      _isDiscoveringOrConnected = true;
       onConnectionStateChanged?.call(SgPulseConnectionState.discovering);
       Future.delayed(sgPulseServiceDiscoveryDelay, _discoverServices);
     } else if (state == BluetoothConnectionState.disconnected) {
+      _isDiscoveringOrConnected = false;
       _pulseSubscription?.cancel();
       _shotSubscription?.cancel();
       _pulseSubscription = null;
@@ -207,6 +215,7 @@ class SgPulseBleService {
       }
     } catch (e) {
       debugPrint('[SgPulseBLE] Service discovery error: $e');
+      _isDiscoveringOrConnected = false;
       onConnectionStateChanged?.call(SgPulseConnectionState.error);
     }
   }
@@ -257,6 +266,7 @@ class SgPulseBleService {
 
   Future<void> disconnect() async {
     _isAutoConnecting = false;
+    _isDiscoveringOrConnected = false;
     await _pulseSubscription?.cancel();
     await _shotSubscription?.cancel();
     await _connectionSubscription?.cancel();
