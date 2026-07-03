@@ -142,6 +142,7 @@ class Stage {
   int plannedRoundCount; // total round count planned for this stage
   List<String> shotTargetsSequence; // sequence of targets in shooting order
   List<double> shotRolls; // roll in degrees for each shot
+  List<double> shotStabilities; // stability (MOA) value for each shot
 
   Stage({
     required this.stageNumber,
@@ -163,6 +164,7 @@ class Stage {
     this.plannedRoundCount = 10,
     this.shotTargetsSequence = const [],
     this.shotRolls = const [],
+    this.shotStabilities = const [],
   });
 
   List<Target> get targets {
@@ -209,6 +211,7 @@ class Stage {
       'plannedRoundCount': plannedRoundCount,
       'shotTargetsSequence': shotTargetsSequence,
       'shotRolls': shotRolls,
+      'shotStabilities': shotStabilities,
     };
   }
 
@@ -258,6 +261,7 @@ class Stage {
       plannedRoundCount: map['plannedRoundCount']?.toInt() ?? 10,
       shotTargetsSequence: List<String>.from(map['shotTargetsSequence'] ?? const []),
       shotRolls: List<double>.from(map['shotRolls'] ?? const []),
+      shotStabilities: List<double>.from(map['shotStabilities'] ?? const []),
     );
   }
 }

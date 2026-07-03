@@ -135,6 +135,9 @@ class _SgPulseDetailScreenState extends State<SgPulseDetailScreen> {
 
           const SizedBox(height: 16),
           _RollThresholdCard(provider: provider),
+
+          const SizedBox(height: 16),
+          _StabilityZonesCard(provider: provider),
         ],
       ),
     );
@@ -660,6 +663,162 @@ class _RollThresholdCard extends StatelessWidget {
                       'Acceptable deviation limit: ±${provider.rollThreshold}°',
                       style: const TextStyle(fontSize: 11, color: Colors.grey),
                     ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: Colors.white24, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StabilityZonesCard extends StatelessWidget {
+  final SgPulseProvider provider;
+  const _StabilityZonesCard({required this.provider});
+
+  void _showConfigureDialog(BuildContext context) {
+    double tempGreen = provider.stabilityGreenZone;
+    double tempYellow = provider.stabilityYellowZone;
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('CONFIGURE STABILITY ZONES'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Values at or below Green Zone are green (excellent stability). Values between Green Zone and Yellow Zone are yellow (acceptable stability). Anything above Yellow Zone is red (poor stability).',
+                style: TextStyle(fontSize: 12, color: Colors.grey, height: 1.4),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                initialValue: '${provider.stabilityGreenZone}',
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Green Zone limit (e.g. 1.0)',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                onChanged: (val) {
+                  final parsed = double.tryParse(val);
+                  if (parsed != null && parsed > 0) {
+                    tempGreen = parsed;
+                  }
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                initialValue: '${provider.stabilityYellowZone}',
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Yellow Zone limit (e.g. 5.0)',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+                onChanged: (val) {
+                  final parsed = double.tryParse(val);
+                  if (parsed != null && parsed > 0) {
+                    tempYellow = parsed;
+                  }
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                provider.setStabilityGreenZone(tempGreen);
+                provider.setStabilityYellowZone(tempYellow);
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF007AFF),
+                  foregroundColor: Colors.white),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double liveStability = provider.latestSnapshot?.stability ?? 0.0;
+    Color liveStabilityColor;
+    if (liveStability <= provider.stabilityGreenZone) {
+      liveStabilityColor = const Color(0xFF30D158); // green
+    } else if (liveStability <= provider.stabilityYellowZone) {
+      liveStabilityColor = const Color(0xFFFFD60A); // yellow
+    } else {
+      liveStabilityColor = const Color(0xFFFF453A); // red
+    }
+
+    return Card(
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          _showConfigureDialog(context);
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF007AFF).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.insights, color: Color(0xFF007AFF), size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Stability Zones Configuration',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Green: ≤ ${provider.stabilityGreenZone} | Yellow: ≤ ${provider.stabilityYellowZone}',
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                    if (provider.connectionState == SgPulseConnectionState.connected) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Text(
+                            'Live Stability: ',
+                            style: TextStyle(fontSize: 11, color: Colors.grey),
+                          ),
+                          Text(
+                            '${liveStability.toStringAsFixed(1)} MOA',
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: liveStabilityColor),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),

@@ -179,6 +179,7 @@ class MatchProvider with ChangeNotifier {
           plannedRoundCount: oldStage.plannedRoundCount,
           shotTargetsSequence: oldStage.shotTargetsSequence,
           shotRolls: oldStage.shotRolls,
+          shotStabilities: oldStage.shotStabilities,
         );
       }
 

@@ -11,6 +11,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'dart:math' as math;
+
 import '../models/sg_pulse_device.dart';
 import '../models/pulse_snapshot.dart';
 import '../services/sg_pulse_ble_service.dart';
@@ -18,6 +20,8 @@ import '../services/sg_pulse_ble_service.dart';
 class SgPulseProvider extends ChangeNotifier {
   static const _savedDeviceKey = 'saved_sg_pulse_device';
   static const _rollThresholdKey = 'sg_pulse_roll_threshold';
+  static const _greenZoneKey = 'sg_pulse_stability_green_zone';
+  static const _yellowZoneKey = 'sg_pulse_stability_yellow_zone';
 
   final SgPulseBleService _service;
   
@@ -40,6 +44,8 @@ class SgPulseProvider extends ChangeNotifier {
   Future<void> _initPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     rollThreshold = prefs.getDouble(_rollThresholdKey) ?? 0.3;
+    stabilityGreenZone = prefs.getDouble(_greenZoneKey) ?? 1.0;
+    stabilityYellowZone = prefs.getDouble(_yellowZoneKey) ?? 5.0;
     final saved = prefs.getString(_savedDeviceKey);
     if (saved != null) {
       try {
@@ -77,6 +83,14 @@ class SgPulseProvider extends ChangeNotifier {
 
   /// Firearm roll threshold (capping cant limit)
   double rollThreshold = 0.3;
+
+  /// Firearm stability configurations
+  double stabilityGreenZone = 1.0;
+  double stabilityYellowZone = 5.0;
+
+  /// Internal buffers for calculating stability metrics locally
+  final List<double> _angleHistory = [];
+  final List<double> _stabilityHistory = [];
 
   /// Temporary flag to trigger visual shot feedback in UI.
   bool isShotFlashing = false;
@@ -137,6 +151,8 @@ class SgPulseProvider extends ChangeNotifier {
     connectedDevice = null;
     latestSnapshot = null;
     shotCount = 0;
+    _angleHistory.clear();
+    _stabilityHistory.clear();
     notifyListeners();
   }
 
@@ -145,6 +161,22 @@ class SgPulseProvider extends ChangeNotifier {
     rollThreshold = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_rollThresholdKey, value);
+    notifyListeners();
+  }
+
+  /// Update firearm stability green zone limit
+  Future<void> setStabilityGreenZone(double value) async {
+    stabilityGreenZone = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_greenZoneKey, value);
+    notifyListeners();
+  }
+
+  /// Update firearm stability yellow zone limit
+  Future<void> setStabilityYellowZone(double value) async {
+    stabilityYellowZone = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_yellowZoneKey, value);
     notifyListeners();
   }
 
@@ -175,7 +207,60 @@ class SgPulseProvider extends ChangeNotifier {
   }
 
   void _onPulseData(PulseSnapshot snapshot) {
-    latestSnapshot = snapshot;
+    // 1. Decouple minor tremor/noise by quantizing the incoming pitch and roll to 0.1 degree steps (tenths).
+    // This replicates the `(((int)(val / 100.0d)) * 100) / 1000.0d` quantization in the Drills app.
+    // Also, snap values to absolute zero if below 0.1.
+    double rawPitch = snapshot.pitch.abs() < 0.1 ? 0.0 : snapshot.pitch;
+    double rawRoll = snapshot.roll.abs() < 0.1 ? 0.0 : snapshot.roll;
+
+    final double pitchQuantized = (rawPitch * 10.0).round() / 10.0;
+    final double rollQuantized = (rawRoll * 10.0).round() / 10.0;
+
+    final double pitchRad = pitchQuantized * math.pi / 180.0;
+    final double rollRad = rollQuantized * math.pi / 180.0;
+    final double cosVal = math.cos(pitchRad) * math.cos(rollRad);
+    final double angleDeg = math.acos(cosVal.clamp(-1.0, 1.0)) * 180.0 / math.pi;
+
+    _angleHistory.add(angleDeg);
+    // Keep a shorter window of 12 frames so the average angle adapts faster when movement stops.
+    if (_angleHistory.length > 12) {
+      _angleHistory.removeAt(0);
+    }
+
+    final double avgAngle = _angleHistory.reduce((a, b) => a + b) / _angleHistory.length;
+    double instability = (angleDeg - avgAngle).abs() * 60.0;
+
+    // Apply a noise gate: if instability is under 0.15 MOA (sub-micro tremors), snap it to 0.0.
+    if (instability < 0.15) {
+      instability = 0.0;
+    }
+
+    _stabilityHistory.add(instability);
+    if (_stabilityHistory.length > 5) {
+      _stabilityHistory.removeAt(0);
+    }
+
+    // 2. Replicate the exact recursive decay formula from the Shooters Global app:
+    // stability = (sum(instabilityHistory) + previousStability) / (historyLength + 1)
+    // This creates an extremely aggressive exponential decay (decaying by 1/6th per frame when still),
+    // causing the stability value to snap to 0 virtually instantly.
+    final double historySum = _stabilityHistory.reduce((a, b) => a + b);
+    final double prevStability = latestSnapshot?.stability ?? 0.0;
+    double stability = (historySum + prevStability) / (_stabilityHistory.length + 1);
+
+    if (stability < 0.15) {
+      stability = 0.0;
+    }
+
+    latestSnapshot = PulseSnapshot(
+      roll: snapshot.roll,
+      pitch: snapshot.pitch,
+      yaw: snapshot.yaw,
+      stability: stability,
+      isShoot: snapshot.isShoot,
+      stabilityX: snapshot.stabilityX,
+      stabilityY: snapshot.stabilityY,
+    );
     notifyListeners();
   }
 
@@ -193,10 +278,12 @@ class SgPulseProvider extends ChangeNotifier {
     });
   }
 
-  /// Clear the running shot count.
+  /// Clear the running shot count and stability filters.
   void clearSession() {
     shotCount = 0;
     isShotFlashing = false;
+    _angleHistory.clear();
+    _stabilityHistory.clear();
     notifyListeners();
   }
 

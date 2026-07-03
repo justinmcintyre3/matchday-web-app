@@ -195,6 +195,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
         setState(() {
           _stage.shotTimes = [];
           _stage.shotRolls = [];
+          _stage.shotStabilities = [];
           _stage.shotResults = List.filled(_stage.shotResults.length, 'miss');
           _stoppedByLimit = false;
         });
@@ -213,11 +214,15 @@ class _StageDetailScreenState extends State<StageDetailScreen>
           final sgPulseProvider = context.read<SgPulseProvider>();
           _shotSubscription = sgPulseProvider.shotDetectedStream.listen((_) {
             if (_isShootTimerRunning && _currentShootTimeMs != null) {
-              final elapsedSeconds = (durationMs - _currentShootTimeMs!) / 1000.0;
+              final elapsedSeconds =
+                  (durationMs - _currentShootTimeMs!) / 1000.0;
               final currentRoll = sgPulseProvider.latestSnapshot?.roll ?? 0.0;
+              final currentStability =
+                  sgPulseProvider.latestSnapshot?.stability ?? 0.0;
               setState(() {
                 _stage.shotTimes.add(elapsedSeconds);
                 _stage.shotRolls.add(currentRoll);
+                _stage.shotStabilities.add(currentStability);
               });
 
               // Auto scroll to bottom
@@ -331,9 +336,11 @@ class _StageDetailScreenState extends State<StageDetailScreen>
         timeLimit: currentStage.timeLimit,
         numPositions: currentStage.numPositions,
         plannedRoundCount: currentStage.plannedRoundCount,
-        shotTargetsSequence: List<String>.from(currentStage.shotTargetsSequence),
+        shotTargetsSequence:
+            List<String>.from(currentStage.shotTargetsSequence),
         shotTimes: List<double>.from(currentStage.shotTimes),
         shotRolls: List<double>.from(currentStage.shotRolls),
+        shotStabilities: List<double>.from(currentStage.shotStabilities),
       );
 
       // Automatically prefill previous stage's actual windage if this is a fresh stage
@@ -929,6 +936,10 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     if (_stage.shotRolls.length > totalShotsNeeded) {
       _stage.shotRolls = _stage.shotRolls.sublist(0, totalShotsNeeded);
     }
+    if (_stage.shotStabilities.length > totalShotsNeeded) {
+      _stage.shotStabilities =
+          _stage.shotStabilities.sublist(0, totalShotsNeeded);
+    }
     _stage.numTargets = _stage.targets.length;
   }
 
@@ -1397,15 +1408,20 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                       Expanded(
                                         flex: 4,
                                         child: Container(
-                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 8),
                                           decoration: BoxDecoration(
-                                            border: Border.all(color: Colors.white10),
-                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(
+                                                color: Colors.white10),
+                                            borderRadius:
+                                                BorderRadius.circular(4),
                                           ),
                                           child: Center(
                                             child: Text(
                                               '${target.shotsCount} ${target.shotsCount == 1 ? 'Shot' : 'Shots'}',
-                                              style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                              style: const TextStyle(
+                                                  fontSize: 11,
+                                                  color: Colors.grey),
                                             ),
                                           ),
                                         ),
@@ -1616,9 +1632,11 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                       _showCofSetupDialog();
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF007AFF).withValues(alpha: 0.1),
+                      backgroundColor:
+                          const Color(0xFF007AFF).withValues(alpha: 0.1),
                       foregroundColor: const Color(0xFF007AFF),
-                      side: const BorderSide(color: Color(0xFF007AFF), width: 1),
+                      side:
+                          const BorderSide(color: Color(0xFF007AFF), width: 1),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
@@ -1876,7 +1894,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       padding: const EdgeInsets.all(24.0),
       alignment: Alignment.center,
       child: Column(
-        mainAxisAlignment: showShotList ? MainAxisAlignment.start : MainAxisAlignment.center,
+        mainAxisAlignment:
+            showShotList ? MainAxisAlignment.start : MainAxisAlignment.center,
         children: [
           if (!showShotList) ...[
             // Pulse target decoration
@@ -1919,7 +1938,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
           ],
 
           // Watch telemetry state card
-          if (_stage.timeRemaining > 0 || _stage.avgHeartRate > 0 || _isShootTimerRunning)
+          if (_stage.timeRemaining > 0 ||
+              _stage.avgHeartRate > 0 ||
+              _isShootTimerRunning)
             Card(
               child: Padding(
                 padding: const EdgeInsets.symmetric(
@@ -1984,17 +2005,44 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                 itemCount: _stage.shotTimes.length,
                 itemBuilder: (context, index) {
                   final shotTime = _stage.shotTimes[index];
-                  final split = index == 0 ? shotTime : shotTime - _stage.shotTimes[index - 1];
+                  final split = index == 0
+                      ? shotTime
+                      : shotTime - _stage.shotTimes[index - 1];
                   final targetName = _getTargetNameForShotIndex(index);
-                  final roll = index < _stage.shotRolls.length ? _stage.shotRolls[index] : 0.0;
-                  
-                  final rollThreshold = context.read<SgPulseProvider>().rollThreshold;
+                  final sgPulseProvider = context.read<SgPulseProvider>();
+                  final rollThreshold = sgPulseProvider.rollThreshold;
+
+                  final roll = index < _stage.shotRolls.length
+                      ? _stage.shotRolls[index]
+                      : 0.0;
                   final sign = roll < 0 ? -1.0 : 1.0;
-                  final truncatedRoll = sign * ((roll.abs() * 10).floor() / 10.0);
-                  final isWithinThreshold = truncatedRoll.abs() <= rollThreshold;
-                  final rollColor = isWithinThreshold
-                      ? const Color(0xFF30D158)
-                      : (truncatedRoll < 0 ? const Color(0xFFFF453A) : const Color(0xFF0A84FF));
+                  final truncatedRoll =
+                      sign * ((roll.abs() * 10).floor() / 10.0);
+                  final isWithinThreshold =
+                      truncatedRoll.abs() <= rollThreshold;
+                  final rollColor = roll == 0.0
+                      ? Colors.grey
+                      : (isWithinThreshold
+                          ? const Color(0xFF30D158)
+                          : (truncatedRoll < 0
+                              ? const Color(0xFFFF453A)
+                              : const Color(0xFF0A84FF)));
+
+                  final hasRoll = index < _stage.shotRolls.length;
+                  final hasStability = index < _stage.shotStabilities.length;
+                  final rollVal = hasRoll ? _stage.shotRolls[index] : 0.0;
+                  final stability = hasStability ? _stage.shotStabilities[index] : 0.0;
+
+                  Color stabilityColor = Colors.grey;
+                  if (hasStability) {
+                    if (stability <= sgPulseProvider.stabilityGreenZone) {
+                      stabilityColor = const Color(0xFF30D158); // green
+                    } else if (stability <= sgPulseProvider.stabilityYellowZone) {
+                      stabilityColor = const Color(0xFFFFD60A); // yellow
+                    } else {
+                      stabilityColor = const Color(0xFFFF453A); // red
+                    }
+                  }
 
                   return Card(
                     margin: const EdgeInsets.symmetric(vertical: 4.0),
@@ -2007,7 +2055,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                       dense: true,
                       leading: CircleAvatar(
                         radius: 12,
-                        backgroundColor: const Color(0xFF007AFF).withValues(alpha: 0.1),
+                        backgroundColor:
+                            const Color(0xFF007AFF).withValues(alpha: 0.1),
                         child: Text(
                           '${index + 1}',
                           style: const TextStyle(
@@ -2025,15 +2074,41 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                           fontSize: 13,
                         ),
                       ),
-                      subtitle: roll == 0.0
+                      subtitle: (!hasRoll && !hasStability)
                           ? null
-                          : Text(
-                              'Roll: ${truncatedRoll.toStringAsFixed(1)}° ${truncatedRoll < 0 ? "Left" : "Right"}',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: rollColor,
-                                fontWeight: FontWeight.w500,
-                              ),
+                          : Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (hasRoll && rollVal != 0.0)
+                                  Text(
+                                    'Roll: ${truncatedRoll.toStringAsFixed(1)}° ${truncatedRoll < 0 ? "Left" : "Right"}',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: rollColor,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                if (hasStability)
+                                  Text.rich(
+                                    TextSpan(
+                                      children: [
+                                        const TextSpan(
+                                            text: 'Stability: ',
+                                            style: TextStyle(color: Colors.grey)),
+                                        TextSpan(
+                                          text: stability.toStringAsFixed(1),
+                                          style: TextStyle(
+                                              color: stabilityColor,
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                      ],
+                                    ),
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                              ],
                             ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -2147,7 +2222,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                     // Targets list inside array
                     ...List.generate(array.targets.length, (targetIdxInside) {
                       final target = array.targets[targetIdxInside];
-                      final List<int> shotIndices = _getShotIndicesForTarget(arrayIdx, targetIdxInside);
+                      final List<int> shotIndices =
+                          _getShotIndicesForTarget(arrayIdx, targetIdxInside);
 
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 6.0),
@@ -2232,21 +2308,47 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                   icon = Icons.timer_outlined;
                                 }
 
-                                final roll = globalShotIdx < _stage.shotRolls.length
-                                    ? _stage.shotRolls[globalShotIdx]
-                                    : 0.0;
+                                final roll =
+                                    globalShotIdx < _stage.shotRolls.length
+                                        ? _stage.shotRolls[globalShotIdx]
+                                        : 0.0;
                                 final sign = roll < 0 ? -1.0 : 1.0;
-                                final truncatedRoll = sign * ((roll.abs() * 10).floor() / 10.0);
+                                final truncatedRoll =
+                                    sign * ((roll.abs() * 10).floor() / 10.0);
                                 final rollText = roll == 0.0
                                     ? '---'
                                     : '${truncatedRoll.toStringAsFixed(1)}°${truncatedRoll < 0 ? "L" : "R"}';
-                                final rollThreshold = context.read<SgPulseProvider>().rollThreshold;
-                                final isWithinThreshold = truncatedRoll.abs() <= rollThreshold;
+                                final sgPulseProvider =
+                                    context.read<SgPulseProvider>();
+                                final rollThreshold =
+                                    sgPulseProvider.rollThreshold;
+                                final isWithinThreshold =
+                                    truncatedRoll.abs() <= rollThreshold;
                                 final rollColor = roll == 0.0
                                     ? Colors.grey
                                     : (isWithinThreshold
                                         ? const Color(0xFF30D158)
-                                        : (truncatedRoll < 0 ? const Color(0xFFFF453A) : const Color(0xFF0A84FF)));
+                                        : (truncatedRoll < 0
+                                            ? const Color(0xFFFF453A)
+                                            : const Color(0xFF0A84FF)));
+
+                                final hasStability = globalShotIdx < _stage.shotStabilities.length;
+                                 final stability = hasStability
+                                     ? _stage.shotStabilities[globalShotIdx]
+                                     : 0.0;
+                                 final stabilityText = hasStability
+                                     ? 'S: ${stability.toStringAsFixed(1)}'
+                                     : '---';
+                                 Color stabilityColor = Colors.grey;
+                                 if (hasStability) {
+                                   if (stability <= sgPulseProvider.stabilityGreenZone) {
+                                     stabilityColor = const Color(0xFF30D158); // green
+                                   } else if (stability <= sgPulseProvider.stabilityYellowZone) {
+                                     stabilityColor = const Color(0xFFFFD60A); // yellow
+                                   } else {
+                                     stabilityColor = const Color(0xFFFF453A); // red
+                                   }
+                                 }
 
                                 return Column(
                                   mainAxisSize: MainAxisSize.min,
@@ -2275,7 +2377,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                           color: bgColor,
                                           shape: BoxShape.circle,
                                           border: Border.all(
-                                            color: textColor.withValues(alpha: 0.3),
+                                            color: textColor.withValues(
+                                                alpha: 0.3),
                                             width: 1.5,
                                           ),
                                         ),
@@ -2285,7 +2388,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                                 MainAxisAlignment.center,
                                             children: [
                                               Text(
-                                                _stage.shotTimes.length > globalShotIdx
+                                                _stage.shotTimes.length >
+                                                        globalShotIdx
                                                     ? '${_stage.shotTimes[globalShotIdx].toStringAsFixed(1)}s'
                                                     : 'S${shotIdx + 1}',
                                                 style: TextStyle(
@@ -2309,6 +2413,15 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                         fontSize: 9,
                                         fontWeight: FontWeight.bold,
                                         color: rollColor,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      stabilityText,
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                        color: stabilityColor,
                                       ),
                                     ),
                                   ],
@@ -2529,10 +2642,11 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                         _stage.environmentalErrors = '';
                         _stage.windPlan.actualValue = 0.0;
                         _stage.windPlan.actualDirection = 'None';
-                        // Reset COF sequence, shot times, rolls, and restore default target shot counts
+                        // Reset COF sequence, shot times, rolls, stabilities, and restore default target shot counts
                         _stage.shotTargetsSequence = [];
                         _stage.shotTimes = [];
                         _stage.shotRolls = [];
+                        _stage.shotStabilities = [];
                         for (var array in _stage.targetArrays) {
                           for (var target in array.targets) {
                             target.shotsCount = 1;
@@ -2886,8 +3000,10 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                 setState(() {
                   _stage.plannedRoundCount = tempRounds;
                   // Adjust sequence if it exceeds the new planned round count
-                  if (_stage.shotTargetsSequence.length > _stage.plannedRoundCount) {
-                    _stage.shotTargetsSequence = _stage.shotTargetsSequence.sublist(0, _stage.plannedRoundCount);
+                  if (_stage.shotTargetsSequence.length >
+                      _stage.plannedRoundCount) {
+                    _stage.shotTargetsSequence = _stage.shotTargetsSequence
+                        .sublist(0, _stage.plannedRoundCount);
                     _adjustShotResultsLength();
                   }
                 });
@@ -3196,7 +3312,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 12,
-                                  color: isFull ? const Color(0xFF00E676) : Colors.white,
+                                  color: isFull
+                                      ? const Color(0xFF00E676)
+                                      : Colors.white,
                                 ),
                               ),
                             ],
@@ -3205,7 +3323,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                           if (tempSequence.isEmpty)
                             const Text(
                               'No targets tapped yet.',
-                              style: TextStyle(color: Colors.grey, fontSize: 11),
+                              style:
+                                  TextStyle(color: Colors.grey, fontSize: 11),
                             )
                           else
                             SizedBox(
@@ -3221,7 +3340,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                     final int aIdx = int.parse(parts[0]);
                                     final int tIdx = int.parse(parts[1]);
                                     if (aIdx < _stage.targetArrays.length &&
-                                        tIdx < _stage.targetArrays[aIdx].targets.length) {
+                                        tIdx <
+                                            _stage.targetArrays[aIdx].targets
+                                                .length) {
                                       label = 'A${aIdx + 1}-T${tIdx + 1}';
                                     }
                                   }
@@ -3230,10 +3351,12 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 8, vertical: 4),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF007AFF).withValues(alpha: 0.15),
+                                      color: const Color(0xFF007AFF)
+                                          .withValues(alpha: 0.15),
                                       borderRadius: BorderRadius.circular(4),
                                       border: Border.all(
-                                          color: const Color(0xFF007AFF).withValues(alpha: 0.3)),
+                                          color: const Color(0xFF007AFF)
+                                              .withValues(alpha: 0.3)),
                                     ),
                                     child: Row(
                                       children: [
@@ -3298,12 +3421,15 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                     Wrap(
                                       spacing: 8,
                                       runSpacing: 8,
-                                      children: List.generate(array.targets.length, (targetIdx) {
+                                      children: List.generate(
+                                          array.targets.length, (targetIdx) {
                                         final target = array.targets[targetIdx];
                                         final key = '${arrayIdx}_$targetIdx';
-                                        
+
                                         // Count occurrences in current temp sequence
-                                        final count = tempSequence.where((k) => k == key).length;
+                                        final count = tempSequence
+                                            .where((k) => k == key)
+                                            .length;
 
                                         return ElevatedButton(
                                           onPressed: isFull
@@ -3316,11 +3442,14 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                                 },
                                           style: ElevatedButton.styleFrom(
                                             backgroundColor: count > 0
-                                                ? const Color(0xFF00E676).withValues(alpha: 0.15)
-                                                : Colors.white.withValues(alpha: 0.05),
+                                                ? const Color(0xFF00E676)
+                                                    .withValues(alpha: 0.15)
+                                                : Colors.white
+                                                    .withValues(alpha: 0.05),
                                             side: BorderSide(
                                               color: count > 0
-                                                  ? const Color(0xFF00E676).withValues(alpha: 0.4)
+                                                  ? const Color(0xFF00E676)
+                                                      .withValues(alpha: 0.4)
                                                   : Colors.white10,
                                             ),
                                             padding: const EdgeInsets.symmetric(
@@ -3334,7 +3463,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                                 style: const TextStyle(
                                                     color: Colors.white,
                                                     fontSize: 12,
-                                                    fontWeight: FontWeight.bold),
+                                                    fontWeight:
+                                                        FontWeight.bold),
                                               ),
                                               if (count > 0)
                                                 Text(
@@ -3342,7 +3472,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                                   style: const TextStyle(
                                                       color: Color(0xFF00E676),
                                                       fontSize: 10,
-                                                      fontWeight: FontWeight.bold),
+                                                      fontWeight:
+                                                          FontWeight.bold),
                                                 ),
                                             ],
                                           ),
@@ -3367,7 +3498,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                       tempSequence.clear();
                     });
                   },
-                  style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+                  style:
+                      TextButton.styleFrom(foregroundColor: Colors.redAccent),
                   child: const Text('Reset'),
                 ),
                 TextButton(
