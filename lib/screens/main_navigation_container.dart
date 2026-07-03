@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../features/kestrel_ble/providers/kestrel_provider.dart';
 import '../features/kestrel_ble/screens/kestrel_detail_screen.dart';
+import '../features/sg_pulse/providers/sg_pulse_provider.dart';
 import 'matches_list_screen.dart';
 import 'checklist_groups_screen.dart';
 
@@ -17,6 +18,7 @@ class MainNavigationContainer extends StatefulWidget {
 class _MainNavigationContainerState extends State<MainNavigationContainer> {
   int _selectedIndex = 0;
   StreamSubscription? _latMismatchSub;
+  StreamSubscription? _sgPulseBatteryLowSub;
 
   final List<Widget> _screens = [
     const MatchesListScreen(),
@@ -30,11 +32,17 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
       if (!mounted) return;
       _showLatitudeMismatchDialog(kestrelLat);
     });
+
+    _sgPulseBatteryLowSub = context.read<SgPulseProvider>().onBatteryLow.listen((batteryLevel) {
+      if (!mounted) return;
+      _showSgPulseBatteryLowDialog(batteryLevel);
+    });
   }
 
   @override
   void dispose() {
     _latMismatchSub?.cancel();
+    _sgPulseBatteryLowSub?.cancel();
     super.dispose();
   }
 
@@ -67,6 +75,36 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
               );
             },
             child: const Text('Update'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _showSgPulseBatteryLowDialog(int batteryLevel) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('SG Pulse Battery Low'),
+        content: Text(
+          'Your SG Pulse battery is at $batteryLevel%.\n\n'
+          'Please connect your device to a charger.\n'
+          'Press "Ignore" to mute this warning until the next full charge.'
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              context.read<SgPulseProvider>().silenceBatteryLowWarning();
+              Navigator.pop(ctx);
+            },
+            child: const Text('Ignore', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+            },
+            child: const Text('OK'),
           ),
         ],
       ),

@@ -317,7 +317,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       subtitle: Text(
                         sgPulseConnected 
-                          ? 'SG Pulse • Connected'
+                          ? 'SG Pulse • Connected${sgPulse.batteryLevel != null ? ' • ${sgPulse.batteryLevel}%' : ''}'
                           : 'SG Pulse • Disconnected',
                         style: TextStyle(
                           color: sgPulseConnected ? const Color(0xFF00E676) : Colors.white38,

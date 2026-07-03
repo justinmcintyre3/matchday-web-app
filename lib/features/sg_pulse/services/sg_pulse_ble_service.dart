@@ -25,6 +25,7 @@ typedef SgPulseScanResultCallback      = void Function(SgPulseDevice device);
 typedef SgPulseConnectionCallback      = void Function(SgPulseConnectionState state);
 typedef SgPulsePulseDataCallback       = void Function(PulseSnapshot snapshot);
 typedef SgPulseShotDetectedCallback    = void Function();
+typedef SgPulseBatteryCallback         = void Function(int batteryLevel);
 
 // ──────────────────────────────────────────────────────────────────────────────
 // SgPulseBleService
@@ -36,6 +37,7 @@ class SgPulseBleService {
   SgPulseConnectionCallback?   onConnectionStateChanged;
   SgPulsePulseDataCallback?    onPulseData;
   SgPulseShotDetectedCallback? onShotDetected;
+  SgPulseBatteryCallback?      onBatteryLevelReceived;
 
   // Internal state
   BluetoothDevice? _connectedDevice;
@@ -151,9 +153,21 @@ class SgPulseBleService {
 
     try {
       final services = await device.discoverServices();
+      BluetoothCharacteristic? batteryChar;
 
       for (final service in services) {
-        debugPrint('[SgPulseBLE] Found service: ${service.serviceUuid.str}');
+        final serviceUuid = service.serviceUuid.str.toLowerCase();
+        
+        // Find battery service
+        if (serviceUuid == '180f' || serviceUuid == '0000180f-0000-1000-8000-00805f9b34fb') {
+          for (final char in service.characteristics) {
+            final charUuid = char.characteristicUuid.str.toLowerCase();
+            if (charUuid == '2a19' || charUuid == '00002a19-0000-1000-8000-00805f9b34fb') {
+              batteryChar = char;
+            }
+          }
+        }
+
         for (final char in service.characteristics) {
           final uuid = char.characteristicUuid.str.toLowerCase();
           final p = char.properties;
@@ -178,6 +192,19 @@ class SgPulseBleService {
 
       onConnectionStateChanged?.call(SgPulseConnectionState.connected);
       debugPrint('[SgPulseBLE] Connected and streaming');
+
+      if (batteryChar != null) {
+        try {
+          final bytes = await batteryChar.read();
+          if (bytes.isNotEmpty) {
+            final level = bytes[0];
+            debugPrint('[SgPulseBLE] Battery level read: $level%');
+            onBatteryLevelReceived?.call(level);
+          }
+        } catch (e) {
+          debugPrint('[SgPulseBLE] Failed to read battery level: $e');
+        }
+      }
     } catch (e) {
       debugPrint('[SgPulseBLE] Service discovery error: $e');
       onConnectionStateChanged?.call(SgPulseConnectionState.error);

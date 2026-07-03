@@ -22,11 +22,16 @@ class SgPulseProvider extends ChangeNotifier {
   static const _rollThresholdKey = 'sg_pulse_roll_threshold';
   static const _greenZoneKey = 'sg_pulse_stability_green_zone';
   static const _yellowZoneKey = 'sg_pulse_stability_yellow_zone';
+  static const _batteryWarningThresholdKey = 'sg_pulse_battery_warning_threshold';
 
   final SgPulseBleService _service;
   
   final _shotDetectedController = StreamController<void>.broadcast();
   Stream<void> get shotDetectedStream => _shotDetectedController.stream;
+
+  bool _hasWarnedBatteryThisSession = false;
+  final _batteryLowController = StreamController<int>.broadcast();
+  Stream<int> get onBatteryLow => _batteryLowController.stream;
  
   SgPulseProvider({SgPulseBleService? service})
       : _service = service ?? SgPulseBleService() {
@@ -34,6 +39,7 @@ class SgPulseProvider extends ChangeNotifier {
     _service.onConnectionStateChanged = _onConnectionStateChanged;
     _service.onPulseData             = _onPulseData;
     _service.onShotDetected          = _onShotDetected;
+    _service.onBatteryLevelReceived  = _onBatteryLevelReceived;
     _initPrefs();
   }
 
@@ -46,6 +52,7 @@ class SgPulseProvider extends ChangeNotifier {
     rollThreshold = prefs.getDouble(_rollThresholdKey) ?? 0.3;
     stabilityGreenZone = prefs.getDouble(_greenZoneKey) ?? 1.0;
     stabilityYellowZone = prefs.getDouble(_yellowZoneKey) ?? 5.0;
+    batteryWarningThreshold = prefs.getInt(_batteryWarningThresholdKey) ?? 25;
     final saved = prefs.getString(_savedDeviceKey);
     if (saved != null) {
       try {
@@ -87,6 +94,9 @@ class SgPulseProvider extends ChangeNotifier {
   /// Firearm stability configurations
   double stabilityGreenZone = 1.0;
   double stabilityYellowZone = 5.0;
+
+  /// Battery warning threshold percentage
+  int batteryWarningThreshold = 25;
 
   /// Internal buffers for calculating stability metrics locally
   final List<double> _angleHistory = [];
@@ -287,6 +297,42 @@ class SgPulseProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> _onBatteryLevelReceived(int batteryLevel) async {
+    if (connectedDevice == null) return;
+    connectedDevice = connectedDevice!.copyWith(batteryLevel: batteryLevel);
+    _saveDevice();
+    notifyListeners();
+
+    final prefs = await SharedPreferences.getInstance();
+    
+    if (batteryLevel < batteryWarningThreshold) {
+      if (!_hasWarnedBatteryThisSession) {
+        _hasWarnedBatteryThisSession = true;
+        final silenced = prefs.getBool('silence_sg_pulse_battery_low') ?? false;
+        debugPrint('[SgPulseProvider] Battery is low: $batteryLevel%. silenced: $silenced');
+        if (!silenced) {
+          _batteryLowController.add(batteryLevel);
+        }
+      }
+    } else {
+      // Clear ignore if battery is >= threshold
+      debugPrint('[SgPulseProvider] Battery is healthy: $batteryLevel%. Clearing silence flag.');
+      await prefs.setBool('silence_sg_pulse_battery_low', false);
+    }
+  }
+
+  Future<void> silenceBatteryLowWarning() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('silence_sg_pulse_battery_low', true);
+  }
+
+  Future<void> setBatteryWarningThreshold(int value) async {
+    batteryWarningThreshold = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_batteryWarningThresholdKey, value);
+    notifyListeners();
+  }
+
   // ──────────────────────────────────────────────────────────────────────────
   // Helpers
   // ──────────────────────────────────────────────────────────────────────────
@@ -300,6 +346,7 @@ class SgPulseProvider extends ChangeNotifier {
   void dispose() {
     _service.dispose();
     _shotDetectedController.close();
+    _batteryLowController.close();
     super.dispose();
   }
 }
