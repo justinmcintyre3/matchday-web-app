@@ -8,14 +8,14 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/kestrel_device.dart';
 import '../services/kestrel_ble_service.dart';
 
-class KestrelProvider extends ChangeNotifier {
+class KestrelProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const _savedDeviceKey = 'saved_kestrel_device';
   static const _batteryWarningThresholdKey = 'kestrel_battery_warning_threshold';
   final KestrelBleService _service;
@@ -37,6 +37,7 @@ class KestrelProvider extends ChangeNotifier {
     _service.onConnectionStateChanged = _onConnectionStateChanged;
     _service.onRxData = _onRxData;
     _service.onBatteryLevelReceived = _onBatteryLevelReceived;
+    WidgetsBinding.instance.addObserver(this);
     
     _service.onEnvironmentReceived.listen((env) {
       final kestrelLat = env['latitude'] as double?;
@@ -260,8 +261,11 @@ class KestrelProvider extends ChangeNotifier {
     }
     // Device dropped — issue an autoConnect request to let the OS handle reconnection
     else if (state == KestrelConnectionState.disconnected && connectedDevice != null) {
-      debugPrint('[KestrelProvider] Natural disconnect. Issuing autoConnect request.');
-      connect(connectedDevice!, autoConnect: true);
+      final lifecycle = WidgetsBinding.instance.lifecycleState;
+      if (lifecycle == AppLifecycleState.resumed) {
+        debugPrint('[KestrelProvider] Natural disconnect. Issuing autoConnect request.');
+        connect(connectedDevice!, autoConnect: true);
+      }
     }
 
     notifyListeners();
@@ -350,7 +354,22 @@ class KestrelProvider extends ChangeNotifier {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    debugPrint('[KestrelProvider] App lifecycle state changed: $state');
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      if (isConnected) {
+        disconnect();
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      if (connectedDevice != null && !isConnected && connectionState != KestrelConnectionState.connecting) {
+        connect(connectedDevice!, autoConnect: true);
+      }
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _service.dispose();
     _latitudeMismatchController.close();
     _batteryLowController.close();

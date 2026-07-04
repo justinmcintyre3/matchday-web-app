@@ -359,8 +359,11 @@ class Rx5000Provider extends ChangeNotifier with WidgetsBindingObserver {
       notifyListeners();
 
       if (state == Rx5000ConnectionState.disconnected && connectedDevice != null && _activePageCount > 0) {
-        debugPrint('[Rx5000Provider] Natural disconnect. Issuing autoConnect request.');
-        connect(connectedDevice!, autoConnect: true);
+        final lifecycle = WidgetsBinding.instance.lifecycleState;
+        if (lifecycle == AppLifecycleState.resumed) {
+          debugPrint('[Rx5000Provider] Natural disconnect. Issuing autoConnect request.');
+          connect(connectedDevice!, autoConnect: true);
+        }
       }
     }
   }
