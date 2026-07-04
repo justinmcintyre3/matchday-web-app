@@ -96,10 +96,13 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     'Other'
   ];
 
+  late Rx5000Provider _rxProvider;
+
   @override
   void initState() {
     super.initState();
-    context.read<Rx5000Provider>().incrementActivePages();
+    _rxProvider = context.read<Rx5000Provider>();
+    _rxProvider.incrementActivePages();
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       if (!mounted) return;
@@ -389,7 +392,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
 
   @override
   void dispose() {
-    context.read<Rx5000Provider>().decrementActivePages();
+    _rxProvider.decrementActivePages();
     _watchSubscription?.cancel();
     _liveUpdateSubscription?.cancel();
     _timerStartedSubscription?.cancel();

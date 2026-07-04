@@ -112,13 +112,6 @@ class Rx5000Provider extends ChangeNotifier with WidgetsBindingObserver {
       await _service.disconnect();
     } catch (e) {
       debugPrint('[Rx5000Provider] Error during disconnect: $e');
-    } finally {
-      if (connectedDevice != null) {
-        connectedDevice = connectedDevice!.copyWith(
-          state: Rx5000ConnectionState.disconnected,
-        );
-      }
-      notifyListeners();
     }
   }
 
@@ -631,7 +624,7 @@ class Rx5000Provider extends ChangeNotifier with WidgetsBindingObserver {
       }
     } else if (state == AppLifecycleState.resumed) {
       if (_activePageCount > 0 && connectedDevice != null && !isConnected && connectionState != Rx5000ConnectionState.connecting) {
-        connect(connectedDevice!);
+        connect(connectedDevice!, autoConnect: true);
       }
     }
   }

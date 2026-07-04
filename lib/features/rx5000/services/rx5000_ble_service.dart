@@ -702,9 +702,7 @@ class Rx5000BleService {
     _isAutoConnecting = false;
     _isDiscoveringOrConnected = false;
     await _notifySubscription?.cancel();
-    await _connectionSubscription?.cancel();
     _notifySubscription = null;
-    _connectionSubscription = null;
     _writeCharacteristic = null;
     _pendingRequests.clear();
 

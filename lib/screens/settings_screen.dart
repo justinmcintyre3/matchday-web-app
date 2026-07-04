@@ -28,16 +28,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool? _isPaired;
   bool _loading = true;
 
+  late Rx5000Provider _rxProvider;
+
   @override
   void initState() {
     super.initState();
+    _rxProvider = context.read<Rx5000Provider>();
+    _rxProvider.incrementActivePages();
     _loadWatchStatus();
-    context.read<Rx5000Provider>().incrementActivePages();
   }
 
   @override
   void dispose() {
-    context.read<Rx5000Provider>().decrementActivePages();
+    _rxProvider.decrementActivePages();
     super.dispose();
   }
 

@@ -13,15 +13,18 @@ class Rx5000DetailScreen extends StatefulWidget {
 }
 
 class _Rx5000DetailScreenState extends State<Rx5000DetailScreen> {
+  late Rx5000Provider _rxProvider;
+
   @override
   void initState() {
     super.initState();
-    context.read<Rx5000Provider>().incrementActivePages();
+    _rxProvider = context.read<Rx5000Provider>();
+    _rxProvider.incrementActivePages();
   }
 
   @override
   void dispose() {
-    context.read<Rx5000Provider>().decrementActivePages();
+    _rxProvider.decrementActivePages();
     super.dispose();
   }
 
