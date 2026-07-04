@@ -22,6 +22,9 @@ class Rx5000Provider extends ChangeNotifier with WidgetsBindingObserver {
   bool _headingModePersistent = false;
   int _activePageCount = 0;
 
+  final StreamController<Map<String, dynamic>> _rangeStreamController = StreamController.broadcast();
+  Stream<Map<String, dynamic>> get onRangeData => _rangeStreamController.stream;
+
   Rx5000Provider({Rx5000BleService? service})
       : _service = service ?? Rx5000BleService() {
     _service.onScanResult = _onScanResult;
@@ -44,6 +47,7 @@ class Rx5000Provider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> _initPrefs() async {
     final prefs = await SharedPreferences.getInstance();
+    _headingModePersistent = prefs.getBool('rx5000_pin_mode_persistent') ?? false;
     final saved = prefs.getString(_savedDeviceKey);
     if (saved != null) {
       try {
@@ -261,6 +265,8 @@ class Rx5000Provider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> setInPinMode(bool enabled) async {
     if (!isConnected) return;
     _headingModePersistent = enabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('rx5000_pin_mode_persistent', enabled);
     try {
       await _service.writeAndAwaitNotification(1001, value: enabled ? 1 : 0);
       connectedDevice = connectedDevice?.copyWith(inPinMode: enabled);
@@ -456,7 +462,16 @@ class Rx5000Provider extends ChangeNotifier with WidgetsBindingObserver {
       final bleIdleStr = await _service.readRegister(1017);
 
       final isPinMode = (int.tryParse(pinModeStr) ?? 0) == 1;
-      _headingModePersistent = isPinMode;
+      
+      if (_headingModePersistent && !isPinMode) {
+        // Enforce persistent mode on hardware upon connection
+        debugPrint('[Rx5000Provider] Enforcing persistent Pin Mode (Reg 1001 = 1)...');
+        setInPinMode(true);
+      } else {
+        _headingModePersistent = isPinMode;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('rx5000_pin_mode_persistent', isPinMode);
+      }
 
       connectedDevice = connectedDevice?.copyWith(
         outputMode: Rx5000OutputMode.values[int.tryParse(modeStr) ?? 0],
@@ -466,7 +481,7 @@ class Rx5000Provider extends ChangeNotifier with WidgetsBindingObserver {
         batteryLevel: int.tryParse(batteryStr) ?? 100,
         tempCelsius: _parseTemperature(int.tryParse(tempStr) ?? 0),
         lastTarget: (int.tryParse(lastTargetStr) ?? 0) == 1,
-        inPinMode: isPinMode,
+        inPinMode: _headingModePersistent,
         compassCalPercentage: int.tryParse(calPercentageStr) ?? 0,
         compassCalQuality: int.tryParse(calQualityStr) ?? 0,
         isCompassCalibrating: (int.tryParse(calInProgressStr) ?? 0) == 1,
@@ -589,6 +604,8 @@ class Rx5000Provider extends ChangeNotifier with WidgetsBindingObserver {
 
     debugPrint('[Rx5000Provider] Range Notification: $data');
 
+    _rangeStreamController.add(data);
+
     final headingVal = data['heading'] as double?;
 
     connectedDevice = connectedDevice!.copyWith(
@@ -635,6 +652,7 @@ class Rx5000Provider extends ChangeNotifier with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _rangeStreamController.close();
     _service.dispose();
     super.dispose();
   }

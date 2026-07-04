@@ -98,11 +98,46 @@ class _StageDetailScreenState extends State<StageDetailScreen>
 
   late Rx5000Provider _rxProvider;
 
+  final Map<int, TextEditingController> _rangeControllers = {};
+  final Map<int, TextEditingController> _dofControllers = {};
+  final Map<int, FocusNode> _rangeFocusNodes = {};
+  StreamSubscription<Map<String, dynamic>>? _rangeSubscription;
+
+  TextEditingController _getRangeController(TargetArray array) {
+    final key = array.hashCode;
+    if (!_rangeControllers.containsKey(key)) {
+      _rangeControllers[key] = TextEditingController(
+          text: array.distance.replaceAll(RegExp(r'[^0-9.]'), ''));
+    }
+    return _rangeControllers[key]!;
+  }
+
+  TextEditingController _getDofController(TargetArray array) {
+    final key = array.hashCode;
+    if (!_dofControllers.containsKey(key)) {
+      _dofControllers[key] = TextEditingController(text: array.degreeOfFire);
+    }
+    return _dofControllers[key]!;
+  }
+
+  FocusNode _getRangeFocusNode(TargetArray array) {
+    final key = array.hashCode;
+    if (!_rangeFocusNodes.containsKey(key)) {
+      final node = FocusNode();
+      node.addListener(() {
+        if (mounted) setState(() {});
+      });
+      _rangeFocusNodes[key] = node;
+    }
+    return _rangeFocusNodes[key]!;
+  }
+
   @override
   void initState() {
     super.initState();
     _rxProvider = context.read<Rx5000Provider>();
     _rxProvider.incrementActivePages();
+    _rangeSubscription = _rxProvider.onRangeData.listen(_onRangeDataReceived);
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       if (!mounted) return;
@@ -392,6 +427,11 @@ class _StageDetailScreenState extends State<StageDetailScreen>
 
   @override
   void dispose() {
+    _rangeSubscription?.cancel();
+    for (final c in _rangeControllers.values) { c.dispose(); }
+    for (final c in _dofControllers.values) { c.dispose(); }
+    for (final n in _rangeFocusNodes.values) { n.dispose(); }
+    
     _rxProvider.decrementActivePages();
     _watchSubscription?.cancel();
     _liveUpdateSubscription?.cancel();
@@ -408,6 +448,41 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     _shootScrollController.dispose();
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _onRangeDataReceived(Map<String, dynamic> data) {
+    if (!mounted) return;
+    
+    TargetArray? focusedArray;
+    for (final array in _stage.targetArrays) {
+      if (_rangeFocusNodes[array.hashCode]?.hasFocus == true) {
+        focusedArray = array;
+        break;
+      }
+    }
+
+    if (focusedArray != null) {
+      final range = data['range'] as double?;
+      final heading = data['heading'] as double?;
+
+      if (range != null) {
+        final rangeStr = range.toStringAsFixed(1);
+        _getRangeController(focusedArray).text = rangeStr;
+        focusedArray.distance = '$rangeStr YD';
+      }
+      
+      if (heading != null) {
+        final headingStr = heading.round().toString();
+        _getDofController(focusedArray).text = headingStr;
+        focusedArray.degreeOfFire = headingStr;
+      }
+
+      setState(() {
+        _adjustShotResultsLength();
+      });
+      HapticFeedback.lightImpact();
+      _saveStage(exitScreen: false);
+    }
   }
 
   void _stopStageEarly() async {
@@ -1232,13 +1307,22 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(
-                                  'ARRAY ${arrayIdx + 1}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                    color: Color(0xFF007AFF),
-                                  ),
+                                Row(
+                                  children: [
+                                    Text(
+                                      'ARRAY ${arrayIdx + 1}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                        color: Color(0xFF007AFF),
+                                      ),
+                                    ),
+                                    if (context.watch<Rx5000Provider>().isConnected && _getRangeFocusNode(array).hasFocus)
+                                      const Padding(
+                                        padding: EdgeInsets.only(left: 6.0),
+                                        child: Icon(Icons.track_changes, color: Colors.redAccent, size: 14),
+                                      ),
+                                  ],
                                 ),
                                 IconButton(
                                   visualDensity: VisualDensity.compact,
@@ -1260,15 +1344,14 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                 Expanded(
                                   flex: 5,
                                   child: TextFormField(
-                                    key: Key(
-                                        'arr_dist_${arrayIdx}_${array.distance}'),
-                                    initialValue: array.distance
-                                        .replaceAll(RegExp(r'[^0-9.]'), ''),
-                                    keyboardType: TextInputType.number,
+                                    controller: _getRangeController(array),
+                                    focusNode: _getRangeFocusNode(array),
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    textInputAction: TextInputAction.done,
                                     onTap: () => HapticFeedback.lightImpact(),
                                     style: const TextStyle(fontSize: 13),
                                     decoration: const InputDecoration(
-                                      labelText: 'Distance',
+                                      labelText: 'Range',
                                       suffixText: 'YD',
                                       isDense: true,
                                       border: OutlineInputBorder(),
@@ -1283,15 +1366,14 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                       array.distance =
                                           val.isEmpty ? '' : '$val YD';
                                     },
+                                    onFieldSubmitted: (_) => _saveStage(exitScreen: false),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   flex: 5,
                                   child: TextFormField(
-                                    key: Key(
-                                        'arr_angle_${arrayIdx}_${array.degreeOfFire}'),
-                                    initialValue: array.degreeOfFire,
+                                    controller: _getDofController(array),
                                     readOnly: true,
                                     onTap: () {
                                       HapticFeedback.lightImpact();
@@ -1299,7 +1381,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                     },
                                     style: const TextStyle(fontSize: 13),
                                     decoration: const InputDecoration(
-                                      labelText: 'Angle/Dir',
+                                      labelText: 'DoF',
                                       isDense: true,
                                       border: OutlineInputBorder(),
                                       contentPadding: EdgeInsets.symmetric(
@@ -2907,6 +2989,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                             } else if (targetOrArray is TargetArray) {
                               targetOrArray.degreeOfFire =
                                   '${displayHeading.round()}°';
+                              _getDofController(targetOrArray).text = targetOrArray.degreeOfFire;
                               final idx = arrayIdx ??
                                   _stage.targetArrays.indexOf(targetOrArray);
                               if (idx > 0) {
