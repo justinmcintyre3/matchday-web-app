@@ -18,6 +18,8 @@ class SgPulseScanScreen extends StatefulWidget {
 }
 
 class _SgPulseScanScreenState extends State<SgPulseScanScreen> {
+  bool _hasPopped = false;
+
   @override
   void initState() {
     super.initState();
@@ -41,9 +43,10 @@ class _SgPulseScanScreenState extends State<SgPulseScanScreen> {
     final state = provider.connectionState;
 
     // Auto-navigate to detail screen once connected
-    if (state == SgPulseConnectionState.connected ||
+    if ((state == SgPulseConnectionState.connected ||
         state == SgPulseConnectionState.connecting ||
-        state == SgPulseConnectionState.discovering) {
+        state == SgPulseConnectionState.discovering) && !_hasPopped) {
+      _hasPopped = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           Navigator.of(context).pop(); // Return to Settings, tile updates

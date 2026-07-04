@@ -8,6 +8,7 @@ import 'providers/checklist_provider.dart';
 import 'providers/match_provider.dart';
 import 'features/kestrel_ble/providers/kestrel_provider.dart';
 import 'features/sg_pulse/providers/sg_pulse_provider.dart';
+import 'features/rx5000/providers/rx5000_provider.dart';
 import 'screens/main_navigation_container.dart';
 
 void main() async {
@@ -41,6 +42,9 @@ void main() async {
         ),
         ChangeNotifierProvider(
           create: (_) => SgPulseProvider(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => Rx5000Provider(),
         ),
       ],
       child: const MyApp(),

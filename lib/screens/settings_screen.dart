@@ -10,6 +10,10 @@ import '../features/sg_pulse/providers/sg_pulse_provider.dart';
 import '../features/sg_pulse/models/sg_pulse_device.dart';
 import '../features/sg_pulse/screens/sg_pulse_scan_screen.dart';
 import '../features/sg_pulse/screens/sg_pulse_detail_screen.dart';
+import '../features/rx5000/providers/rx5000_provider.dart';
+import '../features/rx5000/models/rx5000_device.dart';
+import '../features/rx5000/screens/rx5000_scan_screen.dart';
+import '../features/rx5000/screens/rx5000_detail_screen.dart';
 import '../providers/match_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -28,6 +32,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _loadWatchStatus();
+    context.read<Rx5000Provider>().incrementActivePages();
+  }
+
+  @override
+  void dispose() {
+    context.read<Rx5000Provider>().decrementActivePages();
+    super.dispose();
   }
 
   Future<void> _loadWatchStatus() async {
@@ -98,6 +109,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final sgPulse = context.watch<SgPulseProvider>().connectedDevice;
     final isSgPulseSaved = sgPulse != null;
     final sgPulseConnected = sgPulse?.state == SgPulseConnectionState.connected;
+
+    final rx5000 = context.watch<Rx5000Provider>().connectedDevice;
+    final isRx5000Saved = rx5000 != null;
+    final rx5000Connected = rx5000?.state == Rx5000ConnectionState.connected;
 
     return Scaffold(
       appBar: AppBar(
@@ -352,6 +367,78 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                     ),
                   ],
+
+                  // ── RX5000 tile (if a device is saved) ──────────────────
+                  if (isRx5000Saved) ...[
+                    Divider(
+                      height: 1,
+                      indent: 56,
+                      color: Colors.white.withValues(alpha: 0.06),
+                    ),
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 6,
+                      ),
+                      leading: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: (rx5000Connected ? const Color(0xFF00E676) : Colors.white)
+                              .withValues(alpha: rx5000Connected ? 0.12 : 0.05),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          Icons.radar,
+                          color: rx5000Connected ? const Color(0xFF00E676) : Colors.white38,
+                          size: 20,
+                        ),
+                      ),
+                      title: const Text(
+                        'Leupold RX5000',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      subtitle: Text(
+                        rx5000Connected 
+                          ? '${rx5000.name} • Connected${rx5000.batteryLevel != null ? ' • ${rx5000.batteryLevel}%' : ''}'
+                          : '${rx5000.name} • Disconnected',
+                        style: TextStyle(
+                          color: rx5000Connected ? const Color(0xFF00E676) : Colors.white38,
+                          fontSize: 12,
+                        ),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (rx5000Connected)
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF00E676),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          if (rx5000Connected) const SizedBox(width: 8),
+                          const Icon(Icons.chevron_right,
+                              color: Colors.white38, size: 20),
+                        ],
+                      ),
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const Rx5000DetailScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -470,6 +557,26 @@ class _AddDeviceSheet extends StatelessWidget {
                 context,
                 MaterialPageRoute(
                   builder: (_) => const SgPulseScanScreen(),
+                ),
+              );
+            },
+          ),
+
+          const SizedBox(height: 10),
+
+          // ── Range Finding Device tile ─────────────────────────────────
+          _DeviceTypeTile(
+            icon: Icons.radar,
+            iconColor: const Color(0xFF007AFF),
+            title: 'Range Finding Device',
+            subtitle: 'Leupold RX5000',
+            onTap: () {
+              HapticFeedback.mediumImpact();
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const Rx5000ScanScreen(),
                 ),
               );
             },

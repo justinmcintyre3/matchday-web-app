@@ -6,6 +6,7 @@ import '../features/kestrel_ble/providers/kestrel_provider.dart';
 import '../features/kestrel_ble/models/kestrel_device.dart';
 import '../features/sg_pulse/providers/sg_pulse_provider.dart';
 import '../features/sg_pulse/models/sg_pulse_device.dart';
+import '../features/rx5000/providers/rx5000_provider.dart';
 import '../screens/settings_screen.dart';
 
 class GlobalAppBar extends StatelessWidget implements PreferredSizeWidget {
@@ -22,23 +23,26 @@ class GlobalAppBar extends StatelessWidget implements PreferredSizeWidget {
     final watchConnected = context.watch<MatchProvider>().isWatchConnected;
     final kestrelConnected = context.watch<KestrelProvider>().connectionState == KestrelConnectionState.connected;
     final pulseConnected = context.watch<SgPulseProvider>().connectionState == SgPulseConnectionState.connected;
+    final rx5000Connected = context.watch<Rx5000Provider>().isConnected;
 
     final canPop = ModalRoute.of(context)?.canPop ?? false;
 
     return AppBar(
       title: title,
-      leadingWidth: 72,
+      leadingWidth: 90,
       leading: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.watch, size: 16, color: _iconColor(watchConnected)),
+              Icon(Icons.watch, size: 14, color: _iconColor(watchConnected)),
               const SizedBox(width: 4),
-              Icon(Icons.track_changes, size: 16, color: _iconColor(kestrelConnected)),
+              Icon(Icons.track_changes, size: 14, color: _iconColor(kestrelConnected)),
               const SizedBox(width: 4),
-              Icon(Icons.sensors, size: 16, color: _iconColor(pulseConnected)),
+              Icon(Icons.sensors, size: 14, color: _iconColor(pulseConnected)),
+              const SizedBox(width: 4),
+              Icon(Icons.adjust, size: 14, color: _iconColor(rx5000Connected)),
             ],
           ),
           if (canPop) ...[

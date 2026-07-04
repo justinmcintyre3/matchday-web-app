@@ -11,6 +11,7 @@ import '../features/kestrel_ble/models/kestrel_device.dart';
 import '../widgets/wind_clock_picker.dart';
 import '../features/sg_pulse/providers/sg_pulse_provider.dart';
 import '../widgets/global_app_bar.dart';
+import '../features/rx5000/providers/rx5000_provider.dart';
 
 class StageDetailScreen extends StatefulWidget {
   final String matchId;
@@ -98,6 +99,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   @override
   void initState() {
     super.initState();
+    context.read<Rx5000Provider>().incrementActivePages();
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       if (!mounted) return;
@@ -387,6 +389,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
 
   @override
   void dispose() {
+    context.read<Rx5000Provider>().decrementActivePages();
     _watchSubscription?.cancel();
     _liveUpdateSubscription?.cancel();
     _timerStartedSubscription?.cancel();
