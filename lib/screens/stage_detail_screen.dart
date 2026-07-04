@@ -30,6 +30,8 @@ class StageDetailScreen extends StatefulWidget {
 class _StageDetailScreenState extends State<StageDetailScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  late Rx5000Provider _rxProvider;
+  bool _isRx5000Active = false;
   StreamSubscription<WatchResultEvent>? _watchSubscription;
   StreamSubscription<WatchLiveUpdateEvent>? _liveUpdateSubscription;
   StreamSubscription<int?>? _timerStartedSubscription;
@@ -96,8 +98,6 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     'Other'
   ];
 
-  late Rx5000Provider _rxProvider;
-
   final Map<int, TextEditingController> _rangeControllers = {};
   final Map<int, TextEditingController> _dofControllers = {};
   final Map<int, FocusNode> _rangeFocusNodes = {};
@@ -136,14 +136,29 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   void initState() {
     super.initState();
     _rxProvider = context.read<Rx5000Provider>();
-    _rxProvider.incrementActivePages();
     _rangeSubscription = _rxProvider.onRangeData.listen(_onRangeDataReceived);
     _tabController = TabController(length: 3, vsync: this);
+    
+    if (_tabController.index == 0) {
+      _rxProvider.incrementActivePages();
+      _isRx5000Active = true;
+    }
+
     _tabController.addListener(() {
       if (!mounted) return;
       if (_tabController.indexIsChanging) {
         HapticFeedback.lightImpact();
       }
+      
+      final shouldBeActive = _tabController.index == 0;
+      if (shouldBeActive && !_isRx5000Active) {
+        _rxProvider.incrementActivePages();
+        _isRx5000Active = true;
+      } else if (!shouldBeActive && _isRx5000Active) {
+        _rxProvider.decrementActivePages();
+        _isRx5000Active = false;
+      }
+      
       setState(() {});
     });
 
@@ -432,7 +447,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     for (final c in _dofControllers.values) { c.dispose(); }
     for (final n in _rangeFocusNodes.values) { n.dispose(); }
     
-    _rxProvider.decrementActivePages();
+    if (_isRx5000Active) {
+      _rxProvider.decrementActivePages();
+    }
     _watchSubscription?.cancel();
     _liveUpdateSubscription?.cancel();
     _timerStartedSubscription?.cancel();
@@ -1169,7 +1186,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
             _saveStage(exitScreen: false);
           }
         },
-        child: Scaffold(
+        child: GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          child: Scaffold(
           appBar: GlobalAppBar(
             title: Text(_stage.name.isNotEmpty
                 ? _stage.name
@@ -1195,6 +1214,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
               _buildReviewTab(),
             ],
           ),
+        ),
         ),
       ),
     );
@@ -1347,7 +1367,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                     controller: _getRangeController(array),
                                     focusNode: _getRangeFocusNode(array),
                                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    textInputAction: TextInputAction.done,
+                                    textInputAction: arrayIdx < _stage.targetArrays.length - 1
+                                        ? TextInputAction.next
+                                        : TextInputAction.done,
                                     onTap: () => HapticFeedback.lightImpact(),
                                     style: const TextStyle(fontSize: 13),
                                     decoration: const InputDecoration(
@@ -1366,7 +1388,13 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                       array.distance =
                                           val.isEmpty ? '' : '$val YD';
                                     },
-                                    onFieldSubmitted: (_) => _saveStage(exitScreen: false),
+                                    onFieldSubmitted: (_) {
+                                      _saveStage(exitScreen: false);
+                                      if (arrayIdx < _stage.targetArrays.length - 1) {
+                                        final nextArray = _stage.targetArrays[arrayIdx + 1];
+                                        _getRangeFocusNode(nextArray).requestFocus();
+                                      }
+                                    },
                                   ),
                                 ),
                                 const SizedBox(width: 8),
