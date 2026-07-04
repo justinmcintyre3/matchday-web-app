@@ -56,7 +56,9 @@ class SgPulseProvider extends ChangeNotifier {
     final saved = prefs.getString(_savedDeviceKey);
     if (saved != null) {
       try {
-        connectedDevice = SgPulseDevice.fromJsonString(saved);
+        connectedDevice = SgPulseDevice.fromJsonString(saved).copyWith(
+          state: SgPulseConnectionState.disconnected,
+        );
         notifyListeners();
         connect(connectedDevice!, autoConnect: true);
       } catch (e) {
@@ -140,8 +142,13 @@ class SgPulseProvider extends ChangeNotifier {
 
   /// Connect to a [device] from the scan list.
   Future<void> connect(SgPulseDevice device, {bool autoConnect = false}) async {
-    connectedDevice = device.copyWith(state: SgPulseConnectionState.connecting);
-    notifyListeners();
+    if (!autoConnect) {
+      connectedDevice = device.copyWith(state: SgPulseConnectionState.connecting);
+      notifyListeners();
+    } else {
+      connectedDevice = device.copyWith(state: SgPulseConnectionState.disconnected);
+      notifyListeners();
+    }
     await _service.connect(device, autoConnect: autoConnect);
   }
 

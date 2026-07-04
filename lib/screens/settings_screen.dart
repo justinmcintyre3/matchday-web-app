@@ -230,7 +230,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Icon(
-                          kestrelConnected ? Icons.bluetooth_connected : Icons.bluetooth,
+                          Icons.track_changes,
                           color: kestrelConnected ? const Color(0xFF00E676) : Colors.white38,
                           size: 20,
                         ),
@@ -302,7 +302,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Icon(
-                          sgPulseConnected ? Icons.bluetooth_connected : Icons.bluetooth,
+                          Icons.sensors,
                           color: sgPulseConnected ? const Color(0xFF00E676) : Colors.white38,
                           size: 20,
                         ),

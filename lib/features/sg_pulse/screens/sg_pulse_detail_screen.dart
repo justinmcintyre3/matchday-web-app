@@ -157,6 +157,7 @@ class _StatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isConnected = state == SgPulseConnectionState.connected;
+    final isError = state == SgPulseConnectionState.error;
     final color = isConnected ? const Color(0xFF00E676) : Colors.white24;
     final label = switch (state) {
       SgPulseConnectionState.connected    => 'Connected',
@@ -165,6 +166,18 @@ class _StatusCard extends StatelessWidget {
       SgPulseConnectionState.error        => 'Error',
       _                                    => 'Disconnected',
     };
+
+    final iconBg = isConnected 
+        ? const Color(0xFF00E676).withValues(alpha: 0.12)
+        : isError 
+            ? const Color(0xFFFF5252).withValues(alpha: 0.12)
+            : const Color(0xFF007AFF).withValues(alpha: 0.12);
+            
+    final iconColor = isConnected
+        ? const Color(0xFF00E676)
+        : isError
+            ? const Color(0xFFFF5252)
+            : const Color(0xFF007AFF);
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -178,12 +191,12 @@ class _StatusCard extends StatelessWidget {
             width: 52,
             height: 52,
             decoration: BoxDecoration(
-              color: const Color(0xFF007AFF).withValues(alpha: 0.12),
+              color: iconBg,
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(
-              Icons.sensors_rounded,
-              color: Color(0xFF007AFF),
+            child: Icon(
+              Icons.sensors,
+              color: iconColor,
               size: 28,
             ),
           ),
@@ -284,7 +297,7 @@ class _DisconnectedCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Icon(Icons.sensors_off_rounded,
+          Icon(Icons.sensors_off,
               color: Colors.white.withValues(alpha: 0.3), size: 36),
           const SizedBox(height: 12),
           Text(

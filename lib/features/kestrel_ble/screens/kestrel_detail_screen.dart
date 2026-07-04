@@ -173,7 +173,7 @@ class _DeviceIcon extends StatelessWidget {
       case KestrelConnectionState.connected:
         iconBg = const Color(0xFF00E676).withValues(alpha: 0.12);
         iconColor = const Color(0xFF00E676);
-        icon = Icons.bluetooth_connected;
+        icon = Icons.track_changes;
         break;
       case KestrelConnectionState.error:
         iconBg = const Color(0xFFFF5252).withValues(alpha: 0.12);
