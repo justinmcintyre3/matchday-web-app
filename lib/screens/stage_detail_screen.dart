@@ -2025,13 +2025,15 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                   final hasRoll = index < _stage.shotRolls.length;
                   final hasStability = index < _stage.shotStabilities.length;
                   final rollVal = hasRoll ? _stage.shotRolls[index] : 0.0;
-                  final stability = hasStability ? _stage.shotStabilities[index] : 0.0;
+                  final stability =
+                      hasStability ? _stage.shotStabilities[index] : 0.0;
 
                   Color stabilityColor = Colors.grey;
                   if (hasStability) {
                     if (stability <= sgPulseProvider.stabilityGreenZone) {
                       stabilityColor = const Color(0xFF30D158); // green
-                    } else if (stability <= sgPulseProvider.stabilityYellowZone) {
+                    } else if (stability <=
+                        sgPulseProvider.stabilityYellowZone) {
                       stabilityColor = const Color(0xFFFFD60A); // yellow
                     } else {
                       stabilityColor = const Color(0xFFFF453A); // red
@@ -2088,7 +2090,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                       children: [
                                         const TextSpan(
                                             text: 'Stability: ',
-                                            style: TextStyle(color: Colors.grey)),
+                                            style:
+                                                TextStyle(color: Colors.grey)),
                                         TextSpan(
                                           text: stability.toStringAsFixed(1),
                                           style: TextStyle(
@@ -2283,23 +2286,32 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                 final result =
                                     _stage.shotResults[globalShotIdx];
                                 Color bgColor = Colors.grey[850]!;
-                                Color textColor = Colors.white70;
-                                IconData? icon;
+                                Color borderColor =
+                                    Colors.white70.withValues(alpha: 0.3);
+                                Color embossedColor =
+                                    Colors.white70.withValues(alpha: 0.15);
+                                Color shotTimeColor = Colors.white;
 
                                 if (result == 'hit') {
                                   bgColor = const Color(0xFF00E676)
                                       .withValues(alpha: 0.2);
-                                  textColor = const Color(0xFF00E676);
-                                  icon = Icons.gps_fixed;
+                                  borderColor = const Color(0xFF00E676)
+                                      .withValues(alpha: 0.3);
+                                  embossedColor = const Color(0xFF00E676)
+                                      .withValues(alpha: 0.60);
                                 } else if (result == 'miss') {
                                   bgColor =
                                       Colors.redAccent.withValues(alpha: 0.2);
-                                  textColor = Colors.redAccent;
-                                  icon = Icons.close;
+                                  borderColor =
+                                      Colors.redAccent.withValues(alpha: 0.3);
+                                  embossedColor =
+                                      Colors.redAccent.withValues(alpha: 0.60);
                                 } else if (result == 'timeOutMiss') {
                                   bgColor = Colors.grey.withValues(alpha: 0.2);
-                                  textColor = Colors.grey;
-                                  icon = Icons.timer_outlined;
+                                  borderColor =
+                                      Colors.grey.withValues(alpha: 0.3);
+                                  embossedColor =
+                                      Colors.grey.withValues(alpha: 0.60);
                                 }
 
                                 final roll =
@@ -2326,23 +2338,29 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                             ? const Color(0xFFFF453A)
                                             : const Color(0xFF0A84FF)));
 
-                                final hasStability = globalShotIdx < _stage.shotStabilities.length;
-                                 final stability = hasStability
-                                     ? _stage.shotStabilities[globalShotIdx]
-                                     : 0.0;
-                                 final stabilityText = hasStability
-                                     ? 'S: ${stability.toStringAsFixed(1)}'
-                                     : '---';
-                                 Color stabilityColor = Colors.grey;
-                                 if (hasStability) {
-                                   if (stability <= sgPulseProvider.stabilityGreenZone) {
-                                     stabilityColor = const Color(0xFF30D158); // green
-                                   } else if (stability <= sgPulseProvider.stabilityYellowZone) {
-                                     stabilityColor = const Color(0xFFFFD60A); // yellow
-                                   } else {
-                                     stabilityColor = const Color(0xFFFF453A); // red
-                                   }
-                                 }
+                                final hasStability = globalShotIdx <
+                                    _stage.shotStabilities.length;
+                                final stability = hasStability
+                                    ? _stage.shotStabilities[globalShotIdx]
+                                    : 0.0;
+                                final stabilityText = hasStability
+                                    ? 'S: ${stability.toStringAsFixed(1)}'
+                                    : '---';
+                                Color stabilityColor = Colors.grey;
+                                if (hasStability) {
+                                  if (stability <=
+                                      sgPulseProvider.stabilityGreenZone) {
+                                    stabilityColor =
+                                        const Color(0xFF30D158); // green
+                                  } else if (stability <=
+                                      sgPulseProvider.stabilityYellowZone) {
+                                    stabilityColor =
+                                        const Color(0xFFFFD60A); // yellow
+                                  } else {
+                                    stabilityColor =
+                                        const Color(0xFFFF453A); // red
+                                  }
+                                }
 
                                 return Column(
                                   mainAxisSize: MainAxisSize.min,
@@ -2371,32 +2389,35 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                           color: bgColor,
                                           shape: BoxShape.circle,
                                           border: Border.all(
-                                            color: textColor.withValues(
-                                                alpha: 0.3),
+                                            color: borderColor,
                                             width: 1.5,
                                           ),
                                         ),
-                                        child: Center(
-                                          child: Column(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            children: [
+                                        child: Stack(
+                                          alignment: Alignment.center,
+                                          children: [
+                                            // Embossed background number
+                                            Text(
+                                              '${globalShotIdx + 1}',
+                                              style: TextStyle(
+                                                fontSize: 36,
+                                                fontWeight: FontWeight.w900,
+                                                color: embossedColor,
+                                                height: 1.0,
+                                              ),
+                                            ),
+                                            // Foreground time
+                                            if (_stage.shotTimes.length >
+                                                globalShotIdx)
                                               Text(
-                                                _stage.shotTimes.length >
-                                                        globalShotIdx
-                                                    ? '${_stage.shotTimes[globalShotIdx].toStringAsFixed(1)}s'
-                                                    : 'S${shotIdx + 1}',
+                                                '${_stage.shotTimes[globalShotIdx].toStringAsFixed(1)}s',
                                                 style: TextStyle(
-                                                  fontSize: 9,
+                                                  fontSize: 12,
                                                   fontWeight: FontWeight.bold,
-                                                  color: textColor,
+                                                  color: shotTimeColor,
                                                 ),
                                               ),
-                                              if (icon != null)
-                                                Icon(icon,
-                                                    size: 11, color: textColor),
-                                            ],
-                                          ),
+                                          ],
                                         ),
                                       ),
                                     ),

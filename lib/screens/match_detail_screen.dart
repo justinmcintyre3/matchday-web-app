@@ -82,7 +82,8 @@ class MatchDetailScreen extends StatelessWidget {
                       content: const Text(
                         'Coming soon!',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            color: Colors.black87, fontWeight: FontWeight.bold),
                       ),
                       behavior: SnackBarBehavior.floating,
                       duration: const Duration(seconds: 2),
@@ -137,7 +138,7 @@ class MatchDetailScreen extends StatelessWidget {
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
-                            'Impact %: ${hitRate.toStringAsFixed(1)}%',
+                            'Impacts: ${hitRate.toStringAsFixed(1)}%',
                             style: const TextStyle(
                               color: Colors.greenAccent,
                               fontWeight: FontWeight.bold,
