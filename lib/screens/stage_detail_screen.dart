@@ -42,6 +42,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   StreamSubscription<void>? _shotSubscription;
   bool _stoppedByLimit = false;
   final _shootScrollController = ScrollController();
+  final _planScrollController = ScrollController();
 
   // Controllers for text inputs
   final _stageNameController = TextEditingController();
@@ -100,7 +101,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
 
   final Map<int, TextEditingController> _rangeControllers = {};
   final Map<int, TextEditingController> _dofControllers = {};
+  final Map<int, TextEditingController> _incControllers = {};
   final Map<int, FocusNode> _rangeFocusNodes = {};
+  final Map<int, FocusNode> _incFocusNodes = {};
   StreamSubscription<Map<String, dynamic>>? _rangeSubscription;
 
   TextEditingController _getRangeController(TargetArray array) {
@@ -120,6 +123,20 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     return _dofControllers[key]!;
   }
 
+  TextEditingController _getIncController(TargetArray array) {
+    final key = array.hashCode;
+    if (!_incControllers.containsKey(key)) {
+      String initVal = array.inclination;
+      final numVal = int.tryParse(initVal);
+      if (numVal != null && numVal > 0 && !initVal.startsWith('+')) {
+        initVal = '+$numVal';
+        array.inclination = initVal;
+      }
+      _incControllers[key] = TextEditingController(text: initVal);
+    }
+    return _incControllers[key]!;
+  }
+
   FocusNode _getRangeFocusNode(TargetArray array) {
     final key = array.hashCode;
     if (!_rangeFocusNodes.containsKey(key)) {
@@ -130,6 +147,31 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       _rangeFocusNodes[key] = node;
     }
     return _rangeFocusNodes[key]!;
+  }
+
+  FocusNode _getIncFocusNode(TargetArray array) {
+    final key = array.hashCode;
+    if (!_incFocusNodes.containsKey(key)) {
+      final node = FocusNode();
+      node.addListener(() {
+        if (!node.hasFocus) {
+          final ctrl = _incControllers[key];
+          if (ctrl != null) {
+            final valStr = ctrl.text;
+            final numVal = int.tryParse(valStr);
+            if (numVal != null && numVal > 0 && !valStr.startsWith('+')) {
+              final formatted = '+$numVal';
+              ctrl.text = formatted;
+              array.inclination = formatted;
+              _saveStage(exitScreen: false);
+            }
+          }
+        }
+        if (mounted) setState(() {});
+      });
+      _incFocusNodes[key] = node;
+    }
+    return _incFocusNodes[key]!;
   }
 
   @override
@@ -362,6 +404,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
           return TargetArray(
             distance: normalizedDistance,
             degreeOfFire: arr.degreeOfFire,
+            inclination: arr.inclination,
             targets: normalizedTargets,
             minWindSpeed: arr.minWindSpeed,
             maxWindSpeed: arr.maxWindSpeed,
@@ -445,7 +488,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     _rangeSubscription?.cancel();
     for (final c in _rangeControllers.values) { c.dispose(); }
     for (final c in _dofControllers.values) { c.dispose(); }
+    for (final c in _incControllers.values) { c.dispose(); }
     for (final n in _rangeFocusNodes.values) { n.dispose(); }
+    for (final n in _incFocusNodes.values) { n.dispose(); }
     
     if (_isRx5000Active) {
       _rxProvider.decrementActivePages();
@@ -463,6 +508,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     _timeRemainingController.dispose();
     _heartRateController.dispose();
     _shootScrollController.dispose();
+    _planScrollController.dispose();
     _tabController.dispose();
     super.dispose();
   }
@@ -481,6 +527,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     if (focusedArray != null) {
       final range = data['range'] as double?;
       final heading = data['heading'] as double?;
+      final inclination = data['inclination'] as num?;
 
       if (range != null) {
         final rangeStr = range.toStringAsFixed(1);
@@ -492,6 +539,13 @@ class _StageDetailScreenState extends State<StageDetailScreen>
         final headingStr = heading.round().toString();
         _getDofController(focusedArray).text = headingStr;
         focusedArray.degreeOfFire = headingStr;
+      }
+
+      if (inclination != null) {
+        final incVal = inclination.toInt();
+        final incStr = incVal > 0 ? '+$incVal' : incVal.toString();
+        _getIncController(focusedArray).text = incStr;
+        focusedArray.inclination = incStr;
       }
 
       setState(() {
@@ -1098,12 +1152,13 @@ class _StageDetailScreenState extends State<StageDetailScreen>
         final array = _stage.targetArrays[i];
         final rangeYards = _parseRangeYards(array.distance);
         final dof = _parseDof(array.degreeOfFire);
+        final inc = double.tryParse(array.inclination) ?? 0.0;
         final windDir = _absoluteWindBearingForArray(i);
         final wind1 = array0.minWindSpeed;
         final wind2 = array0.maxWindSpeed;
 
         debugPrint(
-          '[Kestrel Sync] target $i: rng=${rangeYards}yd dof=$dof '
+          '[Kestrel Sync] target $i: rng=${rangeYards}yd dof=$dof inc=$inc '
           'wind=$wind1-$wind2 mph wd=${windDir.toStringAsFixed(0)}° '
           '(${TargetArray.formatClockSlot(TargetArray.degreesToClockSlot(windDir))})',
         );
@@ -1118,6 +1173,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
             windSpeed1Mph: wind1,
             windSpeed2Mph: wind2,
             windDirection: windDir,
+            inclinationAngle: inc,
           ),
         );
 
@@ -1131,26 +1187,30 @@ class _StageDetailScreenState extends State<StageDetailScreen>
             send: () => kestrelProvider.sendCalcFullSolution(targetNumber: i),
           );
         }
-
         setState(() => _applyBalResultToArray(i, result));
       }
 
       _saveStage(exitScreen: false);
-
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Synced to Watch and Kestrel!')),
         );
+        if (_planScrollController.hasClients) {
+          _planScrollController.animateTo(
+            0.0,
+            duration: const Duration(milliseconds: 600),
+            curve: Curves.easeOutCubic,
+          );
+        }
       }
     } catch (e) {
-      debugPrint('[Kestrel Sync Error] $e');
+      debugPrint('[StageDetailScreen] _syncToWatch error: $e');
       if (mounted) {
-        Navigator.pop(context);
+        Navigator.pop(context); // dismiss spinner
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text(
-                  'Failed to sync with Kestrel. Timeout or disconnected.')),
+          SnackBar(
+              content: Text('Sync error: $e'), backgroundColor: Colors.red),
         );
       }
     }
@@ -1223,6 +1283,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   // PLAN TAB
   Widget _buildPlanTab() {
     return SingleChildScrollView(
+      controller: _planScrollController,
       padding: const EdgeInsets.all(12.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1362,14 +1423,12 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                             Row(
                               children: [
                                 Expanded(
-                                  flex: 5,
+                                  flex: 4,
                                   child: TextFormField(
                                     controller: _getRangeController(array),
                                     focusNode: _getRangeFocusNode(array),
                                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    textInputAction: arrayIdx < _stage.targetArrays.length - 1
-                                        ? TextInputAction.next
-                                        : TextInputAction.done,
+                                    textInputAction: TextInputAction.next,
                                     onTap: () => HapticFeedback.lightImpact(),
                                     style: const TextStyle(fontSize: 13),
                                     decoration: const InputDecoration(
@@ -1377,29 +1436,22 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                       suffixText: 'YD',
                                       isDense: true,
                                       border: OutlineInputBorder(),
-                                      contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 10),
+                                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                                       labelStyle: TextStyle(fontSize: 12),
-                                      suffixStyle: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold),
+                                      suffixStyle: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                                     ),
                                     onChanged: (val) {
-                                      array.distance =
-                                          val.isEmpty ? '' : '$val YD';
+                                      array.distance = val.isEmpty ? '0 YD' : '$val YD';
                                     },
                                     onFieldSubmitted: (_) {
                                       _saveStage(exitScreen: false);
-                                      if (arrayIdx < _stage.targetArrays.length - 1) {
-                                        final nextArray = _stage.targetArrays[arrayIdx + 1];
-                                        _getRangeFocusNode(nextArray).requestFocus();
-                                      }
+                                      _getIncFocusNode(array).requestFocus();
                                     },
                                   ),
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
-                                  flex: 5,
+                                  flex: 3,
                                   child: TextFormField(
                                     controller: _getDofController(array),
                                     readOnly: true,
@@ -1412,13 +1464,41 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                       labelText: 'DoF',
                                       isDense: true,
                                       border: OutlineInputBorder(),
-                                      contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 10),
+                                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                                       labelStyle: TextStyle(fontSize: 12),
-                                      suffixIcon: Icon(
-                                          Icons.compass_calibration,
-                                          size: 14),
+                                      suffixIcon: Icon(Icons.compass_calibration, size: 14),
                                     ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  flex: 3,
+                                  child: TextFormField(
+                                    controller: _getIncController(array),
+                                    focusNode: _getIncFocusNode(array),
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                                    textInputAction: arrayIdx < _stage.targetArrays.length - 1
+                                        ? TextInputAction.next
+                                        : TextInputAction.done,
+                                    onTap: () => HapticFeedback.lightImpact(),
+                                    style: const TextStyle(fontSize: 13),
+                                    decoration: const InputDecoration(
+                                      labelText: 'Inc',
+                                      isDense: true,
+                                      border: OutlineInputBorder(),
+                                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                                      labelStyle: TextStyle(fontSize: 12),
+                                    ),
+                                    onChanged: (val) {
+                                      array.inclination = val.isEmpty ? '0' : val;
+                                    },
+                                    onFieldSubmitted: (_) {
+                                      _saveStage(exitScreen: false);
+                                      if (arrayIdx < _stage.targetArrays.length - 1) {
+                                        final nextArray = _stage.targetArrays[arrayIdx + 1];
+                                        _getRangeFocusNode(nextArray).requestFocus();
+                                      }
+                                    },
                                   ),
                                 ),
                               ],
@@ -4466,3 +4546,7 @@ class _MobileTimePickerDialogState extends State<MobileTimePickerDialog> {
     );
   }
 }
+
+
+
+

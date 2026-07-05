@@ -360,6 +360,7 @@ class WindPlan {
 class TargetArray {
   String distance;
   String degreeOfFire;
+  String inclination;
   List<Target> targets;
   double minWindSpeed;
   double maxWindSpeed;
@@ -431,6 +432,7 @@ class TargetArray {
   TargetArray({
     this.distance = '',
     this.degreeOfFire = '',
+    this.inclination = '0',
     required this.targets,
     this.minWindSpeed = 0.0,
     this.maxWindSpeed = 0.0,
@@ -445,6 +447,7 @@ class TargetArray {
     return {
       'distance': distance,
       'degreeOfFire': degreeOfFire,
+      'inclination': inclination,
       'targets': targets.map((x) => x.toMap()).toList(),
       'minWindSpeed': minWindSpeed,
       'maxWindSpeed': maxWindSpeed,
@@ -460,6 +463,7 @@ class TargetArray {
     return TargetArray(
       distance: map['distance'] ?? '',
       degreeOfFire: map['degreeOfFire'] ?? '',
+      inclination: map['inclination'] ?? '0',
       targets: List<Target>.from(
           map['targets']?.map((x) => Target.fromMap(x as Map)) ?? const []),
       minWindSpeed: (map['minWindSpeed'] as num?)?.toDouble() ?? 0.0,
