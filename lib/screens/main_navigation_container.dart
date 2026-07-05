@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../features/kestrel_ble/providers/kestrel_provider.dart';
 import '../features/kestrel_ble/screens/kestrel_detail_screen.dart';
 import '../features/sg_pulse/providers/sg_pulse_provider.dart';
+import '../features/rx5000/providers/rx5000_provider.dart';
 import 'matches_list_screen.dart';
 import 'checklist_groups_screen.dart';
 
@@ -20,6 +21,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
   StreamSubscription? _latMismatchSub;
   StreamSubscription? _sgPulseBatteryLowSub;
   StreamSubscription? _kestrelBatteryLowSub;
+  StreamSubscription? _rx5000BatteryLowSub;
 
   final List<Widget> _screens = [
     const MatchesListScreen(),
@@ -43,6 +45,11 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
       if (!mounted) return;
       _showKestrelBatteryLowDialog(batteryLevel);
     });
+
+    _rx5000BatteryLowSub = context.read<Rx5000Provider>().onBatteryLow.listen((batteryLevel) {
+      if (!mounted) return;
+      _showRx5000BatteryLowDialog(batteryLevel);
+    });
   }
 
   @override
@@ -50,6 +57,7 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
     _latMismatchSub?.cancel();
     _sgPulseBatteryLowSub?.cancel();
     _kestrelBatteryLowSub?.cancel();
+    _rx5000BatteryLowSub?.cancel();
     super.dispose();
   }
 
@@ -148,6 +156,36 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
     );
   }
 
+  void _showRx5000BatteryLowDialog(int batteryLevel) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('RX5000 Battery Low'),
+        content: Text(
+          'Your Leupold RX5000 battery is at $batteryLevel%.\n\n'
+          'Please connect your device to a charger / swap batteries.\n'
+          'Press "Ignore" to mute this warning until the next full charge.'
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              context.read<Rx5000Provider>().silenceBatteryLowWarning();
+              Navigator.pop(ctx);
+            },
+            child: const Text('Ignore', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+            },
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -197,3 +235,4 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
     );
   }
 }
+

@@ -9,6 +9,7 @@ import '../services/rx5000_ble_service.dart';
 class Rx5000Provider extends ChangeNotifier with WidgetsBindingObserver {
   static const String _savedDeviceKey = 'saved_rx5000_device';
   static const String _savedTokenKey = 'saved_rx5000_token';
+  static const _batteryWarningThresholdKey = 'rx5000_battery_warning_threshold';
 
   final Rx5000BleService _service;
 
@@ -20,7 +21,12 @@ class Rx5000Provider extends ChangeNotifier with WidgetsBindingObserver {
   String? pairingDeviceCode;
   int? _pairingPin;
   bool _headingModePersistent = false;
+  bool _hasWarnedBatteryThisSession = false;
+  int batteryWarningThreshold = 25;
   int _activePageCount = 0;
+
+  final StreamController<int> _batteryLowController = StreamController.broadcast();
+  Stream<int> get onBatteryLow => _batteryLowController.stream;
 
   final StreamController<Map<String, dynamic>> _rangeStreamController = StreamController.broadcast();
   Stream<Map<String, dynamic>> get onRangeData => _rangeStreamController.stream;
@@ -48,6 +54,8 @@ class Rx5000Provider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _initPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     _headingModePersistent = prefs.getBool('rx5000_pin_mode_persistent') ?? false;
+    batteryWarningThreshold = prefs.getInt(_batteryWarningThresholdKey) ?? 25;
+    
     final saved = prefs.getString(_savedDeviceKey);
     if (saved != null) {
       try {
@@ -69,6 +77,18 @@ class Rx5000Provider extends ChangeNotifier with WidgetsBindingObserver {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_savedDeviceKey, connectedDevice!.toJsonString());
     }
+  }
+
+  Future<void> setBatteryWarningThreshold(int value) async {
+    batteryWarningThreshold = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_batteryWarningThresholdKey, value);
+    notifyListeners();
+  }
+
+  Future<void> silenceBatteryLowWarning() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('silence_rx5000_battery_low', true);
   }
 
   // ── BLE Actions ─────────────────────────────────────────────────────────────
@@ -555,6 +575,7 @@ class Rx5000Provider extends ChangeNotifier with WidgetsBindingObserver {
         break;
       case 1005: // BATTERY_LEVEL
         connectedDevice = connectedDevice!.copyWith(batteryLevel: val);
+        _checkBatteryThreshold(val);
         break;
       case 1012: // LAST_TARGET
         connectedDevice = connectedDevice!.copyWith(lastTarget: val == 1);
@@ -630,6 +651,21 @@ class Rx5000Provider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _checkBatteryThreshold(int batteryLevel) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (batteryLevel < batteryWarningThreshold) {
+      if (!_hasWarnedBatteryThisSession) {
+        _hasWarnedBatteryThisSession = true;
+        final silenced = prefs.getBool('silence_rx5000_battery_low') ?? false;
+        if (!silenced) {
+          _batteryLowController.add(batteryLevel);
+        }
+      }
+    } else {
+      await prefs.setBool('silence_rx5000_battery_low', false);
+    }
+  }
+
   void _updateState(Rx5000ConnectionState state) {
     connectedDevice = connectedDevice?.copyWith(state: state);
     notifyListeners();
@@ -638,13 +674,13 @@ class Rx5000Provider extends ChangeNotifier with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     debugPrint('[Rx5000Provider] App lifecycle state changed: $state');
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
-      if (isConnected) {
-        disconnect();
-      }
-    } else if (state == AppLifecycleState.resumed) {
-      if (_activePageCount > 0 && connectedDevice != null && !isConnected && connectionState != Rx5000ConnectionState.connecting) {
+    if (state == AppLifecycleState.resumed) {
+      if (_activePageCount > 0 && connectedDevice != null && !isConnected) {
         connect(connectedDevice!, autoConnect: true);
+      }
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      if (isConnected) {
+        _service.disconnect();
       }
     }
   }
@@ -653,6 +689,7 @@ class Rx5000Provider extends ChangeNotifier with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _rangeStreamController.close();
+    _batteryLowController.close();
     _service.dispose();
     super.dispose();
   }

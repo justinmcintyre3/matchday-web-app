@@ -80,35 +80,9 @@ class KestrelDetailScreen extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 24, 16, 40),
         children: [
           // ── Device header ───────────────────────────────────────────────
-          Center(
-            child: Column(
-              children: [
-                _DeviceIcon(state: state),
-                const SizedBox(height: 14),
-                Text(
-                  device?.name ?? 'Kestrel',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  device != null
-                      ? device.modelDisplay
-                      : 'Ballistics Device',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.45),
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          _StatusCard(device: device, state: state),
 
-          const SizedBox(height: 32),
+          const SizedBox(height: 16),
 
           // ── State-specific content ──────────────────────────────────────
           _buildStateContent(context, state, device, provider),
@@ -159,41 +133,104 @@ class KestrelDetailScreen extends StatelessWidget {
 // Sub-widgets
 // ──────────────────────────────────────────────────────────────────────────────
 
-class _DeviceIcon extends StatelessWidget {
+class _StatusCard extends StatelessWidget {
+  final KestrelDevice? device;
   final KestrelConnectionState state;
-  const _DeviceIcon({required this.state});
+  const _StatusCard({required this.device, required this.state});
 
   @override
   Widget build(BuildContext context) {
-    Color iconBg;
-    Color iconColor;
-    IconData icon;
+    final isConnected = state == KestrelConnectionState.connected;
+    final isError = state == KestrelConnectionState.error;
+    final color = isConnected ? const Color(0xFF00E676) : Colors.white24;
+    final label = switch (state) {
+      KestrelConnectionState.connected    => 'Connected',
+      KestrelConnectionState.connecting   => 'Connecting…',
+      KestrelConnectionState.synchronizing => 'Synchronizing…',
+      KestrelConnectionState.discovering  => 'Discovering…',
+      KestrelConnectionState.error        => 'Error',
+      KestrelConnectionState.pinRequired  => 'PIN Required',
+      _                                    => 'Disconnected',
+    };
 
-    switch (state) {
-      case KestrelConnectionState.connected:
-        iconBg = const Color(0xFF00E676).withValues(alpha: 0.12);
-        iconColor = const Color(0xFF00E676);
-        icon = Icons.track_changes;
-        break;
-      case KestrelConnectionState.error:
-        iconBg = const Color(0xFFFF5252).withValues(alpha: 0.12);
-        iconColor = const Color(0xFFFF5252);
-        icon = Icons.bluetooth_disabled;
-        break;
-      default:
-        iconBg = const Color(0xFF007AFF).withValues(alpha: 0.12);
-        iconColor = const Color(0xFF007AFF);
-        icon = Icons.bluetooth_searching;
-    }
+    final iconBg = isConnected 
+        ? const Color(0xFF00E676).withValues(alpha: 0.12)
+        : isError 
+            ? const Color(0xFFFF5252).withValues(alpha: 0.12)
+            : const Color(0xFF007AFF).withValues(alpha: 0.12);
+            
+    final iconColor = isConnected
+        ? const Color(0xFF00E676)
+        : isError
+            ? const Color(0xFFFF5252)
+            : const Color(0xFF007AFF);
 
     return Container(
-      width: 72,
-      height: 72,
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: iconBg,
-        borderRadius: BorderRadius.circular(20),
+        color: const Color(0xFF1E1E24),
+        borderRadius: BorderRadius.circular(16),
       ),
-      child: Icon(icon, color: iconColor, size: 38),
+      child: Row(
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: iconBg,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              Icons.track_changes,
+              color: iconColor,
+              size: 28,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  device?.name ?? 'Kestrel',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                        boxShadow: isConnected
+                            ? [BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 6)]
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      isConnected && device?.batteryLevel != null
+                          ? '$label • ${device!.batteryLevel}% Battery'
+                          : label,
+                      style: TextStyle(
+                        color: isConnected ? color : Colors.white54,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -397,10 +397,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           size: 20,
                         ),
                       ),
-                      title: const Text(
+                      title: Text(
                         'Leupold RX5000',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: rx5000Connected ? Colors.white : Colors.white70,
                           fontSize: 15,
                           fontWeight: FontWeight.w500,
                         ),
