@@ -207,7 +207,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
         initVal = '+$numVal';
         array.inclination = initVal;
       }
-      _incControllers[key] = TextEditingController(text: initVal);
+      _incControllers[key] = TextEditingController(text: _formatIncDisplay(initVal));
     }
     return _incControllers[key]!;
   }
@@ -229,17 +229,27 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     if (!_incFocusNodes.containsKey(key)) {
       final node = FocusNode();
       node.addListener(() {
-        if (!node.hasFocus) {
-          final ctrl = _incControllers[key];
-          if (ctrl != null) {
-            final valStr = ctrl.text;
-            final numVal = int.tryParse(valStr);
-            if (numVal != null && numVal > 0 && !valStr.startsWith('+')) {
-              final formatted = '+$numVal';
-              ctrl.text = formatted;
-              array.inclination = formatted;
-              _saveStage(exitScreen: false);
-            }
+        final ctrl = _incControllers[key];
+        if (ctrl == null) {
+          if (mounted) setState(() {});
+          return;
+        }
+        if (node.hasFocus) {
+          final stripped = _stripIncDegree(ctrl.text);
+          if (stripped != ctrl.text) {
+            ctrl.text = stripped;
+          }
+          ctrl.selection = TextSelection(baseOffset: 0, extentOffset: ctrl.text.length);
+        } else {
+          final valStr = _stripIncDegree(ctrl.text);
+          final numVal = int.tryParse(valStr);
+          if (numVal != null && numVal > 0 && !valStr.startsWith('+')) {
+            final formatted = '+$numVal';
+            ctrl.text = _formatIncDisplay(formatted);
+            array.inclination = formatted;
+            _saveStage(exitScreen: false);
+          } else {
+            ctrl.text = _formatIncDisplay(array.inclination);
           }
         }
         if (mounted) setState(() {});
@@ -675,7 +685,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       }
       
       if (heading != null) {
-        final headingStr = heading.round().toString();
+        final headingStr = '${heading.round()}°';
         _getDofController(focusedArray).text = headingStr;
         focusedArray.degreeOfFire = headingStr;
       }
@@ -683,7 +693,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       if (inclination != null) {
         final incVal = inclination.toInt();
         final incStr = incVal > 0 ? '+$incVal' : incVal.toString();
-        _getIncController(focusedArray).text = incStr;
+        _getIncController(focusedArray).text = _formatIncDisplay(incStr);
         focusedArray.inclination = incStr;
       }
 
@@ -816,6 +826,13 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   double _parseDof(String dofStr) {
     final clean = dofStr.replaceAll(RegExp(r'[^0-9.]'), '');
     return double.tryParse(clean) ?? 0.0;
+  }
+
+  String _stripIncDegree(String text) => text.replaceAll('°', '');
+
+  String _formatIncDisplay(String stored) {
+    final val = _stripIncDegree(stored);
+    return val.isEmpty ? '0°' : '$val°';
   }
 
   double step(double v, int dir) {
@@ -1653,7 +1670,18 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                     focusNode: _getIncFocusNode(array),
                                     keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
                                     textInputAction: TextInputAction.done,
-                                    onTap: () => HapticFeedback.lightImpact(),
+                                    onTap: () {
+                                      HapticFeedback.lightImpact();
+                                      final ctrl = _getIncController(array);
+                                      final stripped = _stripIncDegree(ctrl.text);
+                                      if (stripped != ctrl.text) {
+                                        ctrl.text = stripped;
+                                      }
+                                      ctrl.selection = TextSelection(
+                                        baseOffset: 0,
+                                        extentOffset: ctrl.text.length,
+                                      );
+                                    },
                                     style: const TextStyle(fontSize: 13),
                                     decoration: const InputDecoration(
                                       labelText: 'Inc',
