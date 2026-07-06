@@ -103,6 +103,10 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   final Map<int, TextEditingController> _dofControllers = {};
   final Map<int, TextEditingController> _incControllers = {};
   final Map<int, TextEditingController> _targetSizeControllers = {};
+  final Map<int, TextEditingController> _minWindControllers = {};
+  final Map<int, TextEditingController> _maxWindControllers = {};
+  final Map<int, FocusNode> _minWindFocusNodes = {};
+  final Map<int, FocusNode> _maxWindFocusNodes = {};
   final Map<int, FocusNode> _rangeFocusNodes = {};
   final Map<int, FocusNode> _incFocusNodes = {};
   final Map<int, FocusNode> _targetSizeFocusNodes = {};
@@ -115,6 +119,75 @@ class _StageDetailScreenState extends State<StageDetailScreen>
           text: array.distance.replaceAll(RegExp(r'[^0-9.]'), ''));
     }
     return _rangeControllers[key]!;
+  }
+
+  String _formatWindSpeed(double speed) {
+    if (speed == speed.truncateToDouble()) return speed.toInt().toString();
+    return speed.toString();
+  }
+
+  TextEditingController _getMinWindController(TargetArray array) {
+    final key = array.hashCode;
+    if (!_minWindControllers.containsKey(key)) {
+      _minWindControllers[key] = TextEditingController(
+          text: _formatWindSpeed(array.minWindSpeed));
+    }
+    return _minWindControllers[key]!;
+  }
+
+  TextEditingController _getMaxWindController(TargetArray array) {
+    final key = array.hashCode;
+    if (!_maxWindControllers.containsKey(key)) {
+      _maxWindControllers[key] = TextEditingController(
+          text: _formatWindSpeed(array.maxWindSpeed));
+    }
+    return _maxWindControllers[key]!;
+  }
+
+  FocusNode _getMinWindFocusNode(TargetArray array) {
+    final key = array.hashCode;
+    if (!_minWindFocusNodes.containsKey(key)) {
+      final node = FocusNode();
+      node.addListener(() {
+        if (node.hasFocus) {
+          final ctrl = _minWindControllers[key];
+          if (ctrl != null) {
+            ctrl.selection = TextSelection(baseOffset: 0, extentOffset: ctrl.text.length);
+          }
+        }
+      });
+      _minWindFocusNodes[key] = node;
+    }
+    return _minWindFocusNodes[key]!;
+  }
+
+  FocusNode _getMaxWindFocusNode(TargetArray array) {
+    final key = array.hashCode;
+    if (!_maxWindFocusNodes.containsKey(key)) {
+      final node = FocusNode();
+      node.addListener(() {
+        if (node.hasFocus) {
+          final ctrl = _maxWindControllers[key];
+          if (ctrl != null) {
+            ctrl.selection = TextSelection(baseOffset: 0, extentOffset: ctrl.text.length);
+          }
+        } else {
+          // On focus lost: if max < min, pull min down to match
+          final ctrl = _maxWindControllers[key];
+          if (ctrl != null) {
+            final parsed = double.tryParse(ctrl.text);
+            if (parsed != null && parsed < array.minWindSpeed) {
+              array.minWindSpeed = parsed;
+              _minWindControllers[key]?.text = ctrl.text;
+              if (mounted) setState(() {});
+              _saveStage(exitScreen: false);
+            }
+          }
+        }
+      });
+      _maxWindFocusNodes[key] = node;
+    }
+    return _maxWindFocusNodes[key]!;
   }
 
   TextEditingController _getDofController(TargetArray array) {
@@ -521,6 +594,10 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     for (final c in _dofControllers.values) { c.dispose(); }
     for (final c in _incControllers.values) { c.dispose(); }
     for (final c in _targetSizeControllers.values) { c.dispose(); }
+    for (final c in _minWindControllers.values) { c.dispose(); }
+    for (final c in _maxWindControllers.values) { c.dispose(); }
+    for (final n in _minWindFocusNodes.values) { n.dispose(); }
+    for (final n in _maxWindFocusNodes.values) { n.dispose(); }
     for (final n in _rangeFocusNodes.values) { n.dispose(); }
     for (final n in _incFocusNodes.values) { n.dispose(); }
     for (final n in _targetSizeFocusNodes.values) { n.dispose(); }
@@ -911,6 +988,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     return InkWell(
       onTap: () async {
         HapticFeedback.lightImpact();
+        FocusManager.instance.primaryFocus?.unfocus();
+        await Future.delayed(Duration.zero);
+        if (!mounted) return;
         final picked = await showWindClockPickerDialog(
           context,
           initialSlot: slot,
@@ -963,52 +1043,74 @@ class _StageDetailScreenState extends State<StageDetailScreen>
           children: [
             Expanded(
               child: TextFormField(
-                initialValue: array.minWindSpeed == 0
-                    ? ''
-                    : array.minWindSpeed.toString(),
+                controller: _getMinWindController(array),
+                focusNode: _getMinWindFocusNode(array),
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
+                textInputAction: TextInputAction.done,
                 onTap: () => HapticFeedback.lightImpact(),
                 style: const TextStyle(fontSize: 12),
                 decoration: const InputDecoration(
                   labelText: 'Min Speed',
+                  suffixText: 'MPH',
                   isDense: true,
                   border: OutlineInputBorder(),
                   contentPadding:
                       EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                   labelStyle: TextStyle(fontSize: 10),
+                  suffixStyle: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
                 ),
                 onChanged: (val) {
-                  array.minWindSpeed = double.tryParse(val) ?? 0.0;
+                  final parsed = double.tryParse(val) ?? 0.0;
+                  array.minWindSpeed = parsed;
+                  // Auto-populate max if it's unset or lower than new min
+                  if (array.maxWindSpeed < parsed) {
+                    array.maxWindSpeed = parsed;
+                    _getMaxWindController(array).text = val;
+                  }
                   _extrapolateAllDownstreamWind();
                   setState(() {});
                   _saveStage(exitScreen: false);
                 },
+                onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: TextFormField(
-                initialValue: array.maxWindSpeed == 0
-                    ? ''
-                    : array.maxWindSpeed.toString(),
+                controller: _getMaxWindController(array),
+                focusNode: _getMaxWindFocusNode(array),
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
+                textInputAction: TextInputAction.done,
                 onTap: () => HapticFeedback.lightImpact(),
                 style: const TextStyle(fontSize: 12),
                 decoration: const InputDecoration(
                   labelText: 'Max Speed',
+                  suffixText: 'MPH',
                   isDense: true,
                   border: OutlineInputBorder(),
                   contentPadding:
                       EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                   labelStyle: TextStyle(fontSize: 10),
+                  suffixStyle: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
                 ),
                 onChanged: (val) {
-                  array.maxWindSpeed = double.tryParse(val) ?? 0.0;
-                  _extrapolateAllDownstreamWind();
-                  setState(() {});
-                  _saveStage(exitScreen: false);
+                  final parsed = double.tryParse(val);
+                  if (parsed != null) {
+                    array.maxWindSpeed = parsed;
+                    _extrapolateAllDownstreamWind();
+                    setState(() {});
+                    _saveStage(exitScreen: false);
+                  }
+                },
+                onFieldSubmitted: (val) {
+                  final parsed = double.tryParse(val) ?? array.maxWindSpeed;
+                  if (parsed < array.minWindSpeed) {
+                    array.minWindSpeed = parsed;
+                    _getMinWindController(array).text = val;
+                  }
+                  FocusScope.of(context).unfocus();
                 },
               ),
             ),
@@ -1397,14 +1499,15 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                         onPressed: () {
                           setState(() {
                             _stage.targetArrays.add(TargetArray(
-
+                              distance: '',
                               degreeOfFire: '0°',
+                              minWindSpeed: 0,
+                              maxWindSpeed: 0,
+                              windClockDirection: 0,
                               targets: [
                                 Target(
                                   index: 1,
                                   size: '0.0 MIL',
-
-
                                   type: 'IPSC',
                                   shotsCount: 1,
                                 ),
