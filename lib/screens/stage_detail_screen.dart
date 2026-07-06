@@ -1493,7 +1493,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                     controller: _getRangeController(array),
                                     focusNode: _getRangeFocusNode(array),
                                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    textInputAction: TextInputAction.next,
+                                    textInputAction: arrayIdx < _stage.targetArrays.length - 1
+                                        ? TextInputAction.next
+                                        : TextInputAction.done,
                                     onTap: () => HapticFeedback.lightImpact(),
                                     style: const TextStyle(fontSize: 13),
                                     decoration: const InputDecoration(
@@ -1510,7 +1512,12 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                     },
                                     onFieldSubmitted: (_) {
                                       _saveStage(exitScreen: false);
-                                      _getIncFocusNode(array).requestFocus();
+                                      if (arrayIdx < _stage.targetArrays.length - 1) {
+                                        final nextArray = _stage.targetArrays[arrayIdx + 1];
+                                        _getRangeFocusNode(nextArray).requestFocus();
+                                      } else {
+                                        FocusScope.of(context).unfocus();
+                                      }
                                     },
                                   ),
                                 ),
@@ -1542,9 +1549,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                     controller: _getIncController(array),
                                     focusNode: _getIncFocusNode(array),
                                     keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                                    textInputAction: arrayIdx < _stage.targetArrays.length - 1
-                                        ? TextInputAction.next
-                                        : TextInputAction.done,
+                                    textInputAction: TextInputAction.done,
                                     onTap: () => HapticFeedback.lightImpact(),
                                     style: const TextStyle(fontSize: 13),
                                     decoration: const InputDecoration(
@@ -1559,10 +1564,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                     },
                                     onFieldSubmitted: (_) {
                                       _saveStage(exitScreen: false);
-                                      if (arrayIdx < _stage.targetArrays.length - 1) {
-                                        final nextArray = _stage.targetArrays[arrayIdx + 1];
-                                        _getRangeFocusNode(nextArray).requestFocus();
-                                      }
+                                      FocusScope.of(context).unfocus();
                                     },
                                   ),
                                 ),
@@ -1635,9 +1637,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                           focusNode: _getTargetSizeFocusNode(target),
                                           keyboardType: const TextInputType
                                               .numberWithOptions(decimal: true),
-                                          textInputAction: TextInputAction.done,
-                                          onTap: () =>
-                                              HapticFeedback.lightImpact(),
+                                          textInputAction: targetIdx < array.targets.length - 1 ? TextInputAction.next : TextInputAction.done,
+                                          onTap: () => HapticFeedback.lightImpact(),
                                           style: const TextStyle(fontSize: 12),
                                           decoration: const InputDecoration(
                                             labelText: 'Size',
@@ -1656,7 +1657,13 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                             target.size =
                                                 val.isEmpty ? '' : '$val MIL';
                                           },
-                                          onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
+                                          onFieldSubmitted: (_) {
+                                            if (targetIdx < array.targets.length - 1) {
+                                              _getTargetSizeFocusNode(array.targets[targetIdx + 1]).requestFocus();
+                                            } else {
+                                              FocusScope.of(context).unfocus();
+                                            }
+                                          },
                                         ),
                                       ),
                                       const SizedBox(width: 5),
@@ -3702,52 +3709,61 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                             .where((k) => k == key)
                                             .length;
 
-                                        return ElevatedButton(
-                                          onPressed: isFull
-                                              ? null
-                                              : () {
-                                                  HapticFeedback.lightImpact();
-                                                  setDialogState(() {
-                                                    tempSequence.add(key);
-                                                  });
-                                                },
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: count > 0
-                                                ? const Color(0xFF00E676)
-                                                    .withValues(alpha: 0.15)
-                                                : Colors.white
-                                                    .withValues(alpha: 0.05),
-                                            side: BorderSide(
-                                              color: count > 0
-                                                  ? const Color(0xFF00E676)
-                                                      .withValues(alpha: 0.4)
-                                                  : Colors.white10,
+                                        double parsedSize = 1.0;
+                                        final cleanStr = target.size.replaceAll(RegExp(r'[^0-9.]'), '');
+                                        if (cleanStr.isNotEmpty) {
+                                          parsedSize = double.tryParse(cleanStr) ?? 1.0;
+                                        }
+                                        double pillWidth = (parsedSize * 80.0).clamp(20.0, 160.0);
+
+                                        return Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              'A${arrayIdx + 1}-T${targetIdx + 1} (${target.type})',
+                                              style: const TextStyle(
+                                                  color: Colors.white70,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold),
                                             ),
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 12, vertical: 8),
-                                          ),
-                                          child: Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                'A${arrayIdx + 1}-T${targetIdx + 1} (${target.type})',
-                                                style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 12,
-                                                    fontWeight:
-                                                        FontWeight.bold),
-                                              ),
-                                              if (count > 0)
-                                                Text(
-                                                  '$count ${count == 1 ? "shot" : "shots"}',
-                                                  style: const TextStyle(
-                                                      color: Color(0xFF00E676),
-                                                      fontSize: 10,
-                                                      fontWeight:
-                                                          FontWeight.bold),
+                                            const SizedBox(height: 4),
+                                            InkWell(
+                                              onTap: isFull
+                                                  ? null
+                                                  : () {
+                                                      HapticFeedback.lightImpact();
+                                                      setDialogState(() {
+                                                        tempSequence.add(key);
+                                                      });
+                                                    },
+                                              borderRadius: BorderRadius.circular(4),
+                                              child: Container(
+                                                width: pillWidth,
+                                                height: 36,
+                                                decoration: BoxDecoration(
+                                                  color: count > 0
+                                                      ? const Color(0xFF00E676).withValues(alpha: 0.15)
+                                                      : Colors.white.withValues(alpha: 0.05),
+                                                  border: Border.all(
+                                                    color: count > 0
+                                                        ? const Color(0xFF00E676).withValues(alpha: 0.4)
+                                                        : Colors.white10,
+                                                  ),
+                                                  borderRadius: BorderRadius.circular(4),
                                                 ),
-                                            ],
-                                          ),
+                                                alignment: Alignment.center,
+                                                child: count > 0
+                                                    ? Text(
+                                                        '$count',
+                                                        style: const TextStyle(
+                                                            color: Color(0xFF00E676),
+                                                            fontSize: 12,
+                                                            fontWeight: FontWeight.bold),
+                                                      )
+                                                    : null,
+                                              ),
+                                            ),
+                                          ],
                                         );
                                       }),
                                     ),
