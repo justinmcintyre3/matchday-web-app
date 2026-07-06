@@ -1113,22 +1113,21 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                   suffixStyle: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
                 ),
                 onChanged: (val) {
-                  final parsed = double.tryParse(val);
-                  if (parsed != null) {
-                    array.maxWindSpeed = parsed;
-                    _extrapolateAllDownstreamWind();
-                    setState(() {});
-                    _saveStage(exitScreen: false);
-                  }
-                },
-                onFieldSubmitted: (val) {
-                  final parsed = double.tryParse(val) ?? array.maxWindSpeed;
-                  if (parsed < array.minWindSpeed) {
+                  final parsed = double.tryParse(val) ?? 0.0;
+                  array.maxWindSpeed = parsed;
+                  // Auto-pull min down if it's higher than new max (mirror min field behavior).
+                  // Defer while the first digit could still be a prefix of a larger number
+                  // (e.g. min/max both 15, typing "1" then "3" for 13).
+                  if (parsed < array.minWindSpeed &&
+                      parsed * 10 > array.minWindSpeed) {
                     array.minWindSpeed = parsed;
                     _getMinWindController(array).text = val;
                   }
-                  FocusScope.of(context).unfocus();
+                  _extrapolateAllDownstreamWind();
+                  setState(() {});
+                  _saveStage(exitScreen: false);
                 },
+                onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
               ),
             ),
             const SizedBox(width: 8),
