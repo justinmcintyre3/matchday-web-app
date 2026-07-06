@@ -175,8 +175,6 @@ class Stage {
         all.add(Target(
           index: globalIndex++,
           size: t.size,
-          distance: array.distance,
-          degreeOfFire: array.degreeOfFire,
           type: t.type,
           shotsCount: t.shotsCount,
         ));
@@ -223,19 +221,28 @@ class Stage {
         : <TargetArray>[];
 
     if (targetArraysList.isEmpty && map['targets'] != null) {
-      final legacyTargets = List<Target>.from(
-          map['targets']?.map((x) => Target.fromMap(x as Map)) ?? const []);
-      if (legacyTargets.isNotEmpty) {
+      final List<dynamic> rawTargets = map['targets'] as List<dynamic>;
+      if (rawTargets.isNotEmpty) {
         final Map<String, List<Target>> groups = {};
-        for (var t in legacyTargets) {
-          final key = '${t.distance}_${t.degreeOfFire}';
-          groups.putIfAbsent(key, () => []).add(t);
+        final Map<String, String> groupDistance = {};
+        final Map<String, String> groupDof = {};
+
+        for (var rawT in rawTargets) {
+          if (rawT is Map) {
+            final t = Target.fromMap(rawT);
+            final d = rawT['distance']?.toString() ?? '';
+            final dof = rawT['degreeOfFire']?.toString() ?? '';
+            final key = '${d}_$dof';
+            groups.putIfAbsent(key, () => []).add(t);
+            groupDistance[key] = d;
+            groupDof[key] = dof;
+          }
         }
-        for (var group in groups.values) {
+        for (var key in groups.keys) {
           targetArraysList.add(TargetArray(
-            distance: group.first.distance,
-            degreeOfFire: group.first.degreeOfFire,
-            targets: group,
+            distance: groupDistance[key] ?? '',
+            degreeOfFire: groupDof[key] ?? '',
+            targets: groups[key]!,
           ));
         }
       }
@@ -269,8 +276,6 @@ class Stage {
 class Target {
   final int index;
   String size;
-  String distance;
-  String degreeOfFire;
   String
       type; // IPSC, Sniper Head, Sniper Shoulders, Circles, Diamonds, Square, Pig, Coyote, Sasquatch, etc.
   int shotsCount; // number of shots for this target
@@ -278,8 +283,6 @@ class Target {
   Target({
     required this.index,
     this.size = '',
-    this.distance = '',
-    this.degreeOfFire = '',
     this.type = 'IPSC',
     this.shotsCount = 1,
   });
@@ -288,8 +291,6 @@ class Target {
     return {
       'index': index,
       'size': size,
-      'distance': distance,
-      'degreeOfFire': degreeOfFire,
       'type': type,
       'shotsCount': shotsCount,
     };
@@ -299,8 +300,6 @@ class Target {
     return Target(
       index: map['index']?.toInt() ?? 0,
       size: map['size'] ?? '',
-      distance: map['distance'] ?? '',
-      degreeOfFire: map['degreeOfFire'] ?? '',
       type: map['type'] ?? 'IPSC',
       shotsCount: map['shotsCount']?.toInt() ?? 1,
     );

@@ -283,8 +283,8 @@ class MatchDetailScreen extends StatelessWidget {
   Widget _buildStageTile(BuildContext context, MatchProvider provider,
       Match match, Stage stage, int index) {
     final isCompleted = stage.status == 'completed';
-    final targetSummary = stage.targets.isNotEmpty
-        ? '${stage.targets[0].distance} • ${stage.targets[0].size} • ${stage.targets[0].type}${stage.targets.length > 1 ? " (+${stage.targets.length - 1})" : ""}'
+    final targetSummary = stage.targetArrays.isNotEmpty && stage.targetArrays[0].targets.isNotEmpty
+        ? '${stage.targetArrays[0].distance} • ${stage.targetArrays[0].targets[0].size} • ${stage.targetArrays[0].targets[0].type}${stage.targets.length > 1 ? " (+${stage.targets.length - 1})" : ""}'
         : 'No targets defined';
 
     return Dismissible(

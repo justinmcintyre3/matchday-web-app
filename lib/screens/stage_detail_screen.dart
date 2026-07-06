@@ -102,8 +102,10 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   final Map<int, TextEditingController> _rangeControllers = {};
   final Map<int, TextEditingController> _dofControllers = {};
   final Map<int, TextEditingController> _incControllers = {};
+  final Map<int, TextEditingController> _targetSizeControllers = {};
   final Map<int, FocusNode> _rangeFocusNodes = {};
   final Map<int, FocusNode> _incFocusNodes = {};
+  final Map<int, FocusNode> _targetSizeFocusNodes = {};
   StreamSubscription<Map<String, dynamic>>? _rangeSubscription;
 
   TextEditingController _getRangeController(TargetArray array) {
@@ -172,6 +174,37 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       _incFocusNodes[key] = node;
     }
     return _incFocusNodes[key]!;
+  }
+
+  TextEditingController _getTargetSizeController(Target target) {
+    final key = target.hashCode;
+    if (!_targetSizeControllers.containsKey(key)) {
+      final rawVal = target.size.replaceAll(RegExp(r'[^0-9.]'), '');
+      _targetSizeControllers[key] = TextEditingController(text: rawVal.isEmpty ? '0.0' : rawVal);
+    }
+    return _targetSizeControllers[key]!;
+  }
+
+  FocusNode _getTargetSizeFocusNode(Target target) {
+    final key = target.hashCode;
+    if (!_targetSizeFocusNodes.containsKey(key)) {
+      final node = FocusNode();
+      node.addListener(() {
+        if (node.hasFocus) {
+          final ctrl = _targetSizeControllers[key];
+          if (ctrl != null) {
+            final text = ctrl.text;
+            if (text.startsWith('0.') && text.length >= 3) {
+               ctrl.selection = TextSelection(baseOffset: 2, extentOffset: text.length);
+            } else if (text.isNotEmpty) {
+               ctrl.selection = TextSelection(baseOffset: 0, extentOffset: text.length);
+            }
+          }
+        }
+      });
+      _targetSizeFocusNodes[key] = node;
+    }
+    return _targetSizeFocusNodes[key]!;
   }
 
   @override
@@ -390,8 +423,6 @@ class _StageDetailScreenState extends State<StageDetailScreen>
             return Target(
               index: t.index,
               size: normalizedSize,
-              distance: '',
-              degreeOfFire: '',
               type: t.type,
               shotsCount: t.shotsCount,
             );
@@ -489,8 +520,10 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     for (final c in _rangeControllers.values) { c.dispose(); }
     for (final c in _dofControllers.values) { c.dispose(); }
     for (final c in _incControllers.values) { c.dispose(); }
+    for (final c in _targetSizeControllers.values) { c.dispose(); }
     for (final n in _rangeFocusNodes.values) { n.dispose(); }
     for (final n in _incFocusNodes.values) { n.dispose(); }
+    for (final n in _targetSizeFocusNodes.values) { n.dispose(); }
     
     if (_isRx5000Active) {
       _rxProvider.decrementActivePages();
@@ -511,6 +544,35 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     _planScrollController.dispose();
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _confirmDelete(String itemType, VoidCallback onDelete) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete $itemType'),
+        content: Text('Are you sure you want to delete this ${itemType.toLowerCase()}?'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              Navigator.pop(context, false);
+            },
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              Navigator.pop(context, true);
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.redAccent)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      onDelete();
+    }
   }
 
   void _onRangeDataReceived(Map<String, dynamic> data) {
@@ -1335,14 +1397,14 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                         onPressed: () {
                           setState(() {
                             _stage.targetArrays.add(TargetArray(
-                              distance: '',
+
                               degreeOfFire: '0°',
                               targets: [
                                 Target(
                                   index: 1,
-                                  size: '',
-                                  distance: '',
-                                  degreeOfFire: '',
+                                  size: '0.0 MIL',
+
+
                                   type: 'IPSC',
                                   shotsCount: 1,
                                 ),
@@ -1411,9 +1473,12 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                   icon: const Icon(Icons.delete_sweep,
                                       color: Colors.redAccent, size: 20),
                                   onPressed: () {
-                                    setState(() {
-                                      _stage.targetArrays.removeAt(arrayIdx);
-                                      _adjustShotResultsLength();
+                                    HapticFeedback.lightImpact();
+                                    _confirmDelete('Position', () {
+                                      setState(() {
+                                        _stage.targetArrays.removeAt(arrayIdx);
+                                        _adjustShotResultsLength();
+                                      });
                                     });
                                   },
                                 ),
@@ -1457,7 +1522,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                     readOnly: true,
                                     onTap: () {
                                       HapticFeedback.lightImpact();
-                                      _showCompassDialog(array, arrayIdx);
+                                      _showCompassDialog(array);
                                     },
                                     style: const TextStyle(fontSize: 13),
                                     decoration: const InputDecoration(
@@ -1526,8 +1591,6 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                       array.targets.add(Target(
                                         index: array.targets.length + 1,
                                         size: '',
-                                        distance: '',
-                                        degreeOfFire: '',
                                         type: 'IPSC',
                                         shotsCount: 1,
                                       ));
@@ -1568,10 +1631,11 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                         child: TextFormField(
                                           key: Key(
                                               'tgt_size_${arrayIdx}_${targetIdx}_${target.size}'),
-                                          initialValue: target.size.replaceAll(
-                                              RegExp(r'[^0-9.]'), ''),
+                                          controller: _getTargetSizeController(target),
+                                          focusNode: _getTargetSizeFocusNode(target),
                                           keyboardType: const TextInputType
                                               .numberWithOptions(decimal: true),
+                                          textInputAction: TextInputAction.done,
                                           onTap: () =>
                                               HapticFeedback.lightImpact(),
                                           style: const TextStyle(fontSize: 12),
@@ -1592,6 +1656,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                             target.size =
                                                 val.isEmpty ? '' : '$val MIL';
                                           },
+                                          onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
                                         ),
                                       ),
                                       const SizedBox(width: 5),
@@ -1625,23 +1690,23 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                             color: Colors.redAccent, size: 18),
                                         onPressed: () {
                                           HapticFeedback.lightImpact();
-                                          setState(() {
-                                            array.targets.removeAt(targetIdx);
-                                            // Reindex targets inside array
-                                            for (int k = 0;
-                                                k < array.targets.length;
-                                                k++) {
-                                              array.targets[k] = Target(
-                                                index: k + 1,
-                                                size: array.targets[k].size,
-                                                distance: '',
-                                                degreeOfFire: '',
-                                                type: array.targets[k].type,
-                                                shotsCount:
-                                                    array.targets[k].shotsCount,
-                                              );
-                                            }
-                                            _adjustShotResultsLength();
+                                          _confirmDelete('Target', () {
+                                            setState(() {
+                                              array.targets.removeAt(targetIdx);
+                                              // Reindex targets inside array
+                                              for (int k = 0;
+                                                  k < array.targets.length;
+                                                  k++) {
+                                                array.targets[k] = Target(
+                                                  index: k + 1,
+                                                  size: array.targets[k].size,
+                                                  type: array.targets[k].type,
+                                                  shotsCount:
+                                                      array.targets[k].shotsCount,
+                                                );
+                                              }
+                                              _adjustShotResultsLength();
+                                            });
                                           });
                                         },
                                       ),
@@ -2564,6 +2629,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                     InkWell(
                                       onTap: () {
                                         HapticFeedback.lightImpact();
+                                        
                                         setState(() {
                                           if (result == 'miss') {
                                             _stage.shotResults[globalShotIdx] =
@@ -2935,7 +3001,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     return '---';
   }
 
-  void _showCompassDialog(dynamic targetOrArray, [int? arrayIdx]) {
+  void _showCompassDialog(TargetArray array) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -3091,18 +3157,11 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                       ElevatedButton(
                         onPressed: () {
                           setState(() {
-                            if (targetOrArray is Target) {
-                              targetOrArray.degreeOfFire =
-                                  '${displayHeading.round()}°';
-                            } else if (targetOrArray is TargetArray) {
-                              targetOrArray.degreeOfFire =
-                                  '${displayHeading.round()}°';
-                              _getDofController(targetOrArray).text = targetOrArray.degreeOfFire;
-                              final idx = arrayIdx ??
-                                  _stage.targetArrays.indexOf(targetOrArray);
-                              if (idx > 0) {
-                                _extrapolateWindForArray(idx);
-                              }
+                            array.degreeOfFire = '${displayHeading.round()}°';
+                            _getDofController(array).text = array.degreeOfFire;
+                            final idx = _stage.targetArrays.indexOf(array);
+                            if (idx > 0) {
+                              _extrapolateWindForArray(idx);
                             }
                           });
                           _saveStage(exitScreen: false);
