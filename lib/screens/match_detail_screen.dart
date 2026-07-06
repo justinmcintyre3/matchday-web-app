@@ -283,9 +283,7 @@ class MatchDetailScreen extends StatelessWidget {
   Widget _buildStageTile(BuildContext context, MatchProvider provider,
       Match match, Stage stage, int index) {
     final isCompleted = stage.status == 'completed';
-    final targetSummary = stage.targetArrays.isNotEmpty && stage.targetArrays[0].targets.isNotEmpty
-        ? '${stage.targetArrays[0].distance} • ${stage.targetArrays[0].targets[0].size} • ${stage.targetArrays[0].targets[0].type}${stage.targets.length > 1 ? " (+${stage.targets.length - 1})" : ""}'
-        : 'No targets defined';
+
 
     return Dismissible(
       key: Key('stage_${stage.stageNumber}_${match.stages.length}'),
@@ -377,15 +375,15 @@ class MatchDetailScreen extends StatelessWidget {
               fontSize: 16,
             ),
           ),
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 4.0),
-            child: Text(
-              stage.name.isNotEmpty
-                  ? 'Stage ${stage.stageNumber} • $targetSummary'
-                  : targetSummary,
-              style: TextStyle(color: Colors.grey[600], fontSize: 13),
-            ),
-          ),
+          subtitle: stage.name.isNotEmpty
+              ? Padding(
+                  padding: const EdgeInsets.only(top: 4.0),
+                  child: Text(
+                    'Stage ${stage.stageNumber}',
+                    style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                  ),
+                )
+              : null,
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [

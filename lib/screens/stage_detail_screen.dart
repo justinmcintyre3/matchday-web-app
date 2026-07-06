@@ -2387,13 +2387,15 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                             ),
                           ),
                           const SizedBox(width: 12),
-                          Text(
-                            '+${split.toStringAsFixed(2)}s',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[500],
+                          if (index > 0)
+                            Text(
+                              '>${split.toStringAsFixed(2)}s',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFFFFD60A),
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          ),
                         ],
                       ),
                     ),
@@ -2558,7 +2560,6 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                     Colors.white70.withValues(alpha: 0.3);
                                 Color embossedColor =
                                     Colors.white70.withValues(alpha: 0.15);
-                                Color shotTimeColor = Colors.white;
 
                                 if (result == 'hit') {
                                   bgColor = const Color(0xFF00E676)
@@ -2581,55 +2582,6 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                   embossedColor =
                                       Colors.grey.withValues(alpha: 0.60);
                                 }
-
-                                final roll =
-                                    globalShotIdx < _stage.shotRolls.length
-                                        ? _stage.shotRolls[globalShotIdx]
-                                        : 0.0;
-                                final sign = roll < 0 ? -1.0 : 1.0;
-                                final truncatedRoll =
-                                    sign * ((roll.abs() * 10).floor() / 10.0);
-                                final rollText = roll == 0.0
-                                    ? '---'
-                                    : '${truncatedRoll.toStringAsFixed(1)}°${truncatedRoll < 0 ? "L" : "R"}';
-                                final sgPulseProvider =
-                                    context.read<SgPulseProvider>();
-                                final rollThreshold =
-                                    sgPulseProvider.rollThreshold;
-                                final isWithinThreshold =
-                                    truncatedRoll.abs() <= rollThreshold;
-                                final rollColor = roll == 0.0
-                                    ? Colors.grey
-                                    : (isWithinThreshold
-                                        ? const Color(0xFF30D158)
-                                        : (truncatedRoll < 0
-                                            ? const Color(0xFFFF453A)
-                                            : const Color(0xFF0A84FF)));
-
-                                final hasStability = globalShotIdx <
-                                    _stage.shotStabilities.length;
-                                final stability = hasStability
-                                    ? _stage.shotStabilities[globalShotIdx]
-                                    : 0.0;
-                                final stabilityText = hasStability
-                                    ? 'S: ${stability.toStringAsFixed(1)}'
-                                    : '---';
-                                Color stabilityColor = Colors.grey;
-                                if (hasStability) {
-                                  if (stability <=
-                                      sgPulseProvider.stabilityGreenZone) {
-                                    stabilityColor =
-                                        const Color(0xFF30D158); // green
-                                  } else if (stability <=
-                                      sgPulseProvider.stabilityYellowZone) {
-                                    stabilityColor =
-                                        const Color(0xFFFFD60A); // yellow
-                                  } else {
-                                    stabilityColor =
-                                        const Color(0xFFFF453A); // red
-                                  }
-                                }
-
                                 return Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -2675,37 +2627,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                                 height: 1.0,
                                               ),
                                             ),
-                                            // Foreground time
-                                            if (_stage.shotTimes.length >
-                                                globalShotIdx)
-                                              Text(
-                                                '${_stage.shotTimes[globalShotIdx].toStringAsFixed(1)}s',
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: shotTimeColor,
-                                                ),
-                                              ),
                                           ],
                                         ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      rollText,
-                                      style: TextStyle(
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.bold,
-                                        color: rollColor,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      stabilityText,
-                                      style: TextStyle(
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.bold,
-                                        color: stabilityColor,
                                       ),
                                     ),
                                   ],
