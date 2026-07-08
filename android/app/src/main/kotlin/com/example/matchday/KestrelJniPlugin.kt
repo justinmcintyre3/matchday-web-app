@@ -224,6 +224,7 @@ class KestrelJniPlugin(private val channel: MethodChannel, private val context: 
         elevation: Float,
         windage1: Float,
         windage2: Float,
+        lead: Float,
         targetNumber: Int,
         solutionId: Int = targetNumber,
     ): Map<String, Any> {
@@ -231,6 +232,7 @@ class KestrelJniPlugin(private val channel: MethodChannel, private val context: 
             "elevation" to elevation,
             "windage1" to windage1,
             "windage2" to windage2,
+            "lead" to lead,
             "targetNumber" to targetNumber,
             "solutionId" to solutionId,
         )
@@ -327,7 +329,7 @@ class KestrelJniPlugin(private val channel: MethodChannel, private val context: 
     ) {
         invokeFlutter(
             "onBalFullSolution",
-            solutionMap(f4, f5, f6, i2, i4),
+            solutionMap(f4, f5, f6, 0f, i2, i4),
         )
     }
 
@@ -366,6 +368,7 @@ class KestrelJniPlugin(private val channel: MethodChannel, private val context: 
                 eVar.Elevation,
                 eVar.Wnd1,
                 eVar.Wnd2,
+                eVar.Lead,
                 eVar.TargetNumber,
                 eVar.SolutionId,
             ),

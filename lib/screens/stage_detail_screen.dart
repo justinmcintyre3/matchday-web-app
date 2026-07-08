@@ -110,6 +110,10 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   final Map<int, FocusNode> _rangeFocusNodes = {};
   final Map<int, FocusNode> _incFocusNodes = {};
   final Map<int, FocusNode> _targetSizeFocusNodes = {};
+  final Map<int, TextEditingController> _speedControllers = {};
+  final Map<int, FocusNode> _speedFocusNodes = {};
+  // Tracks which target hash has a focused speed field (for showing Estimate button)
+  int? _focusedSpeedTargetKey;
   StreamSubscription<Map<String, dynamic>>? _rangeSubscription;
 
   TextEditingController _getRangeController(TargetArray array) {
@@ -129,8 +133,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   TextEditingController _getMinWindController(TargetArray array) {
     final key = array.hashCode;
     if (!_minWindControllers.containsKey(key)) {
-      _minWindControllers[key] = TextEditingController(
-          text: _formatWindSpeed(array.minWindSpeed));
+      _minWindControllers[key] =
+          TextEditingController(text: _formatWindSpeed(array.minWindSpeed));
     }
     return _minWindControllers[key]!;
   }
@@ -138,8 +142,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   TextEditingController _getMaxWindController(TargetArray array) {
     final key = array.hashCode;
     if (!_maxWindControllers.containsKey(key)) {
-      _maxWindControllers[key] = TextEditingController(
-          text: _formatWindSpeed(array.maxWindSpeed));
+      _maxWindControllers[key] =
+          TextEditingController(text: _formatWindSpeed(array.maxWindSpeed));
     }
     return _maxWindControllers[key]!;
   }
@@ -152,7 +156,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
         if (node.hasFocus) {
           final ctrl = _minWindControllers[key];
           if (ctrl != null) {
-            ctrl.selection = TextSelection(baseOffset: 0, extentOffset: ctrl.text.length);
+            ctrl.selection =
+                TextSelection(baseOffset: 0, extentOffset: ctrl.text.length);
           }
         }
       });
@@ -169,7 +174,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
         if (node.hasFocus) {
           final ctrl = _maxWindControllers[key];
           if (ctrl != null) {
-            ctrl.selection = TextSelection(baseOffset: 0, extentOffset: ctrl.text.length);
+            ctrl.selection =
+                TextSelection(baseOffset: 0, extentOffset: ctrl.text.length);
           }
         } else {
           // On focus lost: if max < min, pull min down to match
@@ -207,7 +213,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
         initVal = '+$numVal';
         array.inclination = initVal;
       }
-      _incControllers[key] = TextEditingController(text: _formatIncDisplay(initVal));
+      _incControllers[key] =
+          TextEditingController(text: _formatIncDisplay(initVal));
     }
     return _incControllers[key]!;
   }
@@ -239,7 +246,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
           if (stripped != ctrl.text) {
             ctrl.text = stripped;
           }
-          ctrl.selection = TextSelection(baseOffset: 0, extentOffset: ctrl.text.length);
+          ctrl.selection =
+              TextSelection(baseOffset: 0, extentOffset: ctrl.text.length);
         } else {
           final valStr = _stripIncDegree(ctrl.text);
           final numVal = int.tryParse(valStr);
@@ -263,7 +271,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     final key = target.hashCode;
     if (!_targetSizeControllers.containsKey(key)) {
       final rawVal = target.size.replaceAll(RegExp(r'[^0-9.]'), '');
-      _targetSizeControllers[key] = TextEditingController(text: rawVal.isEmpty ? '0.0' : rawVal);
+      _targetSizeControllers[key] =
+          TextEditingController(text: rawVal.isEmpty ? '0.0' : rawVal);
     }
     return _targetSizeControllers[key]!;
   }
@@ -278,9 +287,11 @@ class _StageDetailScreenState extends State<StageDetailScreen>
           if (ctrl != null) {
             final text = ctrl.text;
             if (text.startsWith('0.') && text.length >= 3) {
-               ctrl.selection = TextSelection(baseOffset: 2, extentOffset: text.length);
+              ctrl.selection =
+                  TextSelection(baseOffset: 2, extentOffset: text.length);
             } else if (text.isNotEmpty) {
-               ctrl.selection = TextSelection(baseOffset: 0, extentOffset: text.length);
+              ctrl.selection =
+                  TextSelection(baseOffset: 0, extentOffset: text.length);
             }
           }
         }
@@ -290,13 +301,51 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     return _targetSizeFocusNodes[key]!;
   }
 
+  TextEditingController _getSpeedController(Target target) {
+    final key = target.hashCode;
+    if (!_speedControllers.containsKey(key)) {
+      final rawVal = target.targetSpeedMph == 0.0
+          ? ''
+          : target.targetSpeedMph.toStringAsFixed(1);
+      _speedControllers[key] = TextEditingController(text: rawVal);
+    }
+    return _speedControllers[key]!;
+  }
+
+  FocusNode _getSpeedFocusNode(Target target) {
+    final key = target.hashCode;
+    if (!_speedFocusNodes.containsKey(key)) {
+      final node = FocusNode();
+      node.addListener(() {
+        if (node.hasFocus) {
+          final ctrl = _speedControllers[key];
+          if (ctrl != null) {
+            ctrl.selection =
+                TextSelection(baseOffset: 0, extentOffset: ctrl.text.length);
+          }
+          if (mounted) {
+            setState(() => _focusedSpeedTargetKey = key);
+          }
+        } else {
+          if (mounted) {
+            setState(() {
+              if (_focusedSpeedTargetKey == key) _focusedSpeedTargetKey = null;
+            });
+          }
+        }
+      });
+      _speedFocusNodes[key] = node;
+    }
+    return _speedFocusNodes[key]!;
+  }
+
   @override
   void initState() {
     super.initState();
     _rxProvider = context.read<Rx5000Provider>();
     _rangeSubscription = _rxProvider.onRangeData.listen(_onRangeDataReceived);
     _tabController = TabController(length: 3, vsync: this);
-    
+
     if (_tabController.index == 0) {
       _rxProvider.incrementActivePages();
       _isRx5000Active = true;
@@ -307,7 +356,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       if (_tabController.indexIsChanging) {
         HapticFeedback.lightImpact();
       }
-      
+
       final shouldBeActive = _tabController.index == 0;
       if (shouldBeActive && !_isRx5000Active) {
         _rxProvider.incrementActivePages();
@@ -316,7 +365,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
         _rxProvider.decrementActivePages();
         _isRx5000Active = false;
       }
-      
+
       setState(() {});
     });
 
@@ -508,6 +557,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
               size: normalizedSize,
               type: t.type,
               shotsCount: t.shotsCount,
+              isMovingTarget: t.isMovingTarget,
+              targetSpeedMph: t.targetSpeedMph,
+              targetLeadMil: t.targetLeadMil,
             );
           }));
 
@@ -600,18 +652,46 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   @override
   void dispose() {
     _rangeSubscription?.cancel();
-    for (final c in _rangeControllers.values) { c.dispose(); }
-    for (final c in _dofControllers.values) { c.dispose(); }
-    for (final c in _incControllers.values) { c.dispose(); }
-    for (final c in _targetSizeControllers.values) { c.dispose(); }
-    for (final c in _minWindControllers.values) { c.dispose(); }
-    for (final c in _maxWindControllers.values) { c.dispose(); }
-    for (final n in _minWindFocusNodes.values) { n.dispose(); }
-    for (final n in _maxWindFocusNodes.values) { n.dispose(); }
-    for (final n in _rangeFocusNodes.values) { n.dispose(); }
-    for (final n in _incFocusNodes.values) { n.dispose(); }
-    for (final n in _targetSizeFocusNodes.values) { n.dispose(); }
-    
+    for (final c in _rangeControllers.values) {
+      c.dispose();
+    }
+    for (final c in _dofControllers.values) {
+      c.dispose();
+    }
+    for (final c in _incControllers.values) {
+      c.dispose();
+    }
+    for (final c in _targetSizeControllers.values) {
+      c.dispose();
+    }
+    for (final c in _minWindControllers.values) {
+      c.dispose();
+    }
+    for (final c in _maxWindControllers.values) {
+      c.dispose();
+    }
+    for (final n in _minWindFocusNodes.values) {
+      n.dispose();
+    }
+    for (final n in _maxWindFocusNodes.values) {
+      n.dispose();
+    }
+    for (final n in _rangeFocusNodes.values) {
+      n.dispose();
+    }
+    for (final n in _incFocusNodes.values) {
+      n.dispose();
+    }
+    for (final n in _targetSizeFocusNodes.values) {
+      n.dispose();
+    }
+    for (final c in _speedControllers.values) {
+      c.dispose();
+    }
+    for (final n in _speedFocusNodes.values) {
+      n.dispose();
+    }
+
     if (_isRx5000Active) {
       _rxProvider.decrementActivePages();
     }
@@ -638,7 +718,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Delete $itemType'),
-        content: Text('Are you sure you want to delete this ${itemType.toLowerCase()}?'),
+        content: Text(
+            'Are you sure you want to delete this ${itemType.toLowerCase()}?'),
         actions: [
           TextButton(
             onPressed: () {
@@ -652,7 +733,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
               HapticFeedback.lightImpact();
               Navigator.pop(context, true);
             },
-            child: const Text('Delete', style: TextStyle(color: Colors.redAccent)),
+            child:
+                const Text('Delete', style: TextStyle(color: Colors.redAccent)),
           ),
         ],
       ),
@@ -664,7 +746,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
 
   void _onRangeDataReceived(Map<String, dynamic> data) {
     if (!mounted) return;
-    
+
     TargetArray? focusedArray;
     for (final array in _stage.targetArrays) {
       if (_rangeFocusNodes[array.hashCode]?.hasFocus == true) {
@@ -683,7 +765,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
         _getRangeController(focusedArray).text = rangeStr;
         focusedArray.distance = '$rangeStr YD';
       }
-      
+
       if (heading != null) {
         final headingStr = '${heading.round()}°';
         _getDofController(focusedArray).text = headingStr;
@@ -917,10 +999,18 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     final elevation = (result['elevation'] as num).toDouble();
     final w1 = (result['windage1'] as num).toDouble();
     final w2 = (result['windage2'] as num).toDouble();
+    final leadMil = (result['lead'] as num?)?.toDouble() ?? 0.0;
 
     final array = _stage.targetArrays[arrayIdx];
     array.elevationResult = TargetArray.formatElevationMil(elevation);
     array.windageResult = TargetArray.formatWindagePair(w1, w2);
+
+    // Store lead value on any moving target in this array
+    for (final t in array.targets) {
+      if (t.isMovingTarget) {
+        t.targetLeadMil = leadMil;
+      }
+    }
 
     if (arrayIdx == 0) {
       _stage.windPlan.kestrelValue = w1.abs();
@@ -1075,7 +1165,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                   contentPadding:
                       EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                   labelStyle: TextStyle(fontSize: 10),
-                  suffixStyle: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                  suffixStyle:
+                      TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
                 ),
                 onChanged: (val) {
                   final parsed = double.tryParse(val) ?? 0.0;
@@ -1110,7 +1201,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                   contentPadding:
                       EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                   labelStyle: TextStyle(fontSize: 10),
-                  suffixStyle: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                  suffixStyle:
+                      TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
                 ),
                 onChanged: (val) {
                   final parsed = double.tryParse(val) ?? 0.0;
@@ -1296,6 +1388,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   }
 
   Future<void> _syncToWatch() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     _saveStage(exitScreen: false);
     context.read<MatchProvider>().syncActiveStageToWatch();
 
@@ -1336,11 +1429,16 @@ class _StageDetailScreenState extends State<StageDetailScreen>
         final windDir = _absoluteWindBearingForArray(i);
         final wind1 = array0.minWindSpeed;
         final wind2 = array0.maxWindSpeed;
+        // Find a moving target in this array to get target speed
+        final movingTarget =
+            array.targets.where((t) => t.isMovingTarget).firstOrNull;
+        final targetSpeed = movingTarget?.targetSpeedMph ?? 0.0;
 
         debugPrint(
           '[Kestrel Sync] target $i: rng=${rangeYards}yd dof=$dof inc=$inc '
           'wind=$wind1-$wind2 mph wd=${windDir.toStringAsFixed(0)}° '
-          '(${TargetArray.formatClockSlot(TargetArray.degreesToClockSlot(windDir))})',
+          '(${TargetArray.formatClockSlot(TargetArray.degreesToClockSlot(windDir))}) '
+          'tgtSpeed=${targetSpeed}mph',
         );
 
         var result = await _sendAndWaitForBalSolution(
@@ -1354,6 +1452,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
             windSpeed2Mph: wind2,
             windDirection: windDir,
             inclinationAngle: inc,
+            targetSpeedMph: targetSpeed,
           ),
         );
 
@@ -1427,34 +1526,34 @@ class _StageDetailScreenState extends State<StageDetailScreen>
           }
         },
         child: GestureDetector(
-          onTap: () => FocusScope.of(context).unfocus(),
+          onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
           child: Scaffold(
-          appBar: GlobalAppBar(
-            title: Text(_stage.name.isNotEmpty
-                ? _stage.name
-                : 'Stage ${widget.stageNumber} Setup'),
-            bottom: TabBar(
+            appBar: GlobalAppBar(
+              title: Text(_stage.name.isNotEmpty
+                  ? _stage.name
+                  : 'Stage ${widget.stageNumber} Setup'),
+              bottom: TabBar(
+                controller: _tabController,
+                onTap: (index) => HapticFeedback.lightImpact(),
+                indicatorColor: const Color(0xFF007AFF),
+                labelColor: const Color(0xFF007AFF),
+                unselectedLabelColor: Colors.grey,
+                tabs: const [
+                  Tab(icon: Icon(Icons.edit_note), text: 'Plan'),
+                  Tab(icon: Icon(Icons.watch), text: 'Shoot'),
+                  Tab(icon: Icon(Icons.rate_review), text: 'Review'),
+                ],
+              ),
+            ),
+            body: TabBarView(
               controller: _tabController,
-              onTap: (index) => HapticFeedback.lightImpact(),
-              indicatorColor: const Color(0xFF007AFF),
-              labelColor: const Color(0xFF007AFF),
-              unselectedLabelColor: Colors.grey,
-              tabs: const [
-                Tab(icon: Icon(Icons.edit_note), text: 'Plan'),
-                Tab(icon: Icon(Icons.watch), text: 'Shoot'),
-                Tab(icon: Icon(Icons.rate_review), text: 'Review'),
+              children: [
+                _buildPlanTab(),
+                _buildShootTab(),
+                _buildReviewTab(),
               ],
             ),
           ),
-          body: TabBarView(
-            controller: _tabController,
-            children: [
-              _buildPlanTab(),
-              _buildShootTab(),
-              _buildReviewTab(),
-            ],
-          ),
-        ),
         ),
       ),
     );
@@ -1579,10 +1678,14 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                         color: Color(0xFF007AFF),
                                       ),
                                     ),
-                                    if (context.watch<Rx5000Provider>().isConnected && _getRangeFocusNode(array).hasFocus)
+                                    if (context
+                                            .watch<Rx5000Provider>()
+                                            .isConnected &&
+                                        _getRangeFocusNode(array).hasFocus)
                                       const Padding(
                                         padding: EdgeInsets.only(left: 6.0),
-                                        child: Icon(Icons.track_changes, color: Colors.redAccent, size: 14),
+                                        child: Icon(Icons.track_changes,
+                                            color: Colors.redAccent, size: 14),
                                       ),
                                   ],
                                 ),
@@ -1611,8 +1714,11 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                   child: TextFormField(
                                     controller: _getRangeController(array),
                                     focusNode: _getRangeFocusNode(array),
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    textInputAction: arrayIdx < _stage.targetArrays.length - 1
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                            decimal: true),
+                                    textInputAction: arrayIdx <
+                                            _stage.targetArrays.length - 1
                                         ? TextInputAction.next
                                         : TextInputAction.done,
                                     onTap: () => HapticFeedback.lightImpact(),
@@ -1622,18 +1728,25 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                       suffixText: 'YD',
                                       isDense: true,
                                       border: OutlineInputBorder(),
-                                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                                      contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 10),
                                       labelStyle: TextStyle(fontSize: 12),
-                                      suffixStyle: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                                      suffixStyle: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold),
                                     ),
                                     onChanged: (val) {
-                                      array.distance = val.isEmpty ? '0 YD' : '$val YD';
+                                      array.distance =
+                                          val.isEmpty ? '0 YD' : '$val YD';
                                     },
                                     onFieldSubmitted: (_) {
                                       _saveStage(exitScreen: false);
-                                      if (arrayIdx < _stage.targetArrays.length - 1) {
-                                        final nextArray = _stage.targetArrays[arrayIdx + 1];
-                                        _getRangeFocusNode(nextArray).requestFocus();
+                                      if (arrayIdx <
+                                          _stage.targetArrays.length - 1) {
+                                        final nextArray =
+                                            _stage.targetArrays[arrayIdx + 1];
+                                        _getRangeFocusNode(nextArray)
+                                            .requestFocus();
                                       } else {
                                         FocusScope.of(context).unfocus();
                                       }
@@ -1655,9 +1768,12 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                       labelText: 'DoF',
                                       isDense: true,
                                       border: OutlineInputBorder(),
-                                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                                      contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 10),
                                       labelStyle: TextStyle(fontSize: 12),
-                                      suffixIcon: Icon(Icons.compass_calibration, size: 14),
+                                      suffixIcon: Icon(
+                                          Icons.compass_calibration,
+                                          size: 14),
                                     ),
                                   ),
                                 ),
@@ -1667,12 +1783,15 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                   child: TextFormField(
                                     controller: _getIncController(array),
                                     focusNode: _getIncFocusNode(array),
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                            decimal: true, signed: true),
                                     textInputAction: TextInputAction.done,
                                     onTap: () {
                                       HapticFeedback.lightImpact();
                                       final ctrl = _getIncController(array);
-                                      final stripped = _stripIncDegree(ctrl.text);
+                                      final stripped =
+                                          _stripIncDegree(ctrl.text);
                                       if (stripped != ctrl.text) {
                                         ctrl.text = stripped;
                                       }
@@ -1686,11 +1805,13 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                       labelText: 'Inc',
                                       isDense: true,
                                       border: OutlineInputBorder(),
-                                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                                      contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 10),
                                       labelStyle: TextStyle(fontSize: 12),
                                     ),
                                     onChanged: (val) {
-                                      array.inclination = val.isEmpty ? '0' : val;
+                                      array.inclination =
+                                          val.isEmpty ? '0' : val;
                                     },
                                     onFieldSubmitted: (_) {
                                       _saveStage(exitScreen: false);
@@ -1739,116 +1860,435 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                               itemCount: array.targets.length,
                               itemBuilder: (context, targetIdx) {
                                 final target = array.targets[targetIdx];
-                                return Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 4.0),
-                                  child: Row(
-                                    children: [
-                                      Text(
-                                        'T${targetIdx + 1}',
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.grey,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Expanded(
-                                        flex: 11,
-                                        child: _buildShapeButton(target),
-                                      ),
-                                      const SizedBox(width: 5),
-                                      Expanded(
-                                        flex: 5,
-                                        child: TextFormField(
-                                          key: Key(
-                                              'tgt_size_${arrayIdx}_${targetIdx}_${target.size}'),
-                                          controller: _getTargetSizeController(target),
-                                          focusNode: _getTargetSizeFocusNode(target),
-                                          keyboardType: const TextInputType
-                                              .numberWithOptions(decimal: true),
-                                          textInputAction: targetIdx < array.targets.length - 1 ? TextInputAction.next : TextInputAction.done,
-                                          onTap: () => HapticFeedback.lightImpact(),
-                                          style: const TextStyle(fontSize: 12),
-                                          decoration: const InputDecoration(
-                                            labelText: 'Size',
-                                            suffixText: 'MIL',
-                                            isDense: true,
-                                            border: OutlineInputBorder(),
-                                            contentPadding:
-                                                EdgeInsets.symmetric(
-                                                    horizontal: 4, vertical: 6),
-                                            labelStyle: TextStyle(fontSize: 10),
-                                            suffixStyle: TextStyle(
-                                                fontSize: 9,
-                                                fontWeight: FontWeight.bold),
-                                          ),
-                                          onChanged: (val) {
-                                            target.size =
-                                                val.isEmpty ? '' : '$val MIL';
-                                          },
-                                          onFieldSubmitted: (_) {
-                                            if (targetIdx < array.targets.length - 1) {
-                                              _getTargetSizeFocusNode(array.targets[targetIdx + 1]).requestFocus();
-                                            } else {
-                                              FocusScope.of(context).unfocus();
-                                            }
-                                          },
-                                        ),
-                                      ),
-                                      const SizedBox(width: 5),
-                                      Expanded(
-                                        flex: 4,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              vertical: 8),
-                                          decoration: BoxDecoration(
-                                            border: Border.all(
-                                                color: Colors.white10),
-                                            borderRadius:
-                                                BorderRadius.circular(4),
-                                          ),
-                                          child: Center(
-                                            child: Text(
-                                              '${target.shotsCount} ${target.shotsCount == 1 ? 'Shot' : 'Shots'}',
-                                              style: const TextStyle(
-                                                  fontSize: 11,
-                                                  color: Colors.grey),
+                                final speedKey = target.hashCode;
+                                final isSpeedFocused =
+                                    _focusedSpeedTargetKey == speedKey;
+                                return Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 4.0),
+                                      child: Row(
+                                        children: [
+                                          Text(
+                                            'T${targetIdx + 1}',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.grey,
                                             ),
                                           ),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            flex: 11,
+                                            child: _buildShapeButton(
+                                                target, array),
+                                          ),
+                                          const SizedBox(width: 5),
+                                          Expanded(
+                                            flex: 5,
+                                            child: TextFormField(
+                                              key: Key(
+                                                  'tgt_size_${arrayIdx}_${targetIdx}_${target.size}'),
+                                              controller:
+                                                  _getTargetSizeController(
+                                                      target),
+                                              focusNode:
+                                                  _getTargetSizeFocusNode(
+                                                      target),
+                                              keyboardType: const TextInputType
+                                                  .numberWithOptions(
+                                                  decimal: true),
+                                              textInputAction: targetIdx <
+                                                      array.targets.length - 1
+                                                  ? TextInputAction.next
+                                                  : TextInputAction.done,
+                                              onTap: () =>
+                                                  HapticFeedback.lightImpact(),
+                                              style:
+                                                  const TextStyle(fontSize: 12),
+                                              decoration: const InputDecoration(
+                                                labelText: 'Size',
+                                                suffixText: 'MIL',
+                                                isDense: true,
+                                                border: OutlineInputBorder(),
+                                                contentPadding:
+                                                    EdgeInsets.symmetric(
+                                                        horizontal: 4,
+                                                        vertical: 6),
+                                                labelStyle:
+                                                    TextStyle(fontSize: 10),
+                                                suffixStyle: TextStyle(
+                                                    fontSize: 9,
+                                                    fontWeight:
+                                                        FontWeight.bold),
+                                              ),
+                                              onChanged: (val) {
+                                                target.size = val.isEmpty
+                                                    ? ''
+                                                    : '$val MIL';
+                                              },
+                                              onFieldSubmitted: (_) {
+                                                if (targetIdx <
+                                                    array.targets.length - 1) {
+                                                  _getTargetSizeFocusNode(
+                                                          array.targets[
+                                                              targetIdx + 1])
+                                                      .requestFocus();
+                                                } else {
+                                                  FocusScope.of(context)
+                                                      .unfocus();
+                                                }
+                                              },
+                                            ),
+                                          ),
+                                          const SizedBox(width: 5),
+                                          Expanded(
+                                            flex: 4,
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      vertical: 8),
+                                              decoration: BoxDecoration(
+                                                border: Border.all(
+                                                    color: Colors.white10),
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                              ),
+                                              child: Center(
+                                                child: Text(
+                                                  '${target.shotsCount} ${target.shotsCount == 1 ? 'Shot' : 'Shots'}',
+                                                  style: const TextStyle(
+                                                      fontSize: 11,
+                                                      color: Colors.grey),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 2),
+                                          IconButton(
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(),
+                                            icon: const Icon(
+                                                Icons.delete_outline,
+                                                color: Colors.redAccent,
+                                                size: 18),
+                                            onPressed: () {
+                                              HapticFeedback.lightImpact();
+                                              _confirmDelete('Target', () {
+                                                setState(() {
+                                                  array.targets
+                                                      .removeAt(targetIdx);
+                                                  // Reindex targets inside array
+                                                  for (int k = 0;
+                                                      k < array.targets.length;
+                                                      k++) {
+                                                    array.targets[k] = Target(
+                                                      index: k + 1,
+                                                      size:
+                                                          array.targets[k].size,
+                                                      type:
+                                                          array.targets[k].type,
+                                                      shotsCount: array
+                                                          .targets[k]
+                                                          .shotsCount,
+                                                      isMovingTarget: array
+                                                          .targets[k]
+                                                          .isMovingTarget,
+                                                      targetSpeedMph: array
+                                                          .targets[k]
+                                                          .targetSpeedMph,
+                                                      targetLeadMil: array
+                                                          .targets[k]
+                                                          .targetLeadMil,
+                                                    );
+                                                  }
+                                                  _adjustShotResultsLength();
+                                                });
+                                              });
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    // Moving target speed + lead sub-row
+                                    if (target.isMovingTarget) ...[
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                            left: 20, right: 2, bottom: 6),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                // Speed input
+                                                Expanded(
+                                                  child: TextFormField(
+                                                    controller:
+                                                        _getSpeedController(
+                                                            target),
+                                                    focusNode:
+                                                        _getSpeedFocusNode(
+                                                            target),
+                                                    keyboardType:
+                                                        const TextInputType
+                                                            .numberWithOptions(
+                                                            decimal: true),
+                                                    textInputAction:
+                                                        TextInputAction.done,
+                                                    onTap: () => HapticFeedback
+                                                        .lightImpact(),
+                                                    style: const TextStyle(
+                                                        fontSize: 12,
+                                                        color:
+                                                            Color(0xFFFFB300)),
+                                                    decoration: InputDecoration(
+                                                      labelText: 'Speed',
+                                                      suffixText: 'mph',
+                                                      isDense: true,
+                                                      border:
+                                                          const OutlineInputBorder(),
+                                                      enabledBorder:
+                                                          OutlineInputBorder(
+                                                        borderSide: BorderSide(
+                                                            color: const Color(
+                                                                    0xFFFFB300)
+                                                                .withValues(
+                                                                    alpha:
+                                                                        0.5)),
+                                                      ),
+                                                      focusedBorder:
+                                                          const OutlineInputBorder(
+                                                        borderSide: BorderSide(
+                                                            color: Color(
+                                                                0xFFFFB300)),
+                                                      ),
+                                                      labelStyle:
+                                                          const TextStyle(
+                                                              fontSize: 10,
+                                                              color: Color(
+                                                                  0xFFFFB300)),
+                                                      suffixStyle:
+                                                          const TextStyle(
+                                                              fontSize: 9,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              color: Color(
+                                                                  0xFFFFB300)),
+                                                      contentPadding:
+                                                          const EdgeInsets
+                                                              .symmetric(
+                                                              horizontal: 6,
+                                                              vertical: 6),
+                                                    ),
+                                                    onChanged: (val) {
+                                                      final parsed =
+                                                          double.tryParse(val);
+                                                      setState(() {
+                                                        target.targetSpeedMph =
+                                                            parsed ?? 0.0;
+                                                      });
+                                                      _saveStage(
+                                                          exitScreen: false);
+                                                    },
+                                                    onFieldSubmitted: (_) {
+                                                      FocusScope.of(context)
+                                                          .unfocus();
+                                                    },
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                // Lead display box — styled to match Speed field
+                                                Expanded(
+                                                  child: InputDecorator(
+                                                    decoration: InputDecoration(
+                                                      labelText: 'Lead',
+                                                      suffixText:
+                                                          target.targetLeadMil ==
+                                                                  0.0
+                                                              ? ''
+                                                              : 'MIL',
+                                                      isDense: true,
+                                                      border:
+                                                          const OutlineInputBorder(),
+                                                      enabledBorder:
+                                                          OutlineInputBorder(
+                                                        borderSide: BorderSide(
+                                                            color: const Color(
+                                                                    0xFFFFB300)
+                                                                .withValues(
+                                                                    alpha:
+                                                                        0.4)),
+                                                      ),
+                                                      labelStyle:
+                                                          const TextStyle(
+                                                              fontSize: 10,
+                                                              color: Color(
+                                                                  0xFFFFB300)),
+                                                      suffixStyle:
+                                                          const TextStyle(
+                                                              fontSize: 9,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              color: Color(
+                                                                  0xFFFFB300)),
+                                                      contentPadding:
+                                                          const EdgeInsets
+                                                              .symmetric(
+                                                              horizontal: 6,
+                                                              vertical: 6),
+                                                    ),
+                                                    child: Text(
+                                                      target.targetLeadMil ==
+                                                              0.0
+                                                          ? '---'
+                                                          : target.targetLeadMil
+                                                              .toStringAsFixed(
+                                                                  2),
+                                                      style: const TextStyle(
+                                                        fontSize: 12,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: Colors.white,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            // Estimate button (shown when speed field is focused)
+                                            if (isSpeedFocused)
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                    top: 6),
+                                                child: SizedBox(
+                                                  height: 32,
+                                                  child: OutlinedButton.icon(
+                                                    onPressed: () {
+                                                      HapticFeedback
+                                                          .lightImpact();
+                                                      _getSpeedFocusNode(target)
+                                                          .unfocus();
+                                                      _showSpeedEstimatorDialog(
+                                                          target, array);
+                                                    },
+                                                    icon: const Icon(
+                                                        Icons
+                                                            .calculate_outlined,
+                                                        size: 14),
+                                                    label: const Text(
+                                                        'Estimate',
+                                                        style: TextStyle(
+                                                            fontSize: 12)),
+                                                    style: OutlinedButton
+                                                        .styleFrom(
+                                                      foregroundColor:
+                                                          const Color(
+                                                              0xFFFFB300),
+                                                      side: const BorderSide(
+                                                          color:
+                                                              Color(0xFFFFB300),
+                                                          width: 1),
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 12),
+                                                      visualDensity:
+                                                          VisualDensity.compact,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            // Edge holds
+                                            Builder(builder: (context) {
+                                              double parsedWidth = 0.0;
+                                              final cleanStr = target.size.replaceAll(RegExp(r'[^0-9.]'), '');
+                                              if (cleanStr.isNotEmpty) {
+                                                parsedWidth = double.tryParse(cleanStr) ?? 0.0;
+                                              }
+                                              
+                                              final showEdges = target.targetLeadMil != 0.0 && parsedWidth > 0.0;
+                                              final leadingEdge = showEdges ? (target.targetLeadMil - (parsedWidth / 2)) : 0.0;
+                                              final trailingEdge = showEdges ? (target.targetLeadMil + (parsedWidth / 2)) : 0.0;
+                                              
+                                              return Padding(
+                                                padding: const EdgeInsets.only(top: 8.0),
+                                                child: Row(
+                                                  children: [
+                                                    Expanded(
+                                                      child: InputDecorator(
+                                                        decoration: InputDecoration(
+                                                          labelText: 'Leading Edge',
+                                                          suffixText: showEdges ? 'MIL' : '',
+                                                          isDense: true,
+                                                          border: const OutlineInputBorder(),
+                                                          enabledBorder: OutlineInputBorder(
+                                                            borderSide: BorderSide(
+                                                                color: const Color(0xFFFFB300).withValues(alpha: 0.4)),
+                                                          ),
+                                                          labelStyle: const TextStyle(
+                                                              fontSize: 10, color: Color(0xFFFFB300)),
+                                                          suffixStyle: const TextStyle(
+                                                              fontSize: 9,
+                                                              fontWeight: FontWeight.bold,
+                                                              color: Color(0xFFFFB300)),
+                                                          contentPadding: const EdgeInsets.symmetric(
+                                                              horizontal: 6, vertical: 6),
+                                                        ),
+                                                        child: Text(
+                                                          showEdges ? leadingEdge.toStringAsFixed(2) : '---',
+                                                          style: const TextStyle(
+                                                              fontSize: 12,
+                                                              fontWeight: FontWeight.bold,
+                                                              color: Colors.white),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Expanded(
+                                                      child: InputDecorator(
+                                                        decoration: InputDecoration(
+                                                          labelText: 'Trailing Edge',
+                                                          suffixText: showEdges ? 'MIL' : '',
+                                                          isDense: true,
+                                                          border: const OutlineInputBorder(),
+                                                          enabledBorder: OutlineInputBorder(
+                                                            borderSide: BorderSide(
+                                                                color: const Color(0xFFFFB300).withValues(alpha: 0.4)),
+                                                          ),
+                                                          labelStyle: const TextStyle(
+                                                              fontSize: 10, color: Color(0xFFFFB300)),
+                                                          suffixStyle: const TextStyle(
+                                                              fontSize: 9,
+                                                              fontWeight: FontWeight.bold,
+                                                              color: Color(0xFFFFB300)),
+                                                          contentPadding: const EdgeInsets.symmetric(
+                                                              horizontal: 6, vertical: 6),
+                                                        ),
+                                                        child: Text(
+                                                          showEdges ? trailingEdge.toStringAsFixed(2) : '---',
+                                                          style: const TextStyle(
+                                                              fontSize: 12,
+                                                              fontWeight: FontWeight.bold,
+                                                              color: Colors.white),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            }),
+                                          ],
                                         ),
                                       ),
-                                      const SizedBox(width: 2),
-                                      IconButton(
-                                        visualDensity: VisualDensity.compact,
-                                        padding: EdgeInsets.zero,
-                                        constraints: const BoxConstraints(),
-                                        icon: const Icon(Icons.delete_outline,
-                                            color: Colors.redAccent, size: 18),
-                                        onPressed: () {
-                                          HapticFeedback.lightImpact();
-                                          _confirmDelete('Target', () {
-                                            setState(() {
-                                              array.targets.removeAt(targetIdx);
-                                              // Reindex targets inside array
-                                              for (int k = 0;
-                                                  k < array.targets.length;
-                                                  k++) {
-                                                array.targets[k] = Target(
-                                                  index: k + 1,
-                                                  size: array.targets[k].size,
-                                                  type: array.targets[k].type,
-                                                  shotsCount:
-                                                      array.targets[k].shotsCount,
-                                                );
-                                              }
-                                              _adjustShotResultsLength();
-                                            });
-                                          });
-                                        },
-                                      ),
                                     ],
-                                  ),
+                                  ],
                                 );
                               },
                             ),
@@ -2718,7 +3158,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                     InkWell(
                                       onTap: () {
                                         HapticFeedback.lightImpact();
-                                        
+
                                         setState(() {
                                           if (result == 'miss') {
                                             _stage.shotResults[globalShotIdx] =
@@ -3253,29 +3693,48 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     );
   }
 
-  Widget _buildShapeButton(Target target) {
+  Widget _buildShapeButton(Target target, TargetArray array) {
     return InkWell(
       onTap: () {
         HapticFeedback.lightImpact();
-        _showShapeSelector(target);
+        _showShapeSelector(target, array);
       },
       child: InputDecorator(
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           labelText: 'Shape',
-          labelStyle: TextStyle(fontSize: 10),
+          labelStyle: const TextStyle(fontSize: 10),
           isDense: true,
-          border: OutlineInputBorder(),
-          contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+          border: target.isMovingTarget
+              ? OutlineInputBorder(
+                  borderSide: BorderSide(
+                      color: const Color(0xFFFFB300).withValues(alpha: 0.7)))
+              : const OutlineInputBorder(),
+          enabledBorder: target.isMovingTarget
+              ? OutlineInputBorder(
+                  borderSide: BorderSide(
+                      color: const Color(0xFFFFB300).withValues(alpha: 0.5)))
+              : const OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white24)),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
+            if (target.isMovingTarget)
+              const Padding(
+                padding: EdgeInsets.only(right: 4),
+                child: Icon(Icons.directions_run,
+                    size: 12, color: Color(0xFFFFB300)),
+              ),
             Flexible(
               child: Text(
                 target.type,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
-                  color: Colors.white,
+                  color: target.isMovingTarget
+                      ? const Color(0xFFFFB300)
+                      : Colors.white,
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -3367,7 +3826,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     return allTypes.toList();
   }
 
-  void _showShapeSelector(Target target) {
+  void _showShapeSelector(Target target, TargetArray array) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -3402,6 +3861,13 @@ class _StageDetailScreenState extends State<StageDetailScreen>
             final isCustomMode =
                 !availableTypes.contains(target.type) || target.type == 'Other';
 
+            // Check if another target in the array is already marked as moving
+            final anotherTargetIsMoving =
+                array.targets.any((t) => t != target && t.isMovingTarget);
+            // A valid shape is selected (not blank/Other without custom text)
+            final hasValidShape =
+                target.type.isNotEmpty && target.type != 'Other';
+
             return Padding(
               padding: EdgeInsets.only(
                 top: 20,
@@ -3424,15 +3890,107 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Text(
-                    isCustomMode ? 'ENTER CUSTOM SHAPE' : 'SELECT TARGET SHAPE',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      letterSpacing: 1.2,
-                      color: Color(0xFF007AFF),
-                    ),
-                    textAlign: TextAlign.center,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          isCustomMode
+                              ? 'ENTER CUSTOM SHAPE'
+                              : 'SELECT TARGET SHAPE',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            letterSpacing: 1.2,
+                            color: Color(0xFF007AFF),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      // Moving Target toggle — only in non-custom mode and
+                      // only if no other target in the array is already moving
+                      if (!isCustomMode && !anotherTargetIsMoving)
+                        GestureDetector(
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            final newVal = !target.isMovingTarget;
+                            setState(() => target.isMovingTarget = newVal);
+                            setModalState(() {});
+                            _saveStage(exitScreen: false);
+                            // Auto-close if turning ON and a valid shape exists,
+                            // or if turning OFF
+                            if (!newVal || hasValidShape) {
+                              Navigator.pop(context);
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: target.isMovingTarget
+                                  ? const Color(0xFFFFB300)
+                                      .withValues(alpha: 0.15)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: target.isMovingTarget
+                                    ? const Color(0xFFFFB300)
+                                    : Colors.white24,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.directions_run,
+                                  size: 14,
+                                  color: target.isMovingTarget
+                                      ? const Color(0xFFFFB300)
+                                      : Colors.grey,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Moving',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: target.isMovingTarget
+                                        ? const Color(0xFFFFB300)
+                                        : Colors.grey,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Container(
+                                  width: 28,
+                                  height: 16,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(8),
+                                    color: target.isMovingTarget
+                                        ? const Color(0xFFFFB300)
+                                        : Colors.white12,
+                                  ),
+                                  child: AnimatedAlign(
+                                    duration: const Duration(milliseconds: 150),
+                                    alignment: target.isMovingTarget
+                                        ? Alignment.centerRight
+                                        : Alignment.centerLeft,
+                                    child: Container(
+                                      width: 12,
+                                      height: 12,
+                                      margin: const EdgeInsets.symmetric(
+                                          horizontal: 2),
+                                      decoration: const BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 20),
                   if (!isCustomMode) ...[
@@ -3448,6 +4006,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                               setState(() {
                                 target.type = type;
                               });
+                              // If moving target is ON, selecting shape auto-closes
+                              // Otherwise close normally
                               Navigator.pop(context);
                             },
                             onLongPress: () {
@@ -3588,6 +4148,363 @@ class _StageDetailScreenState extends State<StageDetailScreen>
             );
           },
         );
+      },
+    );
+  }
+
+  // ── Moving Target: Speed Estimator ────────────────────────────────────────
+  void _showSpeedEstimatorDialog(Target target, TargetArray array) {
+    final rangeYards = _parseRangeYards(array.distance);
+    final movementCtrl = TextEditingController();
+    final timeCtrl = TextEditingController(
+      text: '',
+    );
+    double? calcSpeed;
+
+    // speed_mph = (movement_mil × range_yards × 0.9144) / (time_sec × 17.78)
+    // 0.9144 = yards→meters, 17.78 ≈ 1000/56.325 (1 MIL subtension at range)
+    // Simplified: 1 MIL at R yards = R×0.9144/1000 meters
+    // speed_m_s = (mil × R × 0.9144 / 1000) / time_sec
+    // speed_mph = speed_m_s × 2.23694
+    double? computeSpeed(String movStr, String timeStr) {
+      final mil = double.tryParse(movStr);
+      final secs = double.tryParse(timeStr);
+      if (mil == null || secs == null || secs <= 0 || rangeYards <= 0) {
+        return null;
+      }
+      final metersAtRange = mil * rangeYards * 0.9144 / 1000.0;
+      return (metersAtRange / secs) * 2.23694;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(builder: (ctx, setDlg) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF1E1E24),
+            title: const Row(
+              children: [
+                Icon(Icons.calculate_outlined,
+                    color: Color(0xFFFFB300), size: 18),
+                SizedBox(width: 8),
+                Text('ESTIMATE TARGET SPEED',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.8)),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Range info
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.white10),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Range',
+                          style: TextStyle(fontSize: 11, color: Colors.grey)),
+                      Text(
+                        rangeYards > 0
+                            ? '${rangeYards.toStringAsFixed(0)} yd'
+                            : 'No range set',
+                        style: const TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                // Movement input
+                TextFormField(
+                  controller: movementCtrl,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(fontSize: 14),
+                  decoration: const InputDecoration(
+                    labelText: 'Movement',
+                    suffixText: 'MIL',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                    labelStyle: TextStyle(fontSize: 12),
+                  ),
+                  onChanged: (_) {
+                    setDlg(() {
+                      calcSpeed =
+                          computeSpeed(movementCtrl.text, timeCtrl.text);
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+                // Time input + Stopwatch button
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: timeCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        style: const TextStyle(fontSize: 14),
+                        decoration: const InputDecoration(
+                          labelText: 'Time',
+                          suffixText: 'sec',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                          labelStyle: TextStyle(fontSize: 12),
+                        ),
+                        onChanged: (_) {
+                          setDlg(() {
+                            calcSpeed =
+                                computeSpeed(movementCtrl.text, timeCtrl.text);
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      height: 42,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFFFB300),
+                          side: const BorderSide(
+                              color: Color(0xFFFFB300), width: 1),
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () async {
+                          final elapsed = await _showStopwatchDialog(ctx);
+                          if (elapsed != null) {
+                            setDlg(() {
+                              timeCtrl.text = elapsed.toStringAsFixed(1);
+                              calcSpeed = computeSpeed(
+                                  movementCtrl.text, timeCtrl.text);
+                            });
+                          }
+                        },
+                        child: const Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.timer_outlined, size: 16),
+                            Text('Watch', style: TextStyle(fontSize: 9)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                // Calculated speed display
+                if (calcSpeed != null) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFB300).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color:
+                              const Color(0xFFFFB300).withValues(alpha: 0.4)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Calculated Speed',
+                            style: TextStyle(fontSize: 11, color: Colors.grey)),
+                        Text(
+                          '${calcSpeed!.toStringAsFixed(2)} mph',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFFFB300),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child:
+                    const Text('Cancel', style: TextStyle(color: Colors.grey)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFFB300),
+                    foregroundColor: Colors.black),
+                onPressed: calcSpeed == null
+                    ? null
+                    : () {
+                        final speed = calcSpeed!;
+                        setState(() {
+                          target.targetSpeedMph = speed;
+                          // Update speed field controller if it exists
+                          final key = target.hashCode;
+                          _speedControllers[key]?.text =
+                              speed.toStringAsFixed(1);
+                        });
+                        _saveStage(exitScreen: false);
+                        Navigator.pop(ctx);
+                      },
+                child: const Text('Save Speed'),
+              ),
+            ],
+          );
+        });
+      },
+    );
+  }
+
+  // ── Moving Target: Stopwatch ───────────────────────────────────────────────
+  Future<double?> _showStopwatchDialog(BuildContext parentCtx) async {
+    return showDialog<double>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        int elapsedMs = 0;
+        bool running = false;
+        bool hasStopped = false;
+        Timer? ticker;
+
+        String fmt(int ms) {
+          final m = ms ~/ 60000;
+          final s = (ms % 60000) ~/ 1000;
+          final d = (ms % 1000) ~/ 100;
+          return '${m > 0 ? '$m:' : ''}${s.toString().padLeft(m > 0 ? 2 : 1, '0')}.$d';
+        }
+
+        return StatefulBuilder(builder: (ctx, setSw) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF1E1E24),
+            title: const Row(
+              children: [
+                Icon(Icons.timer, color: Color(0xFFFFB300), size: 18),
+                SizedBox(width: 8),
+                Text('STOPWATCH',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.8)),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Time the target crossing the range.\nHit Start, observe, hit Stop.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+                const SizedBox(height: 20),
+                // Timer display
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                        color: running
+                            ? const Color(0xFFFFB300).withValues(alpha: 0.6)
+                            : Colors.white12),
+                  ),
+                  child: Text(
+                    fmt(elapsedMs),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 40,
+                      fontWeight: FontWeight.bold,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                      color: running
+                          ? const Color(0xFFFFB300)
+                          : hasStopped
+                              ? Colors.white
+                              : Colors.white38,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // Start / Stop button
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor:
+                          running ? Colors.redAccent : const Color(0xFF00E676),
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon:
+                        Icon(running ? Icons.stop : Icons.play_arrow, size: 20),
+                    label: Text(running ? 'Stop' : 'Start',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 15)),
+                    onPressed: () {
+                      if (running) {
+                        ticker?.cancel();
+                        setSw(() {
+                          running = false;
+                          hasStopped = true;
+                        });
+                      } else {
+                        elapsedMs = 0;
+                        final start = DateTime.now();
+                        ticker = Timer.periodic(
+                            const Duration(milliseconds: 100), (_) {
+                          setSw(() {
+                            elapsedMs =
+                                DateTime.now().difference(start).inMilliseconds;
+                          });
+                        });
+                        setSw(() {
+                          running = true;
+                          hasStopped = false;
+                        });
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  ticker?.cancel();
+                  Navigator.pop(ctx, null);
+                },
+                child:
+                    const Text('Cancel', style: TextStyle(color: Colors.grey)),
+              ),
+              if (hasStopped && elapsedMs > 0)
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFFB300),
+                      foregroundColor: Colors.black),
+                  onPressed: () {
+                    ticker?.cancel();
+                    final elapsed = elapsedMs / 1000.0;
+                    // Directly return elapsed — no confirmation needed
+                    if (ctx.mounted) Navigator.pop(ctx, elapsed);
+                  },
+                  child: Text('Keep ${fmt(elapsedMs)}',
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                ),
+            ],
+          );
+        });
       },
     );
   }
@@ -3763,11 +4680,14 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                             .length;
 
                                         double parsedSize = 1.0;
-                                        final cleanStr = target.size.replaceAll(RegExp(r'[^0-9.]'), '');
+                                        final cleanStr = target.size
+                                            .replaceAll(RegExp(r'[^0-9.]'), '');
                                         if (cleanStr.isNotEmpty) {
-                                          parsedSize = double.tryParse(cleanStr) ?? 1.0;
+                                          parsedSize =
+                                              double.tryParse(cleanStr) ?? 1.0;
                                         }
-                                        double pillWidth = (parsedSize * 80.0).clamp(20.0, 160.0);
+                                        double pillWidth = (parsedSize * 80.0)
+                                            .clamp(20.0, 160.0);
 
                                         return Column(
                                           mainAxisSize: MainAxisSize.min,
@@ -3784,34 +4704,46 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                               onTap: isFull
                                                   ? null
                                                   : () {
-                                                      HapticFeedback.lightImpact();
+                                                      HapticFeedback
+                                                          .lightImpact();
                                                       setDialogState(() {
                                                         tempSequence.add(key);
                                                       });
                                                     },
-                                              borderRadius: BorderRadius.circular(4),
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
                                               child: Container(
                                                 width: pillWidth,
                                                 height: 36,
                                                 decoration: BoxDecoration(
                                                   color: count > 0
-                                                      ? const Color(0xFF00E676).withValues(alpha: 0.15)
-                                                      : Colors.white.withValues(alpha: 0.05),
+                                                      ? const Color(0xFF00E676)
+                                                          .withValues(
+                                                              alpha: 0.15)
+                                                      : Colors.white.withValues(
+                                                          alpha: 0.05),
                                                   border: Border.all(
                                                     color: count > 0
-                                                        ? const Color(0xFF00E676).withValues(alpha: 0.4)
+                                                        ? const Color(
+                                                                0xFF00E676)
+                                                            .withValues(
+                                                                alpha: 0.4)
                                                         : Colors.white10,
                                                   ),
-                                                  borderRadius: BorderRadius.circular(4),
+                                                  borderRadius:
+                                                      BorderRadius.circular(4),
                                                 ),
                                                 alignment: Alignment.center,
                                                 child: count > 0
                                                     ? Text(
                                                         '$count',
                                                         style: const TextStyle(
-                                                            color: Color(0xFF00E676),
+                                                            color: Color(
+                                                                0xFF00E676),
                                                             fontSize: 12,
-                                                            fontWeight: FontWeight.bold),
+                                                            fontWeight:
+                                                                FontWeight
+                                                                    .bold),
                                                       )
                                                     : null,
                                               ),
@@ -4674,7 +5606,3 @@ class _MobileTimePickerDialogState extends State<MobileTimePickerDialog> {
     );
   }
 }
-
-
-
-

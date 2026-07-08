@@ -177,6 +177,9 @@ class Stage {
           size: t.size,
           type: t.type,
           shotsCount: t.shotsCount,
+          isMovingTarget: t.isMovingTarget,
+          targetSpeedMph: t.targetSpeedMph,
+          targetLeadMil: t.targetLeadMil,
         ));
       }
     }
@@ -279,12 +282,18 @@ class Target {
   String
       type; // IPSC, Sniper Head, Sniper Shoulders, Circles, Diamonds, Square, Pig, Coyote, Sasquatch, etc.
   int shotsCount; // number of shots for this target
+  bool isMovingTarget; // whether this target is a moving target
+  double targetSpeedMph; // speed in mph to send to Kestrel
+  double targetLeadMil; // lead value (MIL) returned from Kestrel
 
   Target({
     required this.index,
     this.size = '',
     this.type = 'IPSC',
     this.shotsCount = 1,
+    this.isMovingTarget = false,
+    this.targetSpeedMph = 0.0,
+    this.targetLeadMil = 0.0,
   });
 
   Map<String, dynamic> toMap() {
@@ -293,6 +302,9 @@ class Target {
       'size': size,
       'type': type,
       'shotsCount': shotsCount,
+      'isMovingTarget': isMovingTarget,
+      'targetSpeedMph': targetSpeedMph,
+      'targetLeadMil': targetLeadMil,
     };
   }
 
@@ -302,6 +314,9 @@ class Target {
       size: map['size'] ?? '',
       type: map['type'] ?? 'IPSC',
       shotsCount: map['shotsCount']?.toInt() ?? 1,
+      isMovingTarget: map['isMovingTarget'] ?? false,
+      targetSpeedMph: (map['targetSpeedMph'] as num?)?.toDouble() ?? 0.0,
+      targetLeadMil: (map['targetLeadMil'] as num?)?.toDouble() ?? 0.0,
     );
   }
 }
