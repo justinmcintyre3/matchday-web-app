@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "../.."
+		},
+		{
+			"path": "../../../wear_ambient_ongoing"
+		}
+	],
+	"settings": {
+		"java.configuration.updateBuildConfiguration": "interactive",
+		"gitlens.views.scm.grouped.hiddenViews": {
+			"repositories": false
+		}
+	}
+}
