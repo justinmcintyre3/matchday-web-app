@@ -281,7 +281,9 @@ class KestrelBleService {
 
     await btDevice.connect(
       autoConnect: autoConnect,
-      timeout: autoConnect ? const Duration(days: 365) : const Duration(seconds: 15),
+      // 8s for direct connects — fast-fail if device is off, releasing GATT slot quickly.
+      // autoConnect uses OS-managed background scanning, no active slot held.
+      timeout: autoConnect ? const Duration(days: 365) : const Duration(seconds: 8),
     );
   }
 

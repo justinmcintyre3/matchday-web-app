@@ -112,6 +112,16 @@ class SgPulseBleService {
       await stopScan();
     }
 
+    // Clean up any lingering GATT resources before opening a new connection
+    if (_connectedDevice != null || _connectionSubscription != null) {
+      debugPrint('[SgPulseBLE] Cleaning up existing connection resources before reconnect...');
+      await _connectionSubscription?.cancel();
+      _connectionSubscription = null;
+      try {
+        await _connectedDevice?.disconnect();
+      } catch (_) {}
+    }
+
     final btDevice = BluetoothDevice.fromId(device.address);
     _connectedDevice = btDevice;
     _isAutoConnecting = autoConnect;
@@ -121,15 +131,16 @@ class SgPulseBleService {
       onConnectionStateChanged?.call(SgPulseConnectionState.connecting);
     }
 
-    await _connectionSubscription?.cancel();
     _connectionSubscription =
         btDevice.connectionState.listen(_onConnectionStateChange);
 
     await btDevice.connect(
       autoConnect: autoConnect,
+      // 8s for direct connects — fast-fail if device is off, releasing GATT slot quickly.
+      // autoConnect uses OS-managed background scanning, no active slot held.
       timeout: autoConnect
           ? const Duration(days: 365)
-          : const Duration(seconds: 15),
+          : const Duration(seconds: 8),
     );
   }
 
