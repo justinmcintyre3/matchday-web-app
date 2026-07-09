@@ -1396,7 +1396,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   Future<void> _syncToWatch() async {
     FocusManager.instance.primaryFocus?.unfocus();
     _saveStage(exitScreen: false);
-    context.read<MatchProvider>().syncActiveStageToWatch();
+    final matchProvider = context.read<MatchProvider>();
+    matchProvider.syncActiveStageToWatch();
 
     final kestrelProvider = context.read<KestrelProvider>();
     if (kestrelProvider.connectionState != KestrelConnectionState.connected) {
@@ -1480,6 +1481,15 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       }
 
       _saveStage(exitScreen: false);
+
+      // Package and sync DOPE data to watch
+      final dopeTargets = _stage.targetArrays.map((array) => {
+        'distance': array.distance,
+        'elevation': array.elevationResult,
+        'windage': array.windageResult,
+      }).toList();
+      matchProvider.syncDopeToWatch(dopeTargets);
+
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -5269,6 +5279,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   }
 
   void _showTimePickerDialog() async {
+    final matchProvider = context.read<MatchProvider>();
     final result = await showDialog<int>(
       context: context,
       builder: (context) =>
@@ -5278,7 +5289,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       setState(() {
         _stage.timeLimit = result;
       });
-      _syncToWatch();
+      _saveStage(exitScreen: false);
+      matchProvider.syncActiveStageToWatch();
     }
   }
 

@@ -403,6 +403,25 @@ class MatchProvider with ChangeNotifier {
     }
   }
 
+  Future<void> syncDopeToWatch(List<Map<String, String>> targets) async {
+    final stage = activeStage;
+    if (stage == null) return;
+
+    try {
+      final isSupported = await _watchConnectivity.isSupported;
+      if (!isSupported) return;
+
+      await _watchConnectivity.sendMessage({
+        'type': 'sync_dope',
+        'stageNumber': stage.stageNumber,
+        'targets': targets,
+      });
+      debugPrint('Synced DOPE to watch for stage ${stage.stageNumber}: $targets');
+    } catch (e) {
+      debugPrint('Error syncing DOPE to watch: $e');
+    }
+  }
+
   Future<void> stopWatchTimer() async {
     try {
       final isSupported = await _watchConnectivity.isSupported;
