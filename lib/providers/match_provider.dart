@@ -398,6 +398,19 @@ class MatchProvider with ChangeNotifier {
         'timeLimit': stage.timeLimit,
       });
       debugPrint('Synced active stage ${stage.stageNumber} to watch');
+
+      // If this stage already has calculated ballistics, sync the DOPE immediately!
+      final hasDope = stage.targetArrays.isNotEmpty &&
+          stage.targetArrays.any((array) => array.elevationResult.isNotEmpty);
+
+      if (hasDope) {
+        final dopeTargets = stage.targetArrays.map((array) => {
+          'distance': array.distance,
+          'elevation': array.elevationResult,
+          'windage': array.windageResult,
+        }).toList();
+        await syncDopeToWatch(dopeTargets);
+      }
     } catch (e) {
       debugPrint('Error syncing stage to watch: $e');
     }
