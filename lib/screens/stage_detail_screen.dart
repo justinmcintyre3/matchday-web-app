@@ -44,6 +44,12 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   final _shootScrollController = ScrollController();
   final _planScrollController = ScrollController();
 
+  // Environmental confirmation gate — tracks when the user last confirmed
+  // Kestrel environmentals are updated before a sync. Keyed by "matchId_stageNumber".
+  // Static so it survives navigation (widget State recreation) but resets on app restart.
+  static final Map<String, DateTime> _envConfirmedAt = {};
+  static const Duration _envConfirmWindow = Duration(hours: 1);
+
   // Controllers for text inputs
   final _stageNameController = TextEditingController();
   final _mentalErrorsController = TextEditingController();
@@ -1401,6 +1407,10 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       return;
     }
 
+    // Ask user to confirm Kestrel environmentals are fresh before syncing
+    if (!await _guardEnvironmentals()) return;
+    if (!mounted) return;
+
     if (_stage.targetArrays.isEmpty) return;
 
     showDialog(
@@ -1493,6 +1503,34 @@ class _StageDetailScreenState extends State<StageDetailScreen>
         );
       }
     }
+  }
+
+  /// Returns [true] if the sync should proceed.
+  /// Shows the "Have you updated your Kestrel environmentals?" dialog when:
+  ///   - The user has never confirmed for this stage, OR
+  ///   - More than [_envConfirmWindow] has elapsed since their last confirmation.
+  /// Returns [false] if the user dismissed (so they can update the Kestrel first).
+  Future<bool> _guardEnvironmentals() async {
+    final key = '${widget.matchId}_${_stage.stageNumber}';
+    final confirmedAt = _envConfirmedAt[key];
+    final now = DateTime.now();
+
+    final needsConfirm = confirmedAt == null ||
+        now.difference(confirmedAt) > _envConfirmWindow;
+
+    if (!needsConfirm) return true; // Confirmed recently — skip dialog
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _EnvironmentalsConfirmDialog(),
+    );
+
+    if (confirmed == true) {
+      _envConfirmedAt[key] = now;
+      return true;
+    }
+    return false; // User said "Not Yet" — let them update the Kestrel first
   }
 
   @override
@@ -3441,6 +3479,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                         _timeRemainingController.text = '';
                         _heartRateController.text = '';
                       });
+                      // Reset environmental confirmation so the next sync
+                      // will prompt the user to refresh Kestrel data.
+                      _envConfirmedAt.remove('${widget.matchId}_${_stage.stageNumber}');
                       _saveStage(markAsCompleted: false);
                     },
                     style: OutlinedButton.styleFrom(
@@ -5603,6 +5644,99 @@ class _MobileTimePickerDialogState extends State<MobileTimePickerDialog> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Environmental Confirmation Dialog
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _EnvironmentalsConfirmDialog extends StatelessWidget {
+  const _EnvironmentalsConfirmDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: const Color(0xFF1E1E24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFF9F0A).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.thermostat_rounded,
+                color: Color(0xFFFF9F0A), size: 20),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              'Environmentals Updated?',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+      content: const Text(
+        'Have you switched your Kestrel to Live and locked in the current '
+        'temperature, pressure, and humidity?\n\n'
+        'Syncing with stale environmental data will affect the accuracy of '
+        'your firing solution.',
+        style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.5),
+      ),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      actions: [
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              Navigator.of(context).pop(true);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF007AFF),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 13),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              elevation: 0,
+            ),
+            child: const Text(
+              'Yes, Sync Now',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton(
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              Navigator.of(context).pop(false);
+            },
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white70,
+              side: const BorderSide(color: Colors.white24),
+              padding: const EdgeInsets.symmetric(vertical: 13),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text(
+              'Not Yet — I\'ll Update My Kestrel',
+              style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
