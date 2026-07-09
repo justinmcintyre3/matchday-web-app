@@ -14,16 +14,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/kestrel_device.dart';
 import '../services/kestrel_ble_service.dart';
+import '../../ble_coordinator/ble_coordinator.dart';
 
 class KestrelProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const _savedDeviceKey = 'saved_kestrel_device';
   static const _batteryWarningThresholdKey = 'kestrel_battery_warning_threshold';
+  static const _keepConnectedDuringSleepKey = 'kestrel_keep_connected_during_sleep';
   final KestrelBleService _service;
 
   bool _hasCheckedLatitudeThisSession = false;
   bool _hasWarnedBatteryThisSession = false;
   int _reconnectAttempts = 0;
   bool _disposed = false;
+  bool _keepConnectedDuringSleep = false;
 
   final StreamController<double> _latitudeMismatchController = StreamController.broadcast();
   Stream<double> get onLatitudeMismatch => _latitudeMismatchController.stream;
@@ -107,16 +110,26 @@ class KestrelProvider extends ChangeNotifier with WidgetsBindingObserver {
     await prefs.setBool('silence_kestrel_latitude_mismatch', true);
   }
 
+  bool get keepConnectedDuringSleep => _keepConnectedDuringSleep;
+
+  Future<void> setKeepConnectedDuringSleep(bool value) async {
+    _keepConnectedDuringSleep = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keepConnectedDuringSleepKey, value);
+    notifyListeners();
+  }
+
   Future<void> _initPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     batteryWarningThreshold = prefs.getInt(_batteryWarningThresholdKey) ?? 25;
+    _keepConnectedDuringSleep = prefs.getBool(_keepConnectedDuringSleepKey) ?? false;
     final savedJson = prefs.getString(_savedDeviceKey);
     if (savedJson != null) {
       try {
         final Map<String, dynamic> data = jsonDecode(savedJson);
         connectedDevice = KestrelDevice.fromJson(data);
         notifyListeners();
-        
+
         // Auto-connect to the saved device leveraging the OS Bluetooth stack
         connect(connectedDevice!, autoConnect: true);
       } catch (e) {
@@ -172,6 +185,7 @@ class KestrelProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Connect to a [device] from the scan list.
   Future<void> connect(KestrelDevice device, {bool autoConnect = false}) async {
+    BleCoordinator.instance.reset();
     if (!autoConnect) {
       connectedDevice = device.copyWith(state: KestrelConnectionState.connecting);
       notifyListeners();
@@ -251,6 +265,8 @@ class KestrelProvider extends ChangeNotifier with WidgetsBindingObserver {
         debugPrint('[KestrelProvider] Requesting environment...');
         _service.getEnvironment();
       }
+      // Signal coordinator — Kestrel handshake done, release queued devices
+      BleCoordinator.instance.signal();
     } 
     // Auto-authenticate if we already have the PIN saved
     else if (state == KestrelConnectionState.pinRequired) {
@@ -270,8 +286,10 @@ class KestrelProvider extends ChangeNotifier with WidgetsBindingObserver {
         connect(connectedDevice!, autoConnect: true);
       }
     }
-    // Connection error — schedule an auto-reconnect retry with exponential backoff if previously paired
+    // Connection error — signal coordinator so Rx5000 isn't blocked forever,
+    // then schedule an auto-reconnect retry with exponential backoff if previously paired
     else if (state == KestrelConnectionState.error && connectedDevice != null) {
+      BleCoordinator.instance.signal(); // Don't block Rx5000 on a Kestrel error
       final lifecycle = WidgetsBinding.instance.lifecycleState;
       if (lifecycle == AppLifecycleState.resumed && connectedDevice?.serialNumber != null) {
         final backoffSeconds = (1 << _reconnectAttempts).clamp(1, 16);
@@ -375,14 +393,26 @@ class KestrelProvider extends ChangeNotifier with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     debugPrint('[KestrelProvider] App lifecycle state changed: $state');
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
-      if (connectionState != KestrelConnectionState.disconnected) {
-        debugPrint('[KestrelProvider] App going to sleep. Disconnecting Kestrel (current state: $connectionState)...');
+      // Cancel any queued coordinator callbacks — no point connecting while sleeping
+      BleCoordinator.instance.cancelQueue();
+      if (!_keepConnectedDuringSleep &&
+          connectionState != KestrelConnectionState.disconnected) {
+        debugPrint('[KestrelProvider] App going to sleep. Disconnecting Kestrel '
+            '(current state: $connectionState)...');
         disconnect();
+      } else if (_keepConnectedDuringSleep) {
+        debugPrint('[KestrelProvider] App going to sleep. Keeping Kestrel connected '
+            '(keep-alive enabled).');
       }
     } else if (state == AppLifecycleState.resumed) {
-      if (connectedDevice != null && connectionState == KestrelConnectionState.disconnected) {
+      if (connectedDevice != null &&
+          connectionState == KestrelConnectionState.disconnected) {
         debugPrint('[KestrelProvider] App resumed. Reconnecting to Kestrel...');
         connect(connectedDevice!, autoConnect: true);
+      } else if (_keepConnectedDuringSleep && isConnected) {
+        // Already connected — signal coordinator immediately so Rx5000 can proceed
+        debugPrint('[KestrelProvider] App resumed. Kestrel still connected (keep-alive). Signalling coordinator.');
+        BleCoordinator.instance.signal();
       }
     }
   }

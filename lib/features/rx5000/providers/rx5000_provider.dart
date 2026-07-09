@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/rx5000_device.dart';
 import '../services/rx5000_ble_service.dart';
+import '../../ble_coordinator/ble_coordinator.dart';
 
 class Rx5000Provider extends ChangeNotifier with WidgetsBindingObserver {
   static const String _savedDeviceKey = 'saved_rx5000_device';
@@ -311,7 +312,12 @@ class Rx5000Provider extends ChangeNotifier with WidgetsBindingObserver {
     _activePageCount++;
     debugPrint('[Rx5000Provider] Active page count incremented: $_activePageCount');
     if (_activePageCount == 1 && connectedDevice != null && !isConnected && connectionState != Rx5000ConnectionState.connecting) {
-      connect(connectedDevice!);
+      // Wait for Kestrel to finish its JNI handshake before connecting
+      BleCoordinator.instance.whenReady(() {
+        if (_activePageCount > 0 && connectedDevice != null && !isConnected) {
+          connect(connectedDevice!);
+        }
+      });
     }
   }
 
@@ -676,7 +682,12 @@ class Rx5000Provider extends ChangeNotifier with WidgetsBindingObserver {
     debugPrint('[Rx5000Provider] App lifecycle state changed: $state');
     if (state == AppLifecycleState.resumed) {
       if (_activePageCount > 0 && connectedDevice != null && !isConnected) {
-        connect(connectedDevice!, autoConnect: true);
+        // Wait for Kestrel to finish its JNI handshake before connecting
+        BleCoordinator.instance.whenReady(() {
+          if (_activePageCount > 0 && connectedDevice != null && !isConnected) {
+            connect(connectedDevice!, autoConnect: true);
+          }
+        });
       }
     } else if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
       if (isConnected) {

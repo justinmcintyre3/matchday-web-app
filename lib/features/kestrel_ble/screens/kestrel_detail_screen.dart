@@ -90,6 +90,8 @@ class KestrelDetailScreen extends StatelessWidget {
           if (device != null) ...[
             const SizedBox(height: 16),
             _BatteryThresholdCard(provider: provider),
+            const SizedBox(height: 8),
+            _BackgroundConnectionCard(provider: provider),
           ],
         ],
       ),
@@ -896,6 +898,157 @@ class _BatteryThresholdCard extends StatelessWidget {
               const Icon(Icons.chevron_right, color: Colors.white24, size: 20),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BackgroundConnectionCard extends StatelessWidget {
+  final KestrelProvider provider;
+  const _BackgroundConnectionCard({required this.provider});
+
+  @override
+  Widget build(BuildContext context) {
+    final keepAlive = provider.keepConnectedDuringSleep;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF30D158).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.bluetooth_connected_rounded,
+                      color: Color(0xFF30D158), size: 20),
+                ),
+                const SizedBox(width: 14),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Background Connection',
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Kestrel behaviour when app sleeps',
+                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _RadioOption(
+              label: 'Disconnect when app sleeps',
+              sublabel: 'Saves Kestrel battery. Reconnects on wake.',
+              selected: !keepAlive,
+              onTap: () {
+                HapticFeedback.lightImpact();
+                provider.setKeepConnectedDuringSleep(false);
+              },
+            ),
+            const SizedBox(height: 6),
+            _RadioOption(
+              label: 'Stay connected in background',
+              sublabel: 'Instant wake. Uses more Kestrel battery.',
+              selected: keepAlive,
+              onTap: () {
+                HapticFeedback.lightImpact();
+                provider.setKeepConnectedDuringSleep(true);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RadioOption extends StatelessWidget {
+  final String label;
+  final String sublabel;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _RadioOption({
+    required this.label,
+    required this.sublabel,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected
+              ? const Color(0xFF30D158).withValues(alpha: 0.08)
+              : Colors.white.withValues(alpha: 0.03),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? const Color(0xFF30D158) : Colors.white12,
+            width: selected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected ? const Color(0xFF30D158) : Colors.white38,
+                  width: 2,
+                ),
+                color: selected ? const Color(0xFF30D158) : Colors.transparent,
+              ),
+              child: selected
+                  ? const Icon(Icons.check, color: Colors.black, size: 12)
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: selected ? Colors.white : Colors.white70,
+                    ),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    sublabel,
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
