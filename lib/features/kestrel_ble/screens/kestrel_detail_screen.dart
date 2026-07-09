@@ -117,7 +117,13 @@ class KestrelDetailScreen extends StatelessWidget {
       case KestrelConnectionState.error:
         return _ErrorCard(
           message: device?.errorMessage ?? 'An unexpected error occurred.',
-          onRetry: () => provider.startScan(), // Or reconnect if MAC known
+          onRetry: () {
+            if (device != null) {
+              provider.connect(device, autoConnect: false);
+            } else {
+              provider.startScan();
+            }
+          },
         );
 
       case KestrelConnectionState.disconnected:

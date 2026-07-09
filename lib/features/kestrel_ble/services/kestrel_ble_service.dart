@@ -85,6 +85,14 @@ class KestrelBleService {
       }
     });
 
+    _jni.onAuthRequestAck.listen((success) {
+      debugPrint('[KestrelBLE] onAuthRequestAck: $success');
+      if (!success) {
+        onConnectionStateChanged?.call(KestrelConnectionState.error);
+        disconnect();
+      }
+    });
+
     _jni.onPrivacyAuthAck.listen((success) {
       if (success) {
         if (_isResettingHostPin && _currentPin != null) {
@@ -143,8 +151,8 @@ class KestrelBleService {
   Stream<bool> get onCalcFullSolnAck => _jni.onCalcFullSolnAck;
 
   BluetoothDevice? _connectedDevice;
+  BluetoothConnectionState? _lastBleState;
   BluetoothCharacteristic? _txCharacteristic;
-  bool _isAutoConnecting = false;
   bool _hasSentAuthRequest = false;
   bool _hasAcknowledgedPin = false;
   bool _isDiscovering = false;
@@ -249,11 +257,16 @@ class KestrelBleService {
   Future<void> connect(KestrelDevice device, {bool autoConnect = false}) async {
     await stopScan();
 
+    if (_connectedDevice != null || _connectionSubscription != null) {
+      debugPrint('[KestrelBLE] Existing connection resources found. Cleaning up first...');
+      await disconnect();
+    }
+
     final btDevice = BluetoothDevice.fromId(device.address);
     _connectedDevice = btDevice;
-    _isAutoConnecting = autoConnect;
     _hasSentAuthRequest = false;
     _hasAcknowledgedPin = false;
+    _lastBleState = BluetoothConnectionState.disconnected;
 
     // Only show the connecting spinner immediately if this is a manual connection attempt.
     // If it's a background auto-reconnect, stay in the disconnected state until the device is actually found.
@@ -273,8 +286,10 @@ class KestrelBleService {
   }
 
   void _onConnectionStateChange(BluetoothConnectionState state) {
+    if (state == _lastBleState) return;
+    _lastBleState = state;
+
     if (state == BluetoothConnectionState.connected) {
-      _isAutoConnecting = false;
       if (_isDiscovering) {
         debugPrint('[KestrelBLE] Already discovering/connected. Ignoring duplicate connection event.');
         return;
@@ -287,9 +302,7 @@ class KestrelBleService {
       _txCharacteristic = null;
       _isDiscovering = false; // Reset debounce flag on natural drop
       _jni.disconnectJni(); // CRITICAL: Reset the native state machine
-      if (!_isAutoConnecting) {
-        onConnectionStateChanged?.call(KestrelConnectionState.disconnected);
-      }
+      onConnectionStateChanged?.call(KestrelConnectionState.disconnected);
     }
   }
 
@@ -479,7 +492,6 @@ class KestrelBleService {
   // ────────────────────────────────────────────────────────────────────────────
 
   Future<void> disconnect() async {
-    _isAutoConnecting = false;
     _isDiscovering = false;
     await _jni.disconnectJni();
     await _rxSubscription?.cancel();

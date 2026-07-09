@@ -22,6 +22,8 @@ class KestrelProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   bool _hasCheckedLatitudeThisSession = false;
   bool _hasWarnedBatteryThisSession = false;
+  int _reconnectAttempts = 0;
+  bool _disposed = false;
 
   final StreamController<double> _latitudeMismatchController = StreamController.broadcast();
   Stream<double> get onLatitudeMismatch => _latitudeMismatchController.stream;
@@ -240,6 +242,7 @@ class KestrelProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     // Save device on successful connection/auth
     if (state == KestrelConnectionState.connected) {
+      _reconnectAttempts = 0;
       _saveDevice();
       debugPrint('[KestrelProvider] Connected! Requesting device name & serial number...');
       _service.getDeviceName();
@@ -265,6 +268,21 @@ class KestrelProvider extends ChangeNotifier with WidgetsBindingObserver {
       if (lifecycle == AppLifecycleState.resumed) {
         debugPrint('[KestrelProvider] Natural disconnect. Issuing autoConnect request.');
         connect(connectedDevice!, autoConnect: true);
+      }
+    }
+    // Connection error — schedule an auto-reconnect retry with exponential backoff if previously paired
+    else if (state == KestrelConnectionState.error && connectedDevice != null) {
+      final lifecycle = WidgetsBinding.instance.lifecycleState;
+      if (lifecycle == AppLifecycleState.resumed && connectedDevice?.serialNumber != null) {
+        final backoffSeconds = (1 << _reconnectAttempts).clamp(1, 16);
+        _reconnectAttempts++;
+        debugPrint('[KestrelProvider] Connection error on previously paired device. '
+            'Scheduling auto-reconnect retry in $backoffSeconds seconds (attempt $_reconnectAttempts)...');
+        Future.delayed(Duration(seconds: backoffSeconds), () {
+          if (connectionState == KestrelConnectionState.error && connectedDevice != null && !_disposed) {
+            connect(connectedDevice!, autoConnect: true);
+          }
+        });
       }
     }
 
@@ -357,11 +375,13 @@ class KestrelProvider extends ChangeNotifier with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     debugPrint('[KestrelProvider] App lifecycle state changed: $state');
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
-      if (isConnected) {
+      if (connectionState != KestrelConnectionState.disconnected) {
+        debugPrint('[KestrelProvider] App going to sleep. Disconnecting Kestrel (current state: $connectionState)...');
         disconnect();
       }
     } else if (state == AppLifecycleState.resumed) {
-      if (connectedDevice != null && !isConnected && connectionState != KestrelConnectionState.connecting) {
+      if (connectedDevice != null && connectionState == KestrelConnectionState.disconnected) {
+        debugPrint('[KestrelProvider] App resumed. Reconnecting to Kestrel...');
         connect(connectedDevice!, autoConnect: true);
       }
     }
@@ -369,6 +389,7 @@ class KestrelProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _disposed = true;
     WidgetsBinding.instance.removeObserver(this);
     _service.dispose();
     _latitudeMismatchController.close();
