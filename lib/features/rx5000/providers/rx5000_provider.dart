@@ -312,10 +312,11 @@ class Rx5000Provider extends ChangeNotifier with WidgetsBindingObserver {
     _activePageCount++;
     debugPrint('[Rx5000Provider] Active page count incremented: $_activePageCount');
     if (_activePageCount == 1 && connectedDevice != null && !isConnected && connectionState != Rx5000ConnectionState.connecting) {
-      // Wait for Kestrel to finish its JNI handshake before connecting
+      // Use autoConnect:true so the OS passively watches for the device.
+      // This does NOT burn a GATT slot if the Rx5000 is powered off.
       BleCoordinator.instance.whenReady(() {
         if (_activePageCount > 0 && connectedDevice != null && !isConnected) {
-          connect(connectedDevice!);
+          connect(connectedDevice!, autoConnect: true);
         }
       });
     }

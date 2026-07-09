@@ -27,6 +27,7 @@ class KestrelProvider extends ChangeNotifier with WidgetsBindingObserver {
   int _reconnectAttempts = 0;
   bool _disposed = false;
   bool _keepConnectedDuringSleep = false;
+  Timer? _resumeTimer; // debounce rapid inactive→resumed lifecycle bounces
 
   final StreamController<double> _latitudeMismatchController = StreamController.broadcast();
   Stream<double> get onLatitudeMismatch => _latitudeMismatchController.stream;
@@ -392,34 +393,52 @@ class KestrelProvider extends ChangeNotifier with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     debugPrint('[KestrelProvider] App lifecycle state changed: $state');
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
-      // Cancel any queued coordinator callbacks — no point connecting while sleeping
+
+    if (state == AppLifecycleState.paused) {
+      // True background — cancel any pending resume timer and any queued
+      // coordinator callbacks (no point connecting while the phone is asleep).
+      _resumeTimer?.cancel();
+      _resumeTimer = null;
       BleCoordinator.instance.cancelQueue();
+
       if (!_keepConnectedDuringSleep &&
           connectionState != KestrelConnectionState.disconnected) {
-        debugPrint('[KestrelProvider] App going to sleep. Disconnecting Kestrel '
+        debugPrint('[KestrelProvider] App paused. Disconnecting Kestrel '
             '(current state: $connectionState)...');
         disconnect();
       } else if (_keepConnectedDuringSleep) {
-        debugPrint('[KestrelProvider] App going to sleep. Keeping Kestrel connected '
+        debugPrint('[KestrelProvider] App paused. Keeping Kestrel connected '
             '(keep-alive enabled).');
       }
+    } else if (state == AppLifecycleState.inactive) {
+      // Transient — notification shade, incoming call banner, multi-task swipe.
+      // Do NOT disconnect here; wait to see if paused follows.
+      debugPrint('[KestrelProvider] App inactive (transient) — holding connection.');
     } else if (state == AppLifecycleState.resumed) {
-      if (connectedDevice != null &&
-          connectionState == KestrelConnectionState.disconnected) {
-        debugPrint('[KestrelProvider] App resumed. Reconnecting to Kestrel...');
-        connect(connectedDevice!, autoConnect: true);
-      } else if (_keepConnectedDuringSleep && isConnected) {
-        // Already connected — signal coordinator immediately so Rx5000 can proceed
-        debugPrint('[KestrelProvider] App resumed. Kestrel still connected (keep-alive). Signalling coordinator.');
-        BleCoordinator.instance.signal();
-      }
+      // Debounce: cancel any in-flight timer so rapid inactive→resumed
+      // bounces (e.g. notification shade dismiss) don't trigger duplicate connects.
+      _resumeTimer?.cancel();
+      _resumeTimer = Timer(const Duration(milliseconds: 300), () {
+        _resumeTimer = null;
+        if (_disposed) return;
+        if (connectedDevice != null &&
+            connectionState == KestrelConnectionState.disconnected) {
+          debugPrint('[KestrelProvider] App resumed. Reconnecting to Kestrel...');
+          connect(connectedDevice!, autoConnect: true);
+        } else if (_keepConnectedDuringSleep && isConnected) {
+          // Already connected — signal coordinator immediately so Rx5000 can proceed
+          debugPrint('[KestrelProvider] App resumed. Kestrel still connected '
+              '(keep-alive). Signalling coordinator.');
+          BleCoordinator.instance.signal();
+        }
+      });
     }
   }
 
   @override
   void dispose() {
     _disposed = true;
+    _resumeTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _service.dispose();
     _latitudeMismatchController.close();
