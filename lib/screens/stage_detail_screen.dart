@@ -12,6 +12,7 @@ import '../widgets/wind_clock_picker.dart';
 import '../features/sg_pulse/providers/sg_pulse_provider.dart';
 import '../widgets/global_app_bar.dart';
 import '../features/rx5000/providers/rx5000_provider.dart';
+import 'wind_columns_screen.dart';
 
 class StageDetailScreen extends StatefulWidget {
   final String matchId;
@@ -300,6 +301,15 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                   TextSelection(baseOffset: 0, extentOffset: text.length);
             }
           }
+        } else {
+          // Focus lost: save the value and refresh the wind brackets
+          final ctrl = _targetSizeControllers[key];
+          if (ctrl != null) {
+            final val = ctrl.text.trim();
+            target.size = val.isEmpty ? '' : '$val MIL';
+            setState(() {});
+            _saveStage(exitScreen: false);
+          }
         }
       });
       _targetSizeFocusNodes[key] = node;
@@ -587,6 +597,10 @@ class _StageDetailScreenState extends State<StageDetailScreen>
             ),
             elevationResult: arr.elevationResult,
             windageResult: arr.windageResult,
+            elevationValue: arr.elevationValue,
+            windage1Value: arr.windage1Value,
+            windage2Value: arr.windage2Value,
+            leadValue: arr.leadValue,
           );
         })),
         windPlan: WindPlan(
@@ -612,6 +626,11 @@ class _StageDetailScreenState extends State<StageDetailScreen>
         shotTimes: List<double>.from(currentStage.shotTimes),
         shotRolls: List<double>.from(currentStage.shotRolls),
         shotStabilities: List<double>.from(currentStage.shotStabilities),
+        windColumns: WindColumnData(
+          mode: currentStage.windColumns.mode,
+          values: List.from(currentStage.windColumns.values),
+          results: Map.from(currentStage.windColumns.results),
+        ),
       );
 
       // Automatically prefill previous stage's actual windage if this is a fresh stage
@@ -1010,6 +1029,12 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     final array = _stage.targetArrays[arrayIdx];
     array.elevationResult = TargetArray.formatElevationMil(elevation);
     array.windageResult = TargetArray.formatWindagePair(w1, w2);
+    
+    // Save numerical double values for calculations / brackets
+    array.elevationValue = elevation;
+    array.windage1Value = w1;
+    array.windage2Value = w2;
+    array.leadValue = leadMil;
 
     // Store lead value on any moving target in this array
     for (final t in array.targets) {
@@ -1028,70 +1053,214 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     if (array.elevationResult.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(top: 8.0),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF007AFF).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(
-                  color: const Color(0xFF007AFF).withValues(alpha: 0.3),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Elevation',
-                    style: TextStyle(fontSize: 10, color: Color(0xFF007AFF)),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    array.elevationResult,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF007AFF).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: const Color(0xFF007AFF).withValues(alpha: 0.3),
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF00E676).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(
-                  color: const Color(0xFF00E676).withValues(alpha: 0.3),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Elevation',
+                        style: TextStyle(fontSize: 10, color: Color(0xFF007AFF)),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        array.elevationResult,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Windage',
-                    style: TextStyle(fontSize: 10, color: Color(0xFF00E676)),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    array.windageResult,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+              const SizedBox(width: 8),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00E676).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: const Color(0xFF00E676).withValues(alpha: 0.3),
                     ),
                   ),
-                ],
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Windage',
+                        style: TextStyle(fontSize: 10, color: Color(0xFF00E676)),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        array.windageResult,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
+          _buildWindBracketsSection(array),
         ],
+      ),
+    );
+  }
+
+  Widget _buildWindBracketsSection(TargetArray array) {
+    if (array.windage1Value == null || array.windage2Value == null) return const SizedBox.shrink();
+
+    final w1 = array.windage1Value!;
+    final w2 = array.windage2Value!;
+    final spread = (w2 - w1).abs();
+    final hold = (w1 + w2) / 2;
+
+    String formatSigned(double val) {
+      if (val.abs() < 0.005) return '0.00';
+      final dir = val < 0 ? 'R' : 'L';
+      return '${val.abs().toStringAsFixed(2)} $dir';
+    }
+
+    final targetWidgets = <Widget>[];
+    for (int i = 0; i < array.targets.length; i++) {
+      final target = array.targets[i];
+      final cleanStr = target.size.replaceAll(RegExp(r'[^0-9.]'), '');
+      final targetWidth = double.tryParse(cleanStr) ?? 0.0;
+      if (targetWidth <= 0.0) continue;
+
+      final isSafe = spread <= targetWidth;
+      
+      // Calculate covers relative to hold center
+      final leftCover = hold + targetWidth / 2;
+      final rightCover = hold - targetWidth / 2;
+      
+      // Margins: positive = on plate (cover), negative = off plate (miss)
+      final marginLull = (targetWidth / 2) - (w1 - hold).abs();
+      final marginGust = (targetWidth / 2) - (w2 - hold).abs();
+
+      targetWidgets.add(
+        Padding(
+          padding: const EdgeInsets.only(top: 10.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Target ${i + 1} Bracket (${targetWidth.toStringAsFixed(2)} MIL Width)',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.grey[400],
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Icon(
+                        isSafe ? Icons.check_circle : Icons.warning_rounded,
+                        size: 11,
+                        color: isSafe ? const Color(0xFF00E676) : const Color(0xFFFF9F0A),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        isSafe ? 'SAFE' : 'EDGE MISS POSSIBLE',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: isSafe ? const Color(0xFF00E676) : const Color(0xFFFF9F0A),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.01),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Plate Coverage: ${formatSigned(rightCover)} to ${formatSigned(leftCover)}', 
+                             style: const TextStyle(fontSize: 9, color: Colors.white60, fontWeight: FontWeight.bold)),
+                        Text('Center Hold: ${formatSigned(hold)}', 
+                             style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white70)),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Lull (${formatSigned(w1)}) margin: ${marginLull >= 0 ? "${marginLull.toStringAsFixed(2)} MIL cover" : "MISS by ${marginLull.abs().toStringAsFixed(2)} MIL"}',
+                             style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: marginLull >= 0 ? const Color(0xFF00E676) : const Color(0xFFFF3B30))),
+                        Text('Gust (${formatSigned(w2)}) margin: ${marginGust >= 0 ? "${marginGust.toStringAsFixed(2)} MIL cover" : "MISS by ${marginGust.abs().toStringAsFixed(2)} MIL"}',
+                             style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: marginGust >= 0 ? const Color(0xFF00E676) : const Color(0xFFFF3B30))),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 6),
+              _buildBracketVisualPainter(targetWidth, spread, isSafe, w1, w2, hold),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (targetWidgets.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: targetWidgets,
+    );
+  }
+
+  Widget _buildBracketVisualPainter(double targetWidth, double spread, bool isSafe, double w1, double w2, double hold) {
+    return Container(
+      height: 48,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: CustomPaint(
+        painter: _BracketPainter(
+          targetWidth: targetWidth,
+          spread: spread,
+          isSafe: isSafe,
+          w1: w1,
+          w2: w2,
+          hold: hold,
+        ),
       ),
     );
   }
@@ -1978,7 +2147,12 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                                     ? ''
                                                     : '$val MIL';
                                               },
-                                              onFieldSubmitted: (_) {
+                                              onFieldSubmitted: (val) {
+                                                target.size = val.isEmpty
+                                                    ? ''
+                                                    : '$val MIL';
+                                                setState(() {});
+                                                _saveStage(exitScreen: false);
                                                 if (targetIdx <
                                                     array.targets.length - 1) {
                                                   _getTargetSizeFocusNode(
@@ -2620,6 +2794,34 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                         _stage.windPlan.kestrelDirection = dir;
                       });
                     },
+                  ),
+                  const Divider(height: 24, color: Colors.white10),
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => WindColumnsScreen(
+                              matchId: widget.matchId,
+                              stage: _stage,
+                            ),
+                          ),
+                        ).then((_) {
+                          setState(() {});
+                        });
+                      },
+                      icon: const Icon(Icons.view_column_rounded, color: Color(0xFF007AFF), size: 18),
+                      label: const Text(
+                        'Build Wind Columns',
+                        style: TextStyle(
+                          color: Color(0xFF007AFF),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -5750,5 +5952,127 @@ class _EnvironmentalsConfirmDialog extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class _BracketPainter extends CustomPainter {
+  final double targetWidth;
+  final double spread;
+  final bool isSafe;
+  final double w1;
+  final double w2;
+  final double hold;
+
+  _BracketPainter({
+    required this.targetWidth,
+    required this.spread,
+    required this.isSafe,
+    required this.w1,
+    required this.w2,
+    required this.hold,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+
+    final maxDim = targetWidth > spread ? targetWidth : spread;
+    if (maxDim <= 0.0) return;
+
+    // Use 70% of canvas width to allow room for text labels at the edges
+    final scale = (size.width * 0.70) / maxDim;
+
+    String formatSigned(double val) {
+      if (val.abs() < 0.005) return '0.00';
+      final dir = val < 0 ? 'R' : 'L';
+      return '${val.abs().toStringAsFixed(2)}$dir';
+    }
+
+    // 1. Draw Target Plate (steel)
+    final plateWidth = targetWidth * scale;
+    final plateRect = Rect.fromCenter(
+      center: center,
+      width: plateWidth,
+      height: 8,
+    );
+    final platePaint = Paint()
+      ..color = const Color(0xFF424248)
+      ..style = PaintingStyle.fill;
+    final plateBorderPaint = Paint()
+      ..color = Colors.white24
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    canvas.drawRRect(RRect.fromRectAndRadius(plateRect, const Radius.circular(2)), platePaint);
+    canvas.drawRRect(RRect.fromRectAndRadius(plateRect, const Radius.circular(2)), plateBorderPaint);
+
+    // Left and right edges of the plate (Left is positive, Right is negative in our coordinate space)
+    final leftCover = hold + targetWidth / 2;
+    final rightCover = hold - targetWidth / 2;
+
+    // Draw plate edge labels above
+    _drawText(canvas, formatSigned(rightCover), Offset(center.dx - plateWidth / 2, center.dy - 18), Colors.white38);
+    _drawText(canvas, formatSigned(leftCover), Offset(center.dx + plateWidth / 2, center.dy - 18), Colors.white38);
+
+    // 2. Draw Center Line Reference (Target Center)
+    final centerPaint = Paint()
+      ..color = Colors.white24
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+    canvas.drawLine(Offset(center.dx, center.dy - 8), Offset(center.dx, center.dy + 8), centerPaint);
+
+    // 3. Draw Wind Bracket (Lull to Gust range)
+    // w1 and w2 position mapping relative to center (hold)
+    final w1Pos = center.dx + (w1 - hold) * scale;
+    final w2Pos = center.dx + (w2 - hold) * scale;
+
+    final bracketColor = isSafe ? const Color(0xFF00E676) : const Color(0xFFFF9F0A);
+
+    final linePaint = Paint()
+      ..color = bracketColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+    final dotPaint = Paint()
+      ..color = bracketColor
+      ..style = PaintingStyle.fill;
+
+    // Draw connecting line
+    canvas.drawLine(Offset(w1Pos, center.dy), Offset(w2Pos, center.dy), linePaint);
+
+    // Draw dots at lull & gust ends
+    canvas.drawCircle(Offset(w1Pos, center.dy), 3.5, dotPaint);
+    canvas.drawCircle(Offset(w2Pos, center.dy), 3.5, dotPaint);
+
+    // Label the dots below
+    _drawText(canvas, formatSigned(w1), Offset(w1Pos, center.dy + 8), bracketColor);
+    _drawText(canvas, formatSigned(w2), Offset(w2Pos, center.dy + 8), bracketColor);
+
+    // Draw a small indicator for center hold
+    canvas.drawCircle(center, 1.5, Paint()..color = Colors.white);
+  }
+
+  void _drawText(Canvas canvas, String text, Offset position, Color color) {
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(color: color, fontSize: 8, fontWeight: FontWeight.bold),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    textPainter.layout();
+    
+    // Center the label horizontally on the offset position
+    final offset = Offset(position.dx - textPainter.width / 2, position.dy);
+    textPainter.paint(canvas, offset);
+  }
+
+  @override
+  bool shouldRepaint(covariant _BracketPainter oldDelegate) {
+    return oldDelegate.targetWidth != targetWidth ||
+        oldDelegate.spread != spread ||
+        oldDelegate.isSafe != isSafe ||
+        oldDelegate.w1 != w1 ||
+        oldDelegate.w2 != w2 ||
+        oldDelegate.hold != hold;
   }
 }

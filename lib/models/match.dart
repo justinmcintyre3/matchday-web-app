@@ -143,6 +143,7 @@ class Stage {
   List<String> shotTargetsSequence; // sequence of targets in shooting order
   List<double> shotRolls; // roll in degrees for each shot
   List<double> shotStabilities; // stability (MOA) value for each shot
+  WindColumnData windColumns;
 
   Stage({
     required this.stageNumber,
@@ -165,7 +166,8 @@ class Stage {
     this.shotTargetsSequence = const [],
     this.shotRolls = const [],
     this.shotStabilities = const [],
-  });
+    WindColumnData? windColumns,
+  }) : windColumns = windColumns ?? WindColumnData();
 
   List<Target> get targets {
     List<Target> all = [];
@@ -213,6 +215,7 @@ class Stage {
       'shotTargetsSequence': shotTargetsSequence,
       'shotRolls': shotRolls,
       'shotStabilities': shotStabilities,
+      'windColumns': windColumns.toMap(),
     };
   }
 
@@ -272,6 +275,7 @@ class Stage {
       shotTargetsSequence: List<String>.from(map['shotTargetsSequence'] ?? const []),
       shotRolls: List<double>.from(map['shotRolls'] ?? const []),
       shotStabilities: List<double>.from(map['shotStabilities'] ?? const []),
+      windColumns: WindColumnData.fromMap(map['windColumns'] as Map? ?? const {}),
     );
   }
 }
@@ -371,6 +375,35 @@ class WindPlan {
   }
 }
 
+class WindColumnData {
+  String mode; // 'angle' or 'mph'
+  List<double> values; // angles (degrees) or wind speeds (mph)
+  Map<String, String> results; // Key: "arrayIndex_columnIndex" -> Value: "0.3 R" or "0.3 R / 0.6 R"
+
+  WindColumnData({
+    this.mode = 'angle',
+    List<double>? values,
+    Map<String, String>? results,
+  })  : values = values ?? const [300.0, 330.0, 0.0, 30.0, 60.0], // Defaults: 10:00, 11:00, 12:00, 1:00, 2:00
+        results = results ?? const {};
+
+  Map<String, dynamic> toMap() {
+    return {
+      'mode': mode,
+      'values': values,
+      'results': results,
+    };
+  }
+
+  factory WindColumnData.fromMap(Map<dynamic, dynamic> map) {
+    return WindColumnData(
+      mode: map['mode'] ?? 'angle',
+      values: List<double>.from(map['values']?.map((x) => (x as num).toDouble()) ?? const [300.0, 330.0, 0.0, 30.0, 60.0]),
+      results: Map<String, String>.from(map['results'] ?? const {}),
+    );
+  }
+}
+
 class TargetArray {
   String distance;
   String degreeOfFire;
@@ -383,6 +416,12 @@ class TargetArray {
   int extrapolatedClockDirection;
   String elevationResult;
   String windageResult;
+  
+  // Numerical calculated values for UI rendering / visual brackets
+  double? elevationValue;
+  double? windage1Value;
+  double? windage2Value;
+  double? leadValue;
 
   /// 0–23 clock slots: 0 = 12:00, 1 = 12:30, 2 = 1:00, … (15° steps).
   static int migrateWindClockSlot(int value) {
@@ -455,6 +494,10 @@ class TargetArray {
     this.extrapolatedClockDirection = 0,
     this.elevationResult = '',
     this.windageResult = '',
+    this.elevationValue,
+    this.windage1Value,
+    this.windage2Value,
+    this.leadValue,
   });
 
   Map<String, dynamic> toMap() {
@@ -470,6 +513,10 @@ class TargetArray {
       'extrapolatedClockDirection': extrapolatedClockDirection,
       'elevationResult': elevationResult,
       'windageResult': windageResult,
+      'elevationValue': elevationValue,
+      'windage1Value': windage1Value,
+      'windage2Value': windage2Value,
+      'leadValue': leadValue,
     };
   }
 
@@ -492,6 +539,10 @@ class TargetArray {
       ),
       elevationResult: map['elevationResult'] ?? '',
       windageResult: map['windageResult'] ?? '',
+      elevationValue: (map['elevationValue'] as num?)?.toDouble(),
+      windage1Value: (map['windage1Value'] as num?)?.toDouble(),
+      windage2Value: (map['windage2Value'] as num?)?.toDouble(),
+      leadValue: (map['leadValue'] as num?)?.toDouble(),
     );
   }
 }
