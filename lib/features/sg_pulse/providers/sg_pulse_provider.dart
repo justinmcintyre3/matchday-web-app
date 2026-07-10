@@ -23,6 +23,7 @@ class SgPulseProvider extends ChangeNotifier {
   static const _greenZoneKey = 'sg_pulse_stability_green_zone';
   static const _yellowZoneKey = 'sg_pulse_stability_yellow_zone';
   static const _batteryWarningThresholdKey = 'sg_pulse_battery_warning_threshold';
+  static const _shotSensitivityKey = 'sg_pulse_shot_sensitivity';
 
   final SgPulseBleService _service;
   
@@ -40,6 +41,7 @@ class SgPulseProvider extends ChangeNotifier {
     _service.onPulseData             = _onPulseData;
     _service.onShotDetected          = _onShotDetected;
     _service.onBatteryLevelReceived  = _onBatteryLevelReceived;
+    _service.onShotSensitivityReceived = _onShotSensitivityReceived;
     _initPrefs();
   }
 
@@ -53,6 +55,7 @@ class SgPulseProvider extends ChangeNotifier {
     stabilityGreenZone = prefs.getDouble(_greenZoneKey) ?? 1.0;
     stabilityYellowZone = prefs.getDouble(_yellowZoneKey) ?? 5.0;
     batteryWarningThreshold = prefs.getInt(_batteryWarningThresholdKey) ?? 25;
+    shotSensitivity = prefs.getInt(_shotSensitivityKey) ?? 15;
     final saved = prefs.getString(_savedDeviceKey);
     if (saved != null) {
       try {
@@ -99,6 +102,9 @@ class SgPulseProvider extends ChangeNotifier {
 
   /// Battery warning threshold percentage
   int batteryWarningThreshold = 25;
+
+  /// Shot sensitivity threshold (1 to 31, default 15)
+  int shotSensitivity = 15;
 
   /// Internal buffers for calculating stability metrics locally
   final List<double> _angleHistory = [];
@@ -181,6 +187,15 @@ class SgPulseProvider extends ChangeNotifier {
     rollThreshold = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_rollThresholdKey, value);
+    notifyListeners();
+  }
+
+  /// Update shot sensitivity threshold
+  Future<void> setShotSensitivity(int value) async {
+    shotSensitivity = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_shotSensitivityKey, value);
+    await _service.writeShotSensitivity(value);
     notifyListeners();
   }
 
@@ -348,6 +363,13 @@ class SgPulseProvider extends ChangeNotifier {
     batteryWarningThreshold = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_batteryWarningThresholdKey, value);
+    notifyListeners();
+  }
+
+  void _onShotSensitivityReceived(int value) async {
+    shotSensitivity = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_shotSensitivityKey, value);
     notifyListeners();
   }
 

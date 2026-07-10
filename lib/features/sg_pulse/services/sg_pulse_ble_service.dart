@@ -26,6 +26,7 @@ typedef SgPulseConnectionCallback      = void Function(SgPulseConnectionState st
 typedef SgPulsePulseDataCallback       = void Function(PulseSnapshot snapshot);
 typedef SgPulseShotDetectedCallback    = void Function();
 typedef SgPulseBatteryCallback         = void Function(int batteryLevel);
+typedef SgPulseSensitivityCallback     = void Function(int sensitivity);
 
 // ──────────────────────────────────────────────────────────────────────────────
 // SgPulseBleService
@@ -38,9 +39,11 @@ class SgPulseBleService {
   SgPulsePulseDataCallback?    onPulseData;
   SgPulseShotDetectedCallback? onShotDetected;
   SgPulseBatteryCallback?      onBatteryLevelReceived;
+  SgPulseSensitivityCallback?  onShotSensitivityReceived;
 
   // Internal state
   BluetoothDevice? _connectedDevice;
+  BluetoothCharacteristic? _shotSensitivityChar;
 
   StreamSubscription<List<ScanResult>>?       _scanSubscription;
   StreamSubscription<BluetoothConnectionState>? _connectionSubscription;
@@ -201,6 +204,21 @@ class SgPulseBleService {
             debugPrint('[SgPulseBLE] Shot event characteristic found');
             await _enableNotify(char, isPulse: false);
           }
+
+          if (uuid == sgPulseCharShotSensitivity.toLowerCase()) {
+            debugPrint('[SgPulseBLE] Shot sensitivity characteristic found');
+            _shotSensitivityChar = char;
+            try {
+              final bytes = await char.read();
+              if (bytes.isNotEmpty) {
+                final sensitivity = bytes[0];
+                debugPrint('[SgPulseBLE] Shot sensitivity read: $sensitivity');
+                onShotSensitivityReceived?.call(sensitivity);
+              }
+            } catch (e) {
+              debugPrint('[SgPulseBLE] Failed to read shot sensitivity: $e');
+            }
+          }
         }
       }
 
@@ -284,9 +302,24 @@ class SgPulseBleService {
     _pulseSubscription = null;
     _shotSubscription = null;
     _connectionSubscription = null;
+    _shotSensitivityChar = null;
 
     await _connectedDevice?.disconnect();
     _connectedDevice = null;
+  }
+
+  Future<void> writeShotSensitivity(int value) async {
+    final char = _shotSensitivityChar;
+    if (char == null) {
+      debugPrint('[SgPulseBLE] Cannot write shot sensitivity: characteristic not found');
+      return;
+    }
+    try {
+      await char.write([value]);
+      debugPrint('[SgPulseBLE] Wrote shot sensitivity: $value');
+    } catch (e) {
+      debugPrint('[SgPulseBLE] Failed to write shot sensitivity: $e');
+    }
   }
 
   void dispose() {

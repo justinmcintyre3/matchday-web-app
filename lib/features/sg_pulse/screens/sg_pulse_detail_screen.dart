@@ -137,6 +137,9 @@ class _SgPulseDetailScreenState extends State<SgPulseDetailScreen> {
           _RollThresholdCard(provider: provider),
 
           const SizedBox(height: 16),
+          _ShotSensitivityCard(provider: provider),
+
+          const SizedBox(height: 16),
           _BatteryThresholdCard(provider: provider),
 
           const SizedBox(height: 16),
@@ -946,6 +949,138 @@ class _BatteryThresholdCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       'Prompt when battery is below ${provider.batteryWarningThreshold}%',
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: Colors.white24, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ShotSensitivityCard extends StatelessWidget {
+  final SgPulseProvider provider;
+  const _ShotSensitivityCard({required this.provider});
+
+  void _showConfigureDialog(BuildContext context) {
+    int tempVal = provider.shotSensitivity;
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('CONFIGURE SHOT SENSITIVITY'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Adjust the shot detection sensitivity threshold of the device (1 to 31). Lower values are less sensitive; higher values are more sensitive. (Default is 15)',
+                    style: TextStyle(fontSize: 12, color: Colors.grey, height: 1.4),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Sensitivity Level:',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                      ),
+                      Text(
+                        '$tempVal',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF007AFF),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Slider(
+                    value: tempVal.toDouble(),
+                    min: 1.0,
+                    max: 31.0,
+                    divisions: 30,
+                    activeColor: const Color(0xFF007AFF),
+                    inactiveColor: Colors.white12,
+                    onChanged: (val) {
+                      setState(() {
+                        tempVal = val.round();
+                      });
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    provider.setShotSensitivity(tempVal);
+                    Navigator.pop(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF007AFF),
+                      foregroundColor: Colors.white),
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isConnected = provider.connectionState == SgPulseConnectionState.connected;
+
+    return Card(
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          _showConfigureDialog(context);
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF007AFF).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.tune, color: Color(0xFF007AFF), size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Shot Sensitivity Threshold',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Sensitivity: ${provider.shotSensitivity} / 31${isConnected ? '' : ' (Offline)'}',
                       style: const TextStyle(fontSize: 11, color: Colors.grey),
                     ),
                   ],
