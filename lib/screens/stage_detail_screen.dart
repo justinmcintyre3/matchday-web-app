@@ -231,11 +231,32 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     if (!_rangeFocusNodes.containsKey(key)) {
       final node = FocusNode();
       node.addListener(() {
-        if (mounted) setState(() {});
+        if (mounted) {
+          _updateRx5000ConnectionState();
+          setState(() {});
+        }
       });
       _rangeFocusNodes[key] = node;
     }
     return _rangeFocusNodes[key]!;
+  }
+
+  void _updateRx5000ConnectionState() {
+    if (!mounted) return;
+    final hasAnyRangeFocus = _rangeFocusNodes.values.any((n) => n.hasFocus);
+    if (hasAnyRangeFocus) {
+      if (!_isRx5000Active) {
+        _rxProvider.incrementActivePages();
+        _isRx5000Active = true;
+        debugPrint('[StageDetailScreen] Range box focused. Connected RX5000.');
+      }
+    } else {
+      if (_isRx5000Active) {
+        _rxProvider.decrementActivePages();
+        _isRx5000Active = false;
+        debugPrint('[StageDetailScreen] Range box unfocused. Disconnected RX5000.');
+      }
+    }
   }
 
   FocusNode _getIncFocusNode(TargetArray array) {
@@ -362,26 +383,11 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     _rangeSubscription = _rxProvider.onRangeData.listen(_onRangeDataReceived);
     _tabController = TabController(length: 3, vsync: this);
 
-    if (_tabController.index == 0) {
-      _rxProvider.incrementActivePages();
-      _isRx5000Active = true;
-    }
-
     _tabController.addListener(() {
       if (!mounted) return;
       if (_tabController.indexIsChanging) {
         HapticFeedback.lightImpact();
       }
-
-      final shouldBeActive = _tabController.index == 0;
-      if (shouldBeActive && !_isRx5000Active) {
-        _rxProvider.incrementActivePages();
-        _isRx5000Active = true;
-      } else if (!shouldBeActive && _isRx5000Active) {
-        _rxProvider.decrementActivePages();
-        _isRx5000Active = false;
-      }
-
       setState(() {});
     });
 
