@@ -186,8 +186,8 @@ class KestrelProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Connect to a [device] from the scan list.
   Future<void> connect(KestrelDevice device, {bool autoConnect = false}) async {
-    BleCoordinator.instance.reset();
     if (!autoConnect) {
+      BleCoordinator.instance.reset();
       connectedDevice = device.copyWith(state: KestrelConnectionState.connecting);
       notifyListeners();
     }
@@ -254,6 +254,17 @@ class KestrelProvider extends ChangeNotifier with WidgetsBindingObserver {
           deviceType: 'Unknown',
           state: state,
         );
+
+    // Dynamic coordinator locking based on active JNI handshake states
+    if (state == KestrelConnectionState.connecting ||
+        state == KestrelConnectionState.discovering) {
+      BleCoordinator.instance.reset();
+    } else if (state == KestrelConnectionState.connected ||
+        state == KestrelConnectionState.error ||
+        state == KestrelConnectionState.disconnected ||
+        state == KestrelConnectionState.pinRequired) {
+      BleCoordinator.instance.signal();
+    }
 
     // Save device on successful connection/auth
     if (state == KestrelConnectionState.connected) {
