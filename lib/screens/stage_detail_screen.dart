@@ -1157,12 +1157,6 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       final isSafe = spread <= targetWidth;
       
       // Calculate covers relative to hold center
-      final leftCover = hold + targetWidth / 2;
-      final rightCover = hold - targetWidth / 2;
-      
-      // Margins: positive = on plate (cover), negative = off plate (miss)
-      final marginLull = (targetWidth / 2) - (w1 - hold).abs();
-      final marginGust = (targetWidth / 2) - (w2 - hold).abs();
 
       targetWidgets.add(
         Padding(
@@ -1209,28 +1203,15 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                   borderRadius: BorderRadius.circular(4),
                   border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
                 ),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Plate Coverage: ${formatSigned(rightCover)} to ${formatSigned(leftCover)}', 
-                             style: const TextStyle(fontSize: 9, color: Colors.white60, fontWeight: FontWeight.bold)),
-                        Text('Center Hold: ${formatSigned(hold)}', 
-                             style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white70)),
-                      ],
+                child: Center(
+                  child: Text(
+                    'Center Hold: ${formatSigned(hold)}',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF007AFF),
                     ),
-                    const SizedBox(height: 4),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Lull (${formatSigned(w1)}) margin: ${marginLull >= 0 ? "${marginLull.toStringAsFixed(2)} MIL cover" : "MISS by ${marginLull.abs().toStringAsFixed(2)} MIL"}',
-                             style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: marginLull >= 0 ? const Color(0xFF00E676) : const Color(0xFFFF3B30))),
-                        Text('Gust (${formatSigned(w2)}) margin: ${marginGust >= 0 ? "${marginGust.toStringAsFixed(2)} MIL cover" : "MISS by ${marginGust.abs().toStringAsFixed(2)} MIL"}',
-                             style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: marginGust >= 0 ? const Color(0xFF00E676) : const Color(0xFFFF3B30))),
-                      ],
-                    ),
-                  ],
+                  ),
                 ),
               ),
               const SizedBox(height: 6),
@@ -6049,9 +6030,34 @@ class _BracketPainter extends CustomPainter {
     canvas.drawCircle(Offset(w1Pos, center.dy), 3.5, dotPaint);
     canvas.drawCircle(Offset(w2Pos, center.dy), 3.5, dotPaint);
 
-    // Label the dots below
-    _drawText(canvas, formatSigned(w1), Offset(w1Pos, center.dy + 8), bracketColor);
-    _drawText(canvas, formatSigned(w2), Offset(w2Pos, center.dy + 8), bracketColor);
+    // Calculate margins: positive = on plate (cover), negative = off plate (miss)
+    final marginLull = (targetWidth / 2) - (w1 - hold).abs();
+    final marginGust = (targetWidth / 2) - (w2 - hold).abs();
+
+    final leftX = w1Pos < w2Pos ? w1Pos : w2Pos;
+    final rightX = w1Pos < w2Pos ? w2Pos : w1Pos;
+
+    final leftMargin = w1Pos < w2Pos ? marginLull : marginGust;
+    final rightMargin = w1Pos < w2Pos ? marginGust : marginLull;
+
+    final leftHold = w1Pos < w2Pos ? w1 : w2;
+    final rightHold = w1Pos < w2Pos ? w2 : w1;
+
+    final greenColor = const Color(0xFF00E676);
+    final redColor = const Color(0xFFFF3B30);
+
+    // Paint margin numbers beside the dots (with plus prefix for positive, minus for negative)
+    final leftMarginText = '${leftMargin >= 0 ? "+" : ""}${leftMargin.toStringAsFixed(2)}';
+    final leftMarginColor = leftMargin >= 0 ? greenColor : redColor;
+    _drawTextAligned(canvas, leftMarginText, leftX, center.dy, leftMarginColor, isLeft: true);
+
+    final rightMarginText = '${rightMargin >= 0 ? "+" : ""}${rightMargin.toStringAsFixed(2)}';
+    final rightMarginColor = rightMargin >= 0 ? greenColor : redColor;
+    _drawTextAligned(canvas, rightMarginText, rightX, center.dy, rightMarginColor, isLeft: false);
+
+    // Paint hold value below the dots
+    _drawText(canvas, formatSigned(leftHold), Offset(leftX, center.dy + 8), leftMarginColor);
+    _drawText(canvas, formatSigned(rightHold), Offset(rightX, center.dy + 8), rightMarginColor);
 
     // Draw a small indicator for center hold
     canvas.drawCircle(center, 1.5, Paint()..color = Colors.white);
@@ -6070,6 +6076,24 @@ class _BracketPainter extends CustomPainter {
     // Center the label horizontally on the offset position
     final offset = Offset(position.dx - textPainter.width / 2, position.dy);
     textPainter.paint(canvas, offset);
+  }
+
+  void _drawTextAligned(Canvas canvas, String text, double x, double y, Color color, {required bool isLeft}) {
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(color: color, fontSize: 8, fontWeight: FontWeight.bold),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    textPainter.layout();
+    
+    final double dx = isLeft 
+        ? x - 6 - textPainter.width 
+        : x + 6;
+    final double dy = y - textPainter.height / 2;
+    
+    textPainter.paint(canvas, Offset(dx, dy));
   }
 
   @override
