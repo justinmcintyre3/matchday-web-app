@@ -35,6 +35,8 @@ class KestrelProvider extends ChangeNotifier with WidgetsBindingObserver {
   final StreamController<int> _batteryLowController = StreamController.broadcast();
   Stream<int> get onBatteryLow => _batteryLowController.stream;
 
+  double? lastPhoneLat;
+
   int batteryWarningThreshold = 25;
 
   KestrelProvider({KestrelBleService? service})
@@ -96,6 +98,7 @@ class KestrelProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     final position = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.low));
     final phoneLat = position.latitude;
+    lastPhoneLat = phoneLat;
     final diff = (kestrelLat - phoneLat).abs();
     debugPrint('[KestrelProvider] Kestrel Lat: $kestrelLat, Phone Lat: $phoneLat, Diff: $diff');
 

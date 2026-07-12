@@ -33,7 +33,8 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
     super.initState();
     _latMismatchSub = context.read<KestrelProvider>().onLatitudeMismatch.listen((kestrelLat) {
       if (!mounted) return;
-      _showLatitudeMismatchDialog(kestrelLat);
+      final provider = context.read<KestrelProvider>();
+      _showLatitudeMismatchDialog(kestrelLat, provider.lastPhoneLat);
     });
 
     _sgPulseBatteryLowSub = context.read<SgPulseProvider>().onBatteryLow.listen((batteryLevel) {
@@ -61,15 +62,16 @@ class _MainNavigationContainerState extends State<MainNavigationContainer> {
     super.dispose();
   }
 
-  void _showLatitudeMismatchDialog(double kestrelLat) {
+  void _showLatitudeMismatchDialog(double kestrelLat, double? phoneLat) {
+    final phoneLatStr = phoneLat != null ? ' (${phoneLat.toStringAsFixed(3)})' : '';
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         title: const Text('Latitude Mismatch'),
         content: Text(
-          'It appears your phone\'s GPS location does not match the latitude stored in your connected Kestrel '
-          '(${kestrelLat.toStringAsFixed(2)}).\n\n'
+          'It appears your phone\'s GPS location$phoneLatStr does not match the latitude stored in your connected Kestrel '
+          '(${kestrelLat.toStringAsFixed(3)}).\n\n'
           'Press "Ignore" if this is on purpose (you won\'t be reminded again unless you update it later). '
           'Press "Update" to go to the Kestrel settings and sync your location.'
         ),
