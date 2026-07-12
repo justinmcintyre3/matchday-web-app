@@ -7,6 +7,7 @@ import '../models/match.dart';
 import '../providers/match_provider.dart';
 import 'match_detail_screen.dart';
 import '../widgets/global_app_bar.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 
 class MatchesListScreen extends StatefulWidget {
   const MatchesListScreen({super.key});
@@ -113,47 +114,72 @@ class _MatchesListScreenState extends State<MatchesListScreen> {
     final percent =
         totalShots > 0 ? (hits / totalShots * 100).toStringAsFixed(1) : '0.0';
 
-    return Dismissible(
+    return Slidable(
       key: Key(match.id),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20.0),
-        decoration: BoxDecoration(
-          color: Colors.red[400],
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: const Icon(Icons.delete, color: Colors.white),
-      ),
-      confirmDismiss: (direction) async {
-        return await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Delete Match'),
-            content: Text(
-                'Are you sure you want to delete "${match.name}"? This will delete all stage logs.'),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  HapticFeedback.lightImpact();
-                  Navigator.pop(context, false);
-                },
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () {
-                  HapticFeedback.lightImpact();
-                  Navigator.pop(context, true);
-                },
-                child: Text('Delete', style: TextStyle(color: Colors.red[400])),
-              ),
-            ],
+      startActionPane: ActionPane(
+        motion: const ScrollMotion(),
+        children: [
+          SlidableAction(
+            onPressed: (context) {
+              HapticFeedback.lightImpact();
+              _showEditMatchDialog(context, provider, match);
+            },
+            backgroundColor: Colors.blue,
+            foregroundColor: Colors.white,
+            icon: Icons.edit,
+            label: 'Edit',
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(12),
+              bottomLeft: Radius.circular(12),
+            ),
           ),
-        );
-      },
-      onDismissed: (direction) {
-        provider.deleteMatch(match.id);
-      },
+        ],
+      ),
+      endActionPane: ActionPane(
+        motion: const ScrollMotion(),
+        children: [
+          SlidableAction(
+            onPressed: (context) async {
+              HapticFeedback.lightImpact();
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Delete Match'),
+                  content: Text(
+                      'Are you sure you want to delete "${match.name}"? This will delete all stage logs.'),
+                  actions: [
+                    TextButton(
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.pop(context, false);
+                      },
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        Navigator.pop(context, true);
+                      },
+                      child: Text('Delete', style: TextStyle(color: Colors.red[400])),
+                    ),
+                  ],
+                ),
+              );
+              if (confirm == true) {
+                provider.deleteMatch(match.id);
+              }
+            },
+            backgroundColor: Colors.red[400]!,
+            foregroundColor: Colors.white,
+            icon: Icons.delete,
+            label: 'Delete',
+            borderRadius: const BorderRadius.only(
+              topRight: Radius.circular(12),
+              bottomRight: Radius.circular(12),
+            ),
+          ),
+        ],
+      ),
       child: Card(
         margin: const EdgeInsets.only(bottom: 12.0),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -247,6 +273,101 @@ class _MatchesListScreenState extends State<MatchesListScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> _showEditMatchDialog(
+      BuildContext context, MatchProvider provider, Match match) async {
+    final nameController = TextEditingController(text: match.name);
+    final locationController = TextEditingController(text: match.location);
+    DateTime selectedDate = match.date;
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Text('Edit Match', style: TextStyle(fontWeight: FontWeight.bold)),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: InputDecoration(
+                        labelText: 'Match Name',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: locationController,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: InputDecoration(
+                        labelText: 'Location',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                      shape: RoundedRectangleBorder(
+                        side: BorderSide(color: Colors.grey.withValues(alpha: 0.5)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      title: const Text('Date'),
+                      subtitle: Text(DateFormat('MMM d, yyyy').format(selectedDate)),
+                      trailing: const Icon(Icons.calendar_today),
+                      onTap: () async {
+                        final DateTime? picked = await showDatePicker(
+                          context: context,
+                          initialDate: selectedDate,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2030),
+                        );
+                        if (picked != null && picked != selectedDate) {
+                          setDialogState(() {
+                            selectedDate = picked;
+                          });
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actionsAlignment: MainAxisAlignment.spaceBetween,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.cancel_outlined, color: Colors.redAccent),
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    Navigator.of(dialogContext).pop();
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.save, color: Colors.blueAccent),
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    if (nameController.text.trim().isNotEmpty && locationController.text.trim().isNotEmpty) {
+                      provider.updateMatchBasicInfo(
+                        match.id,
+                        nameController.text.trim(),
+                        locationController.text.trim(),
+                        selectedDate,
+                      );
+                      Navigator.of(dialogContext).pop();
+                    }
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 

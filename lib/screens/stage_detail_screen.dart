@@ -1551,6 +1551,22 @@ class _StageDetailScreenState extends State<StageDetailScreen>
 
   Future<void> _syncToWatch() async {
     FocusManager.instance.primaryFocus?.unfocus();
+
+    final isCofFullyMapped = _stage.plannedRoundCount > 0 &&
+        _stage.shotTargetsSequence.length == _stage.plannedRoundCount;
+    if (!isCofFullyMapped) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Please complete Course of Fire mapping first.',
+            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: Color(0xFFFFD60A),
+        ),
+      );
+      return;
+    }
+
     _saveStage(exitScreen: false);
     final matchProvider = context.read<MatchProvider>();
     matchProvider.syncActiveStageToWatch();
@@ -2670,17 +2686,20 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                       HapticFeedback.lightImpact();
                       _showCofSetupDialog();
                     },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          const Color(0xFF007AFF).withValues(alpha: 0.1),
-                      foregroundColor: const Color(0xFF007AFF),
-                      side:
-                          const BorderSide(color: Color(0xFF007AFF), width: 1),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
+                    style: () {
+                      final isCofFullyMapped = _stage.plannedRoundCount > 0 &&
+                          _stage.shotTargetsSequence.length == _stage.plannedRoundCount;
+                      final cofColor = isCofFullyMapped ? const Color(0xFF007AFF) : const Color(0xFFFFD60A);
+                      return ElevatedButton.styleFrom(
+                        backgroundColor: cofColor.withValues(alpha: 0.1),
+                        foregroundColor: cofColor,
+                        side: BorderSide(color: cofColor, width: 1),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      );
+                    }(),
                     icon: const Icon(Icons.route_outlined),
                     label: Text(
                       _stage.shotTargetsSequence.isEmpty
@@ -3149,12 +3168,22 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 if (hasRoll && rollVal != 0.0)
-                                  Text(
-                                    'Roll: ${truncatedRoll.toStringAsFixed(1)}° ${truncatedRoll < 0 ? "Left" : "Right"}',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: rollColor,
-                                      fontWeight: FontWeight.w500,
+                                  Text.rich(
+                                    TextSpan(
+                                      children: [
+                                        const TextSpan(
+                                          text: 'Roll: ',
+                                          style: TextStyle(color: Colors.grey, fontSize: 11),
+                                        ),
+                                        TextSpan(
+                                          text: '${truncatedRoll.toStringAsFixed(1)}° ${truncatedRoll < 0 ? "Left" : "Right"}',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: rollColor,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 if (hasStability)

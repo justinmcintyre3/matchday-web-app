@@ -253,6 +253,35 @@ class MatchProvider with ChangeNotifier {
     }
   }
 
+  void updateMatchBasicInfo(String matchId, String name, String location, DateTime date) {
+    final matchIndex = _matches.indexWhere((m) => m.id == matchId);
+    if (matchIndex != -1) {
+      final match = _matches[matchIndex];
+      _matches[matchIndex] = Match(
+        id: match.id,
+        name: name,
+        location: location,
+        date: date,
+        numStages: match.numStages,
+        shotsPerStage: match.shotsPerStage,
+        stages: match.stages,
+        winnerHits: match.winnerHits,
+        position: match.position,
+        matchNotes: match.matchNotes,
+        deletedMentalTags: match.deletedMentalTags,
+        deletedSkillsTags: match.deletedSkillsTags,
+        deletedEnvTags: match.deletedEnvTags,
+        customMentalTags: match.customMentalTags,
+        customSkillsTags: match.customSkillsTags,
+        customEnvTags: match.customEnvTags,
+        customTargetTypes: match.customTargetTypes,
+        deletedTargetTypes: match.deletedTargetTypes,
+      );
+      _saveMatches();
+      notifyListeners();
+    }
+  }
+
   void addCustomTagToMatch(String matchId, String tag, String errorType) {
     final matchIndex = _matches.indexWhere((m) => m.id == matchId);
     if (matchIndex != -1) {
