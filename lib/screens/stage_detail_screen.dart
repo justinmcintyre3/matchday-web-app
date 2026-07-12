@@ -2105,8 +2105,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                               keyboardType: const TextInputType
                                                   .numberWithOptions(
                                                   decimal: true),
-                                              textInputAction: targetIdx <
-                                                      array.targets.length - 1
+                                              textInputAction: (targetIdx < array.targets.length - 1 || arrayIdx < _stage.targetArrays.length - 1)
                                                   ? TextInputAction.next
                                                   : TextInputAction.done,
                                               onTap: () =>
@@ -2140,15 +2139,14 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                                     : '$val MIL';
                                                 setState(() {});
                                                 _saveStage(exitScreen: false);
-                                                if (targetIdx <
-                                                    array.targets.length - 1) {
-                                                  _getTargetSizeFocusNode(
-                                                          array.targets[
-                                                              targetIdx + 1])
+                                                if (targetIdx < array.targets.length - 1) {
+                                                  _getTargetSizeFocusNode(array.targets[targetIdx + 1])
+                                                      .requestFocus();
+                                                } else if (arrayIdx < _stage.targetArrays.length - 1) {
+                                                  _getTargetSizeFocusNode(_stage.targetArrays[arrayIdx + 1].targets.first)
                                                       .requestFocus();
                                                 } else {
-                                                  FocusScope.of(context)
-                                                      .unfocus();
+                                                  FocusScope.of(context).unfocus();
                                                 }
                                               },
                                             ),

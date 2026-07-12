@@ -251,40 +251,67 @@ class _ChecklistDetailScreenState extends State<ChecklistDetailScreen> {
           focusNode.unfocus();
         },
         child: AlertDialog(
-          title: const Text('Add Item'),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Add Item', style: TextStyle(fontWeight: FontWeight.bold)),
           content: TextField(
             controller: controller,
             focusNode: focusNode,
             autofocus: true,
+            minLines: 1,
+            maxLines: 5,
+            keyboardType: TextInputType.multiline,
             onTap: () => HapticFeedback.lightImpact(),
-            textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(
               hintText: 'Enter item name',
-              border: OutlineInputBorder(),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
+          actionsAlignment: MainAxisAlignment.spaceBetween,
           actions: [
-            TextButton(
+            IconButton(
+              icon: const Icon(Icons.cancel_outlined, color: Colors.redAccent),
               onPressed: () {
                 HapticFeedback.lightImpact();
                 Navigator.of(dialogContext).pop();
               },
-              child: const Text('Cancel'),
             ),
-            TextButton(
-              onPressed: () {
-                HapticFeedback.lightImpact();
-                if (controller.text.isNotEmpty) {
-                  Provider.of<ChecklistProvider>(context, listen: false)
-                      .addItem(widget.groupId, controller.text);
-                  setState(() {
-                    _showResetButton =
-                        false; // Hide reset button when new item is added
-                  });
-                  Navigator.of(dialogContext).pop();
-                }
-              },
-              child: const Text('Add'),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.add_circle_outline, color: Colors.blueAccent),
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    if (controller.text.trim().isNotEmpty) {
+                      Provider.of<ChecklistProvider>(context, listen: false)
+                          .addItem(widget.groupId, controller.text.trim());
+                      setState(() {
+                        _showResetButton = false;
+                      });
+                      Navigator.of(dialogContext).pop();
+                    }
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.post_add, color: Colors.blueAccent),
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    if (controller.text.trim().isNotEmpty) {
+                      Provider.of<ChecklistProvider>(context, listen: false)
+                          .addItem(widget.groupId, controller.text.trim());
+                      setState(() {
+                        _showResetButton = false;
+                      });
+                      Navigator.of(dialogContext).pop();
+                      // Reopen the dialog to add another item
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        _showAddItemDialog(context);
+                      });
+                    }
+                  },
+                ),
+              ],
             ),
           ],
         ),
@@ -305,48 +332,46 @@ class _ChecklistDetailScreenState extends State<ChecklistDetailScreen> {
     return showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Edit Item'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Edit Item', style: TextStyle(fontWeight: FontWeight.bold)),
         content: TextField(
           controller: controller,
           autofocus: true,
+          minLines: 1,
+          maxLines: 5,
+          keyboardType: TextInputType.multiline,
           onTap: () => HapticFeedback.lightImpact(),
-          textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(
+          textCapitalization: TextCapitalization.sentences,
+          decoration: InputDecoration(
             hintText: 'Enter new item name',
-            border: OutlineInputBorder(),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           ),
         ),
+        actionsAlignment: MainAxisAlignment.spaceBetween,
         actions: [
-          TextButton(
+          IconButton(
+            icon: const Icon(Icons.cancel_outlined, color: Colors.redAccent),
             onPressed: () {
               HapticFeedback.lightImpact();
               Navigator.of(dialogContext).pop();
             },
-            child: const Text('Cancel'),
           ),
-          TextButton(
+          IconButton(
+            icon: const Icon(Icons.save, color: Colors.blueAccent),
             onPressed: () {
               HapticFeedback.lightImpact();
-              if (controller.text.isNotEmpty) {
-                // Use dialogContext to access the provider
+              if (controller.text.trim().isNotEmpty) {
                 Provider.of<ChecklistProvider>(dialogContext, listen: false)
                     .updateItem(
                         widget.groupId,
                         ChecklistItem(
                           id: item.id,
-                          title: controller.text, // New title
+                          title: controller.text.trim(),
                           isCompleted: item.isCompleted,
                         ));
                 Navigator.of(dialogContext).pop();
               }
             },
-            child: Text(
-              'Save',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.primary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
           ),
         ],
       ),
