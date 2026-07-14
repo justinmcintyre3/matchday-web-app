@@ -1534,8 +1534,11 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   void _saveStage({bool exitScreen = true, bool markAsCompleted = false}) {
     if (markAsCompleted && _stage.shotResults.contains('none')) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Please mark all shots before completing.'),
-        backgroundColor: Colors.red,
+        content: Text(
+          'Please mark all shots before completing.',
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Color(0xFFFFD60A),
       ));
       return;
     }
@@ -3749,32 +3752,24 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                     if (isCofIncomplete) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Please mark all shots as Hit, Miss, or Timeout first.'),
-                          backgroundColor: Colors.redAccent,
+                          content: Text(
+                            'Please mark all shots as Hit, Miss, or Timeout first.',
+                            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                          ),
+                          backgroundColor: Color(0xFFFFD60A),
                         ),
                       );
                       return;
                     }
 
-                    final allMisses = _stage.shotResults.isNotEmpty && !_stage.shotResults.contains('hit');
                     final needsWindPrompt = _stage.status != 'completed' && !_isActualWindageManipulated;
-                    final needsMissPrompt = _stage.status != 'completed' && allMisses;
 
-                    if (needsWindPrompt || needsMissPrompt) {
-                      String msg;
-                      if (needsWindPrompt && needsMissPrompt) {
-                        msg = 'Do you accept current entered final wind held and target results (all misses)?';
-                      } else if (needsWindPrompt) {
-                        msg = 'Do you accept current entered final wind held?';
-                      } else {
-                        msg = 'Do you accept current entered target results (all misses)?';
-                      }
-
+                    if (needsWindPrompt) {
                       showDialog(
                         context: context,
                         builder: (dialogCtx) => AlertDialog(
-                          title: const Text('Confirm Stage Results'),
-                          content: Text(msg),
+                          title: const Text('Confirm Windage Held'),
+                          content: const Text('Do you accept current entered final wind held?'),
                           actions: [
                             TextButton(
                               onPressed: () {
