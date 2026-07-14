@@ -1083,13 +1083,32 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                         style: TextStyle(fontSize: 10, color: Color(0xFF007AFF)),
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        array.elevationResult,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            array.elevationResult,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          if (_stage.targetArrays.indexOf(array) >= 1 &&
+                              _stage.targetArrays[0].elevationValue != null &&
+                              array.elevationValue != null) () {
+                            final diff = array.elevationValue! - _stage.targetArrays[0].elevationValue!;
+                            final dir = diff < 0 ? 'U' : 'D';
+                            return Text(
+                              'HO: ${diff.abs().toStringAsFixed(2)} $dir',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFFFF9500),
+                              ),
+                            );
+                          }(),
+                        ],
                       ),
                     ],
                   ),
@@ -1667,11 +1686,24 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       _saveStage(exitScreen: false);
 
       // Package and sync DOPE data to watch
-      final dopeTargets = _stage.targetArrays.map((array) => {
-        'distance': array.distance,
-        'elevation': array.elevationResult,
-        'windage': array.windageResult,
-      }).toList();
+      final dopeTargets = <Map<String, String>>[];
+      for (int i = 0; i < _stage.targetArrays.length; i++) {
+        final array = _stage.targetArrays[i];
+        String holdoverVal = '';
+        if (i >= 1 &&
+            _stage.targetArrays[0].elevationValue != null &&
+            array.elevationValue != null) {
+          final diff = array.elevationValue! - _stage.targetArrays[0].elevationValue!;
+          final dir = diff < 0 ? 'U' : 'D';
+          holdoverVal = '${diff.abs().toStringAsFixed(2)} $dir';
+        }
+        dopeTargets.add({
+          'distance': array.distance,
+          'elevation': array.elevationResult,
+          'windage': array.windageResult,
+          'holdover': holdoverVal,
+        });
+      }
       matchProvider.syncDopeToWatch(dopeTargets);
 
       if (mounted) {

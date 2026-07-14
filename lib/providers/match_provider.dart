@@ -433,11 +433,24 @@ class MatchProvider with ChangeNotifier {
           stage.targetArrays.any((array) => array.elevationResult.isNotEmpty);
 
       if (hasDope) {
-        final dopeTargets = stage.targetArrays.map((array) => {
-          'distance': array.distance,
-          'elevation': array.elevationResult,
-          'windage': array.windageResult,
-        }).toList();
+        final dopeTargets = <Map<String, String>>[];
+        for (int i = 0; i < stage.targetArrays.length; i++) {
+          final array = stage.targetArrays[i];
+          String holdoverVal = '';
+          if (i >= 1 &&
+              stage.targetArrays[0].elevationValue != null &&
+              array.elevationValue != null) {
+            final diff = array.elevationValue! - stage.targetArrays[0].elevationValue!;
+            final dir = diff < 0 ? 'U' : 'D';
+            holdoverVal = '${diff.abs().toStringAsFixed(2)} $dir';
+          }
+          dopeTargets.add({
+            'distance': array.distance,
+            'elevation': array.elevationResult,
+            'windage': array.windageResult,
+            'holdover': holdoverVal,
+          });
+        }
         await syncDopeToWatch(dopeTargets);
       }
     } catch (e) {
