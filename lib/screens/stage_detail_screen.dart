@@ -62,6 +62,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   // Local state copy of stage variables
   late Stage _stage;
   bool _initialized = false;
+  bool _isActualWindageManipulated = false;
 
   List<String> _mentalTags = [];
   List<String> _skillsTags = [];
@@ -481,7 +482,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
           _stage.shotTimes = [];
           _stage.shotRolls = [];
           _stage.shotStabilities = [];
-          _stage.shotResults = List.filled(_stage.shotResults.length, 'miss');
+          _stage.shotResults = List.filled(_stage.shotResults.length, 'none');
           _stoppedByLimit = false;
         });
         context.read<SgPulseProvider>().clearSession();
@@ -1512,7 +1513,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     if (_stage.shotResults.length < totalShotsNeeded) {
       _stage.shotResults.addAll(List.generate(
         totalShotsNeeded - _stage.shotResults.length,
-        (_) => 'miss',
+        (_) => 'none',
       ));
     } else if (_stage.shotResults.length > totalShotsNeeded) {
       _stage.shotResults = _stage.shotResults.sublist(0, totalShotsNeeded);
@@ -1531,6 +1532,14 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   }
 
   void _saveStage({bool exitScreen = true, bool markAsCompleted = false}) {
+    if (markAsCompleted && _stage.shotResults.contains('none')) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Please mark all shots before completing.'),
+        backgroundColor: Colors.red,
+      ));
+      return;
+    }
+
     _stage.name = _stageNameController.text.trim();
     _stage.mentalErrors = _mentalTags.join(', ');
     _stage.skillsErrors = _skillsTags.join(', ');
@@ -2864,12 +2873,13 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   }) {
     String displayStr;
 
-    if (value.abs() < 0.00001) {
+    if (value.abs() < 0.00001 || direction == 'None') {
       displayStr = '0.00';
     } else {
-      final dir = value < 0 ? 'L' : 'R';
-      displayStr = '${value.abs().toStringAsFixed(2)} $dir';
+      displayStr = '${value.abs().toStringAsFixed(2)} $direction';
     }
+
+    final signedValue = (direction == 'R') ? -value : value;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2887,12 +2897,14 @@ class _StageDetailScreenState extends State<StageDetailScreen>
               onPressed: () {
                 HapticFeedback.lightImpact();
 
-                double next = step(value, -1);
+                // Left is positive, so moving Left adds to the value
+                double next = step(signedValue, 1);
                 next = normalize(next);
 
-                final dir = isZero(next) ? 'None' : (next < 0 ? 'L' : 'R');
+                final dir = isZero(next) ? 'None' : (next < 0 ? 'R' : 'L');
+                final val = next.abs();
 
-                onChanged(next, dir);
+                onChanged(val, dir);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF121214),
@@ -2921,7 +2933,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                 ),
                 child: Center(
                   child: Text(
-                    '$displayStr MIL',
+                    displayStr == '0.00' ? '0.00 MIL' : '$displayStr MIL',
                     style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -2936,12 +2948,14 @@ class _StageDetailScreenState extends State<StageDetailScreen>
               onPressed: () {
                 HapticFeedback.lightImpact();
 
-                double next = step(value, 1);
+                // Right is negative, so moving Right subtracts from the value
+                double next = step(signedValue, -1);
                 next = normalize(next);
 
-                final dir = isZero(next) ? 'None' : (next < 0 ? 'L' : 'R');
+                final dir = isZero(next) ? 'None' : (next < 0 ? 'R' : 'L');
+                final val = next.abs();
 
-                onChanged(next, dir);
+                onChanged(val, dir);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF121214),
@@ -3424,15 +3438,12 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                         HapticFeedback.lightImpact();
 
                                         setState(() {
-                                          if (result == 'miss') {
-                                            _stage.shotResults[globalShotIdx] =
-                                                'hit';
-                                          } else if (result == 'hit') {
-                                            _stage.shotResults[globalShotIdx] =
-                                                'timeOutMiss';
+                                          if (result == 'hit') {
+                                            _stage.shotResults[globalShotIdx] = 'miss';
+                                          } else if (result == 'miss') {
+                                            _stage.shotResults[globalShotIdx] = 'timeOutMiss';
                                           } else {
-                                            _stage.shotResults[globalShotIdx] =
-                                                'miss';
+                                            _stage.shotResults[globalShotIdx] = 'hit';
                                           }
                                         });
                                       },
@@ -3513,6 +3524,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                       setState(() {
                         _stage.windPlan.actualValue = val;
                         _stage.windPlan.actualDirection = dir;
+                        _isActualWindageManipulated = true;
                       });
                     },
                   ),
@@ -3683,6 +3695,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                         _stage.environmentalErrors = '';
                         _stage.windPlan.actualValue = 0.0;
                         _stage.windPlan.actualDirection = 'None';
+                        _isActualWindageManipulated = false;
                         // Reset COF sequence, shot times, rolls, stabilities, and restore default target shot counts
                         _stage.shotTargetsSequence = [];
                         _stage.shotTimes = [];
@@ -3731,7 +3744,59 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                 child: ElevatedButton(
                   onPressed: () {
                     HapticFeedback.lightImpact();
-                    _saveStage(markAsCompleted: _stage.status != 'completed');
+
+                    final isCofIncomplete = _stage.shotResults.contains('none');
+                    if (isCofIncomplete) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Please mark all shots as Hit, Miss, or Timeout first.'),
+                          backgroundColor: Colors.redAccent,
+                        ),
+                      );
+                      return;
+                    }
+
+                    final allMisses = _stage.shotResults.isNotEmpty && !_stage.shotResults.contains('hit');
+                    final needsWindPrompt = _stage.status != 'completed' && !_isActualWindageManipulated;
+                    final needsMissPrompt = _stage.status != 'completed' && allMisses;
+
+                    if (needsWindPrompt || needsMissPrompt) {
+                      String msg;
+                      if (needsWindPrompt && needsMissPrompt) {
+                        msg = 'Do you accept current entered final wind held and target results (all misses)?';
+                      } else if (needsWindPrompt) {
+                        msg = 'Do you accept current entered final wind held?';
+                      } else {
+                        msg = 'Do you accept current entered target results (all misses)?';
+                      }
+
+                      showDialog(
+                        context: context,
+                        builder: (dialogCtx) => AlertDialog(
+                          title: const Text('Confirm Stage Results'),
+                          content: Text(msg),
+                          actions: [
+                            TextButton(
+                              onPressed: () {
+                                HapticFeedback.lightImpact();
+                                Navigator.pop(dialogCtx);
+                              },
+                              child: const Text('Cancel'),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                HapticFeedback.lightImpact();
+                                Navigator.pop(dialogCtx);
+                                _saveStage(markAsCompleted: _stage.status != 'completed');
+                              },
+                              child: const Text('Accept', style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                      );
+                    } else {
+                      _saveStage(markAsCompleted: _stage.status != 'completed');
+                    }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF007AFF),
