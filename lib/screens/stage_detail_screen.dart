@@ -12,7 +12,9 @@ import '../widgets/wind_clock_picker.dart';
 import '../features/sg_pulse/providers/sg_pulse_provider.dart';
 import '../widgets/global_app_bar.dart';
 import '../features/rx5000/providers/rx5000_provider.dart';
+import '../widgets/performance_charts.dart';
 import 'wind_columns_screen.dart';
+
 
 class StageDetailScreen extends StatefulWidget {
   final String matchId;
@@ -2899,6 +2901,104 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     );
   }
 
+  Widget _buildPerformanceChartsSection() {
+    int rollGreen = 0;
+    int rollRed = 0;
+    int rollBlue = 0;
+
+    int stabilityGreen = 0;
+    int stabilityYellow = 0;
+    int stabilityRed = 0;
+
+    final sgPulseProvider = context.read<SgPulseProvider>();
+    final rollThreshold = sgPulseProvider.rollThreshold;
+
+    for (int i = 0; i < _stage.shotRolls.length; i++) {
+      final roll = _stage.shotRolls[i];
+      if (roll == 0.0) continue;
+      final sign = roll < 0 ? -1.0 : 1.0;
+      final truncatedRoll = sign * ((roll.abs() * 10).floor() / 10.0);
+      final isWithinThreshold = truncatedRoll.abs() <= rollThreshold;
+      if (isWithinThreshold) {
+        rollGreen++;
+      } else if (truncatedRoll < 0) {
+        rollRed++;
+      } else {
+        rollBlue++;
+      }
+    }
+
+    for (int i = 0; i < _stage.shotStabilities.length; i++) {
+      final stability = _stage.shotStabilities[i];
+      if (stability == 0.0) continue;
+      if (stability <= sgPulseProvider.stabilityGreenZone) {
+        stabilityGreen++;
+      } else if (stability <= sgPulseProvider.stabilityYellowZone) {
+        stabilityYellow++;
+      } else {
+        stabilityRed++;
+      }
+    }
+
+    final totalRolls = rollGreen + rollRed + rollBlue;
+    final totalStabilities = stabilityGreen + stabilityYellow + stabilityRed;
+
+    if (totalRolls == 0 && totalStabilities == 0) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Divider(height: 24, color: Colors.white10),
+        const Text(
+          'SHOT QUALITY METRICS',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey,
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (totalRolls > 0) ...[
+          const Text(
+            'Firearm Roll Consistency',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white70),
+          ),
+          const SizedBox(height: 8),
+          MatchdayDonutChart(
+            size: 80,
+            centerLabel: '$totalRolls',
+            centerSubLabel: 'SHOTS',
+            segments: [
+              ChartSegment(value: rollGreen.toDouble(), color: const Color(0xFF30D158), label: 'Centered (Green)'),
+              ChartSegment(value: rollRed.toDouble(), color: const Color(0xFFFF453A), label: 'Roll Left (Red)'),
+              ChartSegment(value: rollBlue.toDouble(), color: const Color(0xFF0A84FF), label: 'Roll Right (Blue)'),
+            ],
+          ),
+        ],
+        if (totalRolls > 0 && totalStabilities > 0) const SizedBox(height: 16),
+        if (totalStabilities > 0) ...[
+          const Text(
+            'Firearm Stability Zones',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white70),
+          ),
+          const SizedBox(height: 8),
+          MatchdayDonutChart(
+            size: 80,
+            centerLabel: '$totalStabilities',
+            centerSubLabel: 'SHOTS',
+            segments: [
+              ChartSegment(value: stabilityGreen.toDouble(), color: const Color(0xFF30D158), label: 'Excellent (Green)'),
+              ChartSegment(value: stabilityYellow.toDouble(), color: const Color(0xFFFFD60A), label: 'Acceptable (Yellow)'),
+              ChartSegment(value: stabilityRed.toDouble(), color: const Color(0xFFFF453A), label: 'Poor (Red)'),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
   // Improved custom stepper for MIL windage inputs (scope turret style)
   Widget _buildWindagePicker({
     required String label,
@@ -3670,6 +3770,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                       ),
                     ],
                   ),
+                  _buildPerformanceChartsSection(),
                 ],
               ),
             ),

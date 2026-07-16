@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import '../models/match.dart';
 import '../providers/match_provider.dart';
 import '../widgets/global_app_bar.dart';
+import '../widgets/performance_charts.dart';
+import '../features/sg_pulse/providers/sg_pulse_provider.dart';
 
 class MatchSummaryScreen extends StatefulWidget {
   final String matchId;
@@ -495,6 +497,8 @@ class _MatchSummaryScreenState extends State<MatchSummaryScreen> {
                                 ),
                               ],
                             ),
+                            const Divider(height: 32, color: Colors.white10),
+                            _buildOverallPerformanceChartsSection(match),
                           ],
                         ),
                       ),
@@ -929,6 +933,103 @@ class _MatchSummaryScreenState extends State<MatchSummaryScreen> {
               }).toList(),
             ),
           ),
+      ],
+    );
+  }
+
+  Widget _buildOverallPerformanceChartsSection(Match match) {
+    int rollGreen = 0;
+    int rollRed = 0;
+    int rollBlue = 0;
+
+    int stabilityGreen = 0;
+    int stabilityYellow = 0;
+    int stabilityRed = 0;
+
+    final sgPulseProvider = context.read<SgPulseProvider>();
+    final rollThreshold = sgPulseProvider.rollThreshold;
+
+    for (final stage in match.stages) {
+      for (final roll in stage.shotRolls) {
+        if (roll == 0.0) continue;
+        final sign = roll < 0 ? -1.0 : 1.0;
+        final truncatedRoll = sign * ((roll.abs() * 10).floor() / 10.0);
+        final isWithinThreshold = truncatedRoll.abs() <= rollThreshold;
+        if (isWithinThreshold) {
+          rollGreen++;
+        } else if (truncatedRoll < 0) {
+          rollRed++;
+        } else {
+          rollBlue++;
+        }
+      }
+
+      for (final stability in stage.shotStabilities) {
+        if (stability == 0.0) continue;
+        if (stability <= sgPulseProvider.stabilityGreenZone) {
+          stabilityGreen++;
+        } else if (stability <= sgPulseProvider.stabilityYellowZone) {
+          stabilityYellow++;
+        } else {
+          stabilityRed++;
+        }
+      }
+    }
+
+    final totalRolls = rollGreen + rollRed + rollBlue;
+    final totalStabilities = stabilityGreen + stabilityYellow + stabilityRed;
+
+    if (totalRolls == 0 && totalStabilities == 0) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'OVERALL SHOT QUALITY METRICS',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey,
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (totalRolls > 0) ...[
+          const Text(
+            'Overall Firearm Roll Consistency',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white70),
+          ),
+          const SizedBox(height: 8),
+          MatchdayDonutChart(
+            size: 80,
+            centerLabel: '$totalRolls',
+            centerSubLabel: 'SHOTS',
+            segments: [
+              ChartSegment(value: rollGreen.toDouble(), color: const Color(0xFF30D158), label: 'Centered (Green)'),
+              ChartSegment(value: rollRed.toDouble(), color: const Color(0xFFFF453A), label: 'Roll Left (Red)'),
+              ChartSegment(value: rollBlue.toDouble(), color: const Color(0xFF0A84FF), label: 'Roll Right (Blue)'),
+            ],
+          ),
+        ],
+        if (totalRolls > 0 && totalStabilities > 0) const SizedBox(height: 16),
+        if (totalStabilities > 0) ...[
+          const Text(
+            'Overall Firearm Stability Zones',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white70),
+          ),
+          const SizedBox(height: 8),
+          MatchdayDonutChart(
+            size: 80,
+            centerLabel: '$totalStabilities',
+            centerSubLabel: 'SHOTS',
+            segments: [
+              ChartSegment(value: stabilityGreen.toDouble(), color: const Color(0xFF30D158), label: 'Excellent (Green)'),
+              ChartSegment(value: stabilityYellow.toDouble(), color: const Color(0xFFFFD60A), label: 'Acceptable (Yellow)'),
+              ChartSegment(value: stabilityRed.toDouble(), color: const Color(0xFFFF453A), label: 'Poor (Red)'),
+            ],
+          ),
+        ],
       ],
     );
   }
