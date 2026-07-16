@@ -411,10 +411,12 @@ class _StageDetailScreenState extends State<StageDetailScreen>
           if (isStoppedEarly) {
             // Keep phone's precise remaining time, only update heart rate
             _stage.avgHeartRate = event.avgHeartRate;
+            _stage.maxHeartRate = event.maxHeartRate;
             _heartRateController.text = '${event.avgHeartRate}';
           } else {
             _stage.timeRemaining = event.timeLeft;
             _stage.avgHeartRate = event.avgHeartRate;
+            _stage.maxHeartRate = event.maxHeartRate;
             _stage.timedOut = (event.timeLeft == 0);
 
             _timeRemainingController.text = '${event.timeLeft}';
@@ -623,6 +625,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
         timedOut: currentStage.timedOut,
         timeRemaining: currentStage.timeRemaining,
         avgHeartRate: currentStage.avgHeartRate,
+        maxHeartRate: currentStage.maxHeartRate,
         shotResults: List<String>.from(currentStage.shotResults),
         mentalErrors: currentStage.mentalErrors,
         skillsErrors: currentStage.skillsErrors,

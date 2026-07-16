@@ -171,6 +171,7 @@ class MatchProvider with ChangeNotifier {
           timedOut: oldStage.timedOut,
           timeRemaining: oldStage.timeRemaining,
           avgHeartRate: oldStage.avgHeartRate,
+          maxHeartRate: oldStage.maxHeartRate,
           shotResults: oldStage.shotResults,
           mentalErrors: oldStage.mentalErrors,
           skillsErrors: oldStage.skillsErrors,
