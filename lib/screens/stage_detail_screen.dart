@@ -1648,26 +1648,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
 
       _saveStage(exitScreen: false);
 
-      // Package and sync DOPE data to watch
-      final dopeTargets = <Map<String, String>>[];
-      for (int i = 0; i < _stage.targetArrays.length; i++) {
-        final array = _stage.targetArrays[i];
-        String holdoverVal = '';
-        if (i >= 1 &&
-            _stage.targetArrays[0].elevationValue != null &&
-            array.elevationValue != null) {
-          final diff = array.elevationValue! - _stage.targetArrays[0].elevationValue!;
-          final dir = diff < 0 ? 'U' : 'D';
-          holdoverVal = '${diff.abs().toStringAsFixed(2)} $dir';
-        }
-        dopeTargets.add({
-          'distance': array.distance,
-          'elevation': array.elevationResult,
-          'windage': array.windageResult,
-          'holdover': holdoverVal,
-        });
-      }
-      matchProvider.syncDopeToWatch(dopeTargets);
+      // Sync DOPE data to watch (including lead)
+      matchProvider.syncOnlyDopeToWatch();
 
       if (mounted) {
         Navigator.pop(context);
@@ -2336,57 +2318,72 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                                 const SizedBox(width: 8),
                                                 // Lead display box — styled to match Speed field
                                                 Expanded(
-                                                  child: InputDecorator(
-                                                    decoration: InputDecoration(
-                                                      labelText: 'Lead',
-                                                      suffixText:
-                                                          target.targetLeadMil ==
-                                                                  0.0
-                                                              ? ''
-                                                              : 'MIL',
-                                                      isDense: true,
-                                                      border:
-                                                          const OutlineInputBorder(),
-                                                      enabledBorder:
-                                                          OutlineInputBorder(
-                                                        borderSide: BorderSide(
-                                                            color: const Color(
-                                                                    0xFFFFB300)
-                                                                .withValues(
-                                                                    alpha:
-                                                                        0.4)),
+                                                  child: GestureDetector(
+                                                    onTap: target.targetLeadMil == 0.0
+                                                        ? null
+                                                        : () {
+                                                            HapticFeedback.lightImpact();
+                                                            setState(() {
+                                                              target.selectedLeadType = 'lead';
+                                                            });
+                                                            _saveStage(exitScreen: false);
+                                                            context.read<MatchProvider>().syncOnlyDopeToWatch();
+                                                          },
+                                                    child: InputDecorator(
+                                                      decoration: InputDecoration(
+                                                        labelText: 'Lead',
+                                                        suffixText:
+                                                            target.targetLeadMil ==
+                                                                    0.0
+                                                                ? ''
+                                                                : 'MIL',
+                                                        isDense: true,
+                                                        filled: target.selectedLeadType == 'lead',
+                                                        fillColor: target.selectedLeadType == 'lead'
+                                                            ? const Color(0xFFFFB300).withValues(alpha: 0.15)
+                                                            : null,
+                                                        border:
+                                                            const OutlineInputBorder(),
+                                                        enabledBorder:
+                                                            OutlineInputBorder(
+                                                          borderSide: BorderSide(
+                                                              color: target.selectedLeadType == 'lead'
+                                                                  ? const Color(0xFFFFB300)
+                                                                  : const Color(0xFFFFB300).withValues(alpha: 0.4),
+                                                              width: target.selectedLeadType == 'lead' ? 2.0 : 1.0),
+                                                        ),
+                                                        labelStyle:
+                                                            const TextStyle(
+                                                                fontSize: 10,
+                                                                color: Color(
+                                                                    0xFFFFB300)),
+                                                        suffixStyle:
+                                                            const TextStyle(
+                                                                fontSize: 9,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                                color: Color(
+                                                                    0xFFFFB300)),
+                                                        contentPadding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                                horizontal: 6,
+                                                                vertical: 6),
                                                       ),
-                                                      labelStyle:
-                                                          const TextStyle(
-                                                              fontSize: 10,
-                                                              color: Color(
-                                                                  0xFFFFB300)),
-                                                      suffixStyle:
-                                                          const TextStyle(
-                                                              fontSize: 9,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .bold,
-                                                              color: Color(
-                                                                  0xFFFFB300)),
-                                                      contentPadding:
-                                                          const EdgeInsets
-                                                              .symmetric(
-                                                              horizontal: 6,
-                                                              vertical: 6),
-                                                    ),
-                                                    child: Text(
-                                                      target.targetLeadMil ==
-                                                              0.0
-                                                          ? '---'
-                                                          : target.targetLeadMil
-                                                              .toStringAsFixed(
-                                                                  2),
-                                                      style: const TextStyle(
-                                                        fontSize: 12,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        color: Colors.white,
+                                                      child: Text(
+                                                        target.targetLeadMil ==
+                                                                0.0
+                                                            ? '---'
+                                                            : target.targetLeadMil
+                                                                .toStringAsFixed(
+                                                                    2),
+                                                        style: const TextStyle(
+                                                          fontSize: 12,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          color: Colors.white,
+                                                        ),
                                                       ),
                                                     ),
                                                   ),
@@ -2452,61 +2449,99 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                                 child: Row(
                                                   children: [
                                                     Expanded(
-                                                      child: InputDecorator(
-                                                        decoration: InputDecoration(
-                                                          labelText: 'Leading Edge',
-                                                          suffixText: showEdges ? 'MIL' : '',
-                                                          isDense: true,
-                                                          border: const OutlineInputBorder(),
-                                                          enabledBorder: OutlineInputBorder(
-                                                            borderSide: BorderSide(
-                                                                color: const Color(0xFFFFB300).withValues(alpha: 0.4)),
+                                                      child: GestureDetector(
+                                                        onTap: !showEdges
+                                                            ? null
+                                                            : () {
+                                                                HapticFeedback.lightImpact();
+                                                                setState(() {
+                                                                  target.selectedLeadType = 'leadingEdge';
+                                                                });
+                                                                _saveStage(exitScreen: false);
+                                                                context.read<MatchProvider>().syncOnlyDopeToWatch();
+                                                              },
+                                                        child: InputDecorator(
+                                                          decoration: InputDecoration(
+                                                            labelText: 'Leading Edge',
+                                                            suffixText: showEdges ? 'MIL' : '',
+                                                            isDense: true,
+                                                            filled: target.selectedLeadType == 'leadingEdge',
+                                                            fillColor: target.selectedLeadType == 'leadingEdge'
+                                                                ? const Color(0xFFFFB300).withValues(alpha: 0.15)
+                                                                : null,
+                                                            border: const OutlineInputBorder(),
+                                                            enabledBorder: OutlineInputBorder(
+                                                              borderSide: BorderSide(
+                                                                  color: target.selectedLeadType == 'leadingEdge'
+                                                                      ? const Color(0xFFFFB300)
+                                                                      : const Color(0xFFFFB300).withValues(alpha: 0.4),
+                                                                  width: target.selectedLeadType == 'leadingEdge' ? 2.0 : 1.0),
+                                                            ),
+                                                            labelStyle: const TextStyle(
+                                                                fontSize: 10, color: Color(0xFFFFB300)),
+                                                            suffixStyle: const TextStyle(
+                                                                fontSize: 9,
+                                                                fontWeight: FontWeight.bold,
+                                                                color: Color(0xFFFFB300)),
+                                                            contentPadding: const EdgeInsets.symmetric(
+                                                                horizontal: 6, vertical: 6),
                                                           ),
-                                                          labelStyle: const TextStyle(
-                                                              fontSize: 10, color: Color(0xFFFFB300)),
-                                                          suffixStyle: const TextStyle(
-                                                              fontSize: 9,
-                                                              fontWeight: FontWeight.bold,
-                                                              color: Color(0xFFFFB300)),
-                                                          contentPadding: const EdgeInsets.symmetric(
-                                                              horizontal: 6, vertical: 6),
-                                                        ),
-                                                        child: Text(
-                                                          showEdges ? leadingEdge.toStringAsFixed(2) : '---',
-                                                          style: const TextStyle(
-                                                              fontSize: 12,
-                                                              fontWeight: FontWeight.bold,
-                                                              color: Colors.white),
+                                                          child: Text(
+                                                            showEdges ? leadingEdge.toStringAsFixed(2) : '---',
+                                                            style: const TextStyle(
+                                                                fontSize: 12,
+                                                                fontWeight: FontWeight.bold,
+                                                                color: Colors.white),
+                                                          ),
                                                         ),
                                                       ),
                                                     ),
                                                     const SizedBox(width: 8),
                                                     Expanded(
-                                                      child: InputDecorator(
-                                                        decoration: InputDecoration(
-                                                          labelText: 'Trailing Edge',
-                                                          suffixText: showEdges ? 'MIL' : '',
-                                                          isDense: true,
-                                                          border: const OutlineInputBorder(),
-                                                          enabledBorder: OutlineInputBorder(
-                                                            borderSide: BorderSide(
-                                                                color: const Color(0xFFFFB300).withValues(alpha: 0.4)),
+                                                      child: GestureDetector(
+                                                        onTap: !showEdges
+                                                            ? null
+                                                            : () {
+                                                                HapticFeedback.lightImpact();
+                                                                setState(() {
+                                                                  target.selectedLeadType = 'trailingEdge';
+                                                                });
+                                                                _saveStage(exitScreen: false);
+                                                                context.read<MatchProvider>().syncOnlyDopeToWatch();
+                                                              },
+                                                        child: InputDecorator(
+                                                          decoration: InputDecoration(
+                                                            labelText: 'Trailing Edge',
+                                                            suffixText: showEdges ? 'MIL' : '',
+                                                            isDense: true,
+                                                            filled: target.selectedLeadType == 'trailingEdge',
+                                                            fillColor: target.selectedLeadType == 'trailingEdge'
+                                                                ? const Color(0xFFFFB300).withValues(alpha: 0.15)
+                                                                : null,
+                                                            border: const OutlineInputBorder(),
+                                                            enabledBorder: OutlineInputBorder(
+                                                              borderSide: BorderSide(
+                                                                  color: target.selectedLeadType == 'trailingEdge'
+                                                                      ? const Color(0xFFFFB300)
+                                                                      : const Color(0xFFFFB300).withValues(alpha: 0.4),
+                                                                  width: target.selectedLeadType == 'trailingEdge' ? 2.0 : 1.0),
+                                                            ),
+                                                            labelStyle: const TextStyle(
+                                                                fontSize: 10, color: Color(0xFFFFB300)),
+                                                            suffixStyle: const TextStyle(
+                                                                fontSize: 9,
+                                                                fontWeight: FontWeight.bold,
+                                                                color: Color(0xFFFFB300)),
+                                                            contentPadding: const EdgeInsets.symmetric(
+                                                                horizontal: 6, vertical: 6),
                                                           ),
-                                                          labelStyle: const TextStyle(
-                                                              fontSize: 10, color: Color(0xFFFFB300)),
-                                                          suffixStyle: const TextStyle(
-                                                              fontSize: 9,
-                                                              fontWeight: FontWeight.bold,
-                                                              color: Color(0xFFFFB300)),
-                                                          contentPadding: const EdgeInsets.symmetric(
-                                                              horizontal: 6, vertical: 6),
-                                                        ),
-                                                        child: Text(
-                                                          showEdges ? trailingEdge.toStringAsFixed(2) : '---',
-                                                          style: const TextStyle(
-                                                              fontSize: 12,
-                                                              fontWeight: FontWeight.bold,
-                                                              color: Colors.white),
+                                                          child: Text(
+                                                            showEdges ? trailingEdge.toStringAsFixed(2) : '---',
+                                                            style: const TextStyle(
+                                                                fontSize: 12,
+                                                                fontWeight: FontWeight.bold,
+                                                                color: Colors.white),
+                                                          ),
                                                         ),
                                                       ),
                                                     ),
@@ -2843,6 +2878,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
           ElevatedButton.icon(
             onPressed: () {
               HapticFeedback.lightImpact();
+              _saveStage(exitScreen: false);
               _syncToWatch();
             },
             icon: const Icon(Icons.sync),

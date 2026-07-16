@@ -429,9 +429,8 @@ class MatchProvider with ChangeNotifier {
       });
       debugPrint('Synced active stage ${stage.stageNumber} to watch');
 
-      // If this stage already has calculated ballistics, sync the DOPE immediately!
-      final hasDope = stage.targetArrays.isNotEmpty &&
-          stage.targetArrays.any((array) => array.elevationResult.isNotEmpty);
+      // If this stage has target arrays, sync the DOPE immediately!
+      final hasDope = stage.targetArrays.isNotEmpty;
 
       if (hasDope) {
         final dopeTargets = <Map<String, String>>[];
@@ -445,17 +444,98 @@ class MatchProvider with ChangeNotifier {
             final dir = diff < 0 ? 'U' : 'D';
             holdoverVal = '${diff.abs().toStringAsFixed(2)} $dir';
           }
+
+          // Check for moving targets and their lead
+          String leadVal = '';
+          Target? movingTarget;
+          for (final t in array.targets) {
+            if (t.isMovingTarget) {
+              movingTarget = t;
+              break;
+            }
+          }
+          if (movingTarget != null && movingTarget.targetLeadMil != 0.0) {
+            double parsedWidth = 0.0;
+            final cleanStr = movingTarget.size.replaceAll(RegExp(r'[^0-9.]'), '');
+            if (cleanStr.isNotEmpty) {
+              parsedWidth = double.tryParse(cleanStr) ?? 0.0;
+            }
+            double finalLead = movingTarget.targetLeadMil;
+            if (movingTarget.selectedLeadType == 'leadingEdge') {
+              finalLead = movingTarget.targetLeadMil - (parsedWidth / 2);
+            } else if (movingTarget.selectedLeadType == 'trailingEdge') {
+              finalLead = movingTarget.targetLeadMil + (parsedWidth / 2);
+            }
+            leadVal = '${finalLead.toStringAsFixed(2)} MIL';
+          }
+
           dopeTargets.add({
             'distance': array.distance,
             'elevation': array.elevationResult,
             'windage': array.windageResult,
             'holdover': holdoverVal,
+            'lead': leadVal,
           });
         }
         await syncDopeToWatch(dopeTargets);
       }
     } catch (e) {
       debugPrint('Error syncing stage to watch: $e');
+    }
+  }
+
+  Future<void> syncOnlyDopeToWatch() async {
+    final stage = activeStage;
+    if (stage == null) return;
+
+    final hasDope = stage.targetArrays.isNotEmpty;
+
+    if (hasDope) {
+      final dopeTargets = <Map<String, String>>[];
+      for (int i = 0; i < stage.targetArrays.length; i++) {
+        final array = stage.targetArrays[i];
+        String holdoverVal = '';
+        if (i >= 1 &&
+            stage.targetArrays[0].elevationValue != null &&
+            array.elevationValue != null) {
+          final diff = array.elevationValue! - stage.targetArrays[0].elevationValue!;
+          final dir = diff < 0 ? 'U' : 'D';
+          holdoverVal = '${diff.abs().toStringAsFixed(2)} $dir';
+        }
+
+        // Check for moving targets and their lead
+        String leadVal = '';
+        Target? movingTarget;
+        for (final t in array.targets) {
+          if (t.isMovingTarget) {
+            movingTarget = t;
+            break;
+          }
+        }
+        if (movingTarget != null && movingTarget.targetLeadMil != 0.0) {
+          double parsedWidth = 0.0;
+          final cleanStr = movingTarget.size.replaceAll(RegExp(r'[^0-9.]'), '');
+          if (cleanStr.isNotEmpty) {
+            parsedWidth = double.tryParse(cleanStr) ?? 0.0;
+          }
+          double finalLead = movingTarget.targetLeadMil;
+          if (movingTarget.selectedLeadType == 'leadingEdge') {
+            finalLead = movingTarget.targetLeadMil - (parsedWidth / 2);
+          } else if (movingTarget.selectedLeadType == 'trailingEdge') {
+            finalLead = movingTarget.targetLeadMil + (parsedWidth / 2);
+          }
+          leadVal = '${finalLead.toStringAsFixed(2)} MIL';
+        }
+
+        dopeTargets.add({
+          'distance': array.distance,
+          'elevation': array.elevationResult,
+          'windage': array.windageResult,
+          'holdover': holdoverVal,
+          'lead': leadVal,
+        });
+      }
+      await syncDopeToWatch(dopeTargets);
     }
   }
 

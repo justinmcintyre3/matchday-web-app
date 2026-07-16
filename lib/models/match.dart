@@ -296,6 +296,7 @@ class Target {
   bool isMovingTarget; // whether this target is a moving target
   double targetSpeedMph; // speed in mph to send to Kestrel
   double targetLeadMil; // lead value (MIL) returned from Kestrel
+  String selectedLeadType; // 'lead', 'leadingEdge', 'trailingEdge'
 
   Target({
     required this.index,
@@ -305,6 +306,7 @@ class Target {
     this.isMovingTarget = false,
     this.targetSpeedMph = 0.0,
     this.targetLeadMil = 0.0,
+    this.selectedLeadType = 'lead',
   });
 
   Map<String, dynamic> toMap() {
@@ -316,6 +318,7 @@ class Target {
       'isMovingTarget': isMovingTarget,
       'targetSpeedMph': targetSpeedMph,
       'targetLeadMil': targetLeadMil,
+      'selectedLeadType': selectedLeadType,
     };
   }
 
@@ -328,6 +331,7 @@ class Target {
       isMovingTarget: map['isMovingTarget'] ?? false,
       targetSpeedMph: (map['targetSpeedMph'] as num?)?.toDouble() ?? 0.0,
       targetLeadMil: (map['targetLeadMil'] as num?)?.toDouble() ?? 0.0,
+      selectedLeadType: map['selectedLeadType'] ?? 'lead',
     );
   }
 }
