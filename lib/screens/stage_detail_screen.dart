@@ -895,49 +895,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     _remainingTimeTimer?.cancel();
   }
 
-  void _showHeartRateInputDialog() {
-    final controller = TextEditingController(
-        text: _stage.avgHeartRate > 0 ? '${_stage.avgHeartRate}' : '');
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Edit Heart Rate'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'Heart Rate (BPM)',
-            hintText: 'e.g. 110',
-            border: OutlineInputBorder(),
-          ),
-          onTap: () => HapticFeedback.lightImpact(),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              HapticFeedback.lightImpact();
-              Navigator.pop(context);
-            },
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              HapticFeedback.lightImpact();
-              final hr = int.tryParse(controller.text.trim()) ?? 0;
-              setState(() {
-                _stage.avgHeartRate = hr;
-              });
-              _saveStage(exitScreen: false);
-              Navigator.pop(context);
-            },
-            child: const Text('Save',
-                style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   double _parseDof(String dofStr) {
     final clean = dofStr.replaceAll(RegExp(r'[^0-9.]'), '');
@@ -3206,12 +3164,29 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                             color: Colors.redAccent, size: 24),
                         const SizedBox(height: 6),
                         Text(
-                          '${_stage.avgHeartRate} BPM',
+                          _isShootTimerRunning
+                              ? '${_stage.avgHeartRate} / ${_stage.maxHeartRate} BPM'
+                              : (_stage.avgHeartRate > 0
+                                  ? 'Avg: ${_stage.avgHeartRate} BPM'
+                                  : '-- BPM'),
                           style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 16),
+                              fontWeight: FontWeight.bold, fontSize: 14),
                         ),
-                        const Text('Live Heart Rate',
-                            style: TextStyle(color: Colors.grey, fontSize: 11)),
+                        if (!_isShootTimerRunning && _stage.maxHeartRate > 0) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'Max: ${_stage.maxHeartRate} BPM',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 14, color: Colors.redAccent),
+                          ),
+                        ],
+                        const SizedBox(height: 4),
+                        Text(
+                          _isShootTimerRunning
+                              ? 'Live / Max Heart Rate'
+                              : 'Heart Rate',
+                          style: const TextStyle(color: Colors.grey, fontSize: 11),
+                        ),
                       ],
                     ),
                   ],
@@ -3745,28 +3720,32 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                         ],
                       ),
                       Container(height: 40, width: 1, color: Colors.white10),
-                      // Avg Heart Rate (Long press to manually edit)
-                      GestureDetector(
-                        onLongPress: () {
-                          HapticFeedback.lightImpact();
-                          _showHeartRateInputDialog();
-                        },
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.favorite,
-                                color: Colors.redAccent, size: 20),
-                            const SizedBox(height: 4),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.favorite,
+                              color: Colors.redAccent, size: 20),
+                          const SizedBox(height: 4),
+                          Text(
+                            _stage.avgHeartRate > 0
+                                ? 'Avg: ${_stage.avgHeartRate} BPM'
+                                : '-- BPM',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          if (_stage.maxHeartRate > 0) ...[
+                            const SizedBox(height: 2),
                             Text(
-                              '${_stage.avgHeartRate} BPM',
+                              'Max: ${_stage.maxHeartRate} BPM',
                               style: const TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 15),
+                                  fontWeight: FontWeight.bold, fontSize: 13, color: Colors.redAccent),
                             ),
-                            const Text('Avg Heart Rate',
-                                style: TextStyle(
-                                    color: Colors.grey, fontSize: 10)),
                           ],
-                        ),
+                          const SizedBox(height: 4),
+                          const Text('Heart Rate',
+                              style: TextStyle(
+                                  color: Colors.grey, fontSize: 9)),
+                        ],
                       ),
                     ],
                   ),

@@ -31,10 +31,7 @@ class HomeScreen extends StatelessWidget {
           body: ReorderableListView(
             padding:
                 const EdgeInsets.only(bottom: kBottomNavigationBarHeight),
-            onReorder: (oldIndex, newIndex) {
-              if (newIndex > oldIndex) {
-                newIndex--;
-              }
+            onReorderItem: (oldIndex, newIndex) {
               provider.reorderGroups(oldIndex, newIndex);
             },
             children: List.generate(provider.groups.length, (index) {

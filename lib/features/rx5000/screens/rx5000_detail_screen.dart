@@ -585,7 +585,7 @@ class _DeviceSettingsCard extends StatelessWidget {
           HapticFeedback.lightImpact();
           onChanged(val);
         },
-        activeColor: const Color(0xFF007AFF),
+        activeThumbColor: const Color(0xFF007AFF),
         activeTrackColor: const Color(0xFF007AFF).withValues(alpha: 0.2),
         inactiveThumbColor: Colors.grey,
         inactiveTrackColor: Colors.white10,

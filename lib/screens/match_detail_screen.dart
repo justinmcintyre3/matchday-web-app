@@ -56,6 +56,12 @@ class MatchDetailScreen extends StatelessWidget {
                 heartRateStages.length
             : 0.0;
 
+        final maxHeartRateStages =
+            completedStages.where((s) => s.maxHeartRate > 0).toList();
+        final int maxHeartRate = maxHeartRateStages.isNotEmpty
+            ? maxHeartRateStages.map((s) => s.maxHeartRate).reduce((a, b) => a > b ? a : b)
+            : 0;
+
         return Scaffold(
           appBar: GlobalAppBar(
             title: Text(match.name),
@@ -168,9 +174,9 @@ class MatchDetailScreen extends StatelessWidget {
                         ),
                         _buildDashboardStat(
                           context,
-                          'Avg Heart Rate',
+                          'Heart Rate (Avg/Max)',
                           avgHeartRate > 0
-                              ? '${avgHeartRate.round()} BPM'
+                              ? '${avgHeartRate.round()} / $maxHeartRate BPM'
                               : '-- BPM',
                           Icons.favorite_outline,
                           Colors.redAccent,
@@ -409,7 +415,7 @@ class MatchDetailScreen extends StatelessWidget {
                               color: Colors.redAccent, size: 10),
                           const SizedBox(width: 2),
                           Text(
-                            '${stage.avgHeartRate} BPM',
+                            '${stage.avgHeartRate}/${stage.maxHeartRate} BPM',
                             style: TextStyle(
                                 fontSize: 11, color: Colors.grey[500]),
                           ),

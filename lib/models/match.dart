@@ -132,10 +132,12 @@ class Stage {
   bool timedOut;
   int timeRemaining; // in seconds
   int avgHeartRate; // in BPM
+  int maxHeartRate; // in BPM
   List<String> shotResults; // 'hit', 'miss', 'timeOutMiss'
   String mentalErrors;
   String skillsErrors;
   String environmentalErrors;
+  String timeLimitOption; // '120s (standard)', '105s (PRS)', '90s (pro)' etc.
   int timeLimit; // in seconds
   int numPositions; // number of positions
   List<double> shotTimes; // elapsed time in seconds for each shot
@@ -155,10 +157,12 @@ class Stage {
     this.timedOut = false,
     this.timeRemaining = 0,
     this.avgHeartRate = 0,
+    this.maxHeartRate = 0,
     required this.shotResults,
     this.mentalErrors = '',
     this.skillsErrors = '',
     this.environmentalErrors = '',
+    this.timeLimitOption = '105s (PRS)',
     this.timeLimit = 105,
     this.numPositions = 1,
     this.shotTimes = const [],
@@ -204,10 +208,12 @@ class Stage {
       'timedOut': timedOut,
       'timeRemaining': timeRemaining,
       'avgHeartRate': avgHeartRate,
+      'maxHeartRate': maxHeartRate,
       'shotResults': shotResults,
       'mentalErrors': mentalErrors,
       'skillsErrors': skillsErrors,
       'environmentalErrors': environmentalErrors,
+      'timeLimitOption': timeLimitOption,
       'timeLimit': timeLimit,
       'numPositions': numPositions,
       'shotTimes': shotTimes,
@@ -264,6 +270,7 @@ class Stage {
       timedOut: map['timedOut'] ?? false,
       timeRemaining: map['timeRemaining']?.toInt() ?? 0,
       avgHeartRate: map['avgHeartRate']?.toInt() ?? 0,
+      maxHeartRate: map['maxHeartRate']?.toInt() ?? 0,
       shotResults: List<String>.from(map['shotResults'] ?? const []),
       mentalErrors: map['mentalErrors'] ?? '',
       skillsErrors: map['skillsErrors'] ?? '',

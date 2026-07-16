@@ -497,6 +497,7 @@ class MatchProvider with ChangeNotifier {
       if (message['type'] == 'stage_result') {
         final timeLeft = message['timeLeft'] as int?;
         final avgHeartRate = message['avgHeartRate'] as int?;
+        final maxHeartRate = message['maxHeartRate'] as int? ?? 0;
         final lastSetTime = message['lastSetTime'] as int?;
         final stoppedByPhone = message['stoppedByPhone'] as bool? ?? false;
 
@@ -504,6 +505,7 @@ class MatchProvider with ChangeNotifier {
           final event = WatchResultEvent(
             timeLeft: timeLeft,
             avgHeartRate: avgHeartRate,
+            maxHeartRate: maxHeartRate,
             lastSetTime: lastSetTime ?? 105,
             stoppedByPhone: stoppedByPhone,
           );
@@ -517,6 +519,9 @@ class MatchProvider with ChangeNotifier {
           if (stage != null) {
             stage.timeRemaining = timeLeft;
             stage.avgHeartRate = heartRate;
+            if (heartRate > stage.maxHeartRate) {
+              stage.maxHeartRate = heartRate;
+            }
             notifyListeners();
           }
           _watchLiveUpdateController.add(WatchLiveUpdateEvent(
@@ -560,6 +565,7 @@ class MatchProvider with ChangeNotifier {
     if (match != null && stage != null) {
       stage.timeRemaining = event.timeLeft;
       stage.avgHeartRate = event.avgHeartRate;
+      stage.maxHeartRate = event.maxHeartRate;
       stage.timedOut = (event.timeLeft == 0);
       
       updateStage(match.id, stage);
@@ -581,12 +587,14 @@ class MatchProvider with ChangeNotifier {
 class WatchResultEvent {
   final int timeLeft;
   final int avgHeartRate;
+  final int maxHeartRate;
   final int lastSetTime;
   final bool stoppedByPhone;
 
   WatchResultEvent({
     required this.timeLeft,
     required this.avgHeartRate,
+    required this.maxHeartRate,
     required this.lastSetTime,
     this.stoppedByPhone = false,
   });

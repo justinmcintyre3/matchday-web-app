@@ -8,7 +8,7 @@
 		}
 	],
 	"settings": {
-		"java.configuration.updateBuildConfiguration": "interactive",
+		"java.configuration.updateBuildConfiguration": "automatic",
 		"gitlens.views.scm.grouped.hiddenViews": {
 			"repositories": false
 		}

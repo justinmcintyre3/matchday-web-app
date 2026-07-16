@@ -128,12 +128,7 @@ class _ChecklistDetailScreenState extends State<ChecklistDetailScreen> {
                   : ReorderableListView(
                 padding:
                 const EdgeInsets.only(bottom: kBottomNavigationBarHeight),
-                      onReorder: (oldIndex, newIndex) {
-                        // Adjust the newIndex if it is greater than the oldIndex
-                        if (newIndex > oldIndex) {
-                          newIndex--;
-                        }
-                        // Update the provider with the new order
+                      onReorderItem: (oldIndex, newIndex) {
                         provider.reorderItems(
                             widget.groupId, oldIndex, newIndex);
                       },

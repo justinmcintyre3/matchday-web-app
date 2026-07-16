@@ -243,6 +243,12 @@ class _MatchSummaryScreenState extends State<MatchSummaryScreen> {
                       heartRateStages.length
                   : 0.0;
 
+              final maxHeartRateStages =
+                  completedStages.where((s) => s.maxHeartRate > 0).toList();
+              final int maxHeartRate = maxHeartRateStages.isNotEmpty
+                  ? maxHeartRateStages.map((s) => s.maxHeartRate).reduce((a, b) => a > b ? a : b)
+                  : 0;
+
               return SingleChildScrollView(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
@@ -425,13 +431,13 @@ class _MatchSummaryScreenState extends State<MatchSummaryScreen> {
                                 ),
                                 Expanded(
                                   child: _buildMetricItem(
-                                    'Avg Heart Rate',
+                                    'Heart Rate',
                                     avgHeartRate > 0
                                         ? Row(
                                             mainAxisAlignment: MainAxisAlignment.center,
                                             children: [
                                               Text(
-                                                '${avgHeartRate.round()}',
+                                                '${avgHeartRate.round()} BPM',
                                                 style: const TextStyle(
                                                     fontSize: 18,
                                                     fontWeight: FontWeight.bold,
@@ -450,7 +456,24 @@ class _MatchSummaryScreenState extends State<MatchSummaryScreen> {
                                                 fontWeight: FontWeight.bold,
                                                 color: Colors.redAccent),
                                           ),
-                                    '',
+                                    maxHeartRate > 0
+                                        ? Text.rich(
+                                            TextSpan(
+                                              text: 'Max: ',
+                                              style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: Colors.grey[600]),
+                                              children: [
+                                                TextSpan(
+                                                  text: '$maxHeartRate BPM',
+                                                  style: const TextStyle(
+                                                      fontWeight: FontWeight.bold,
+                                                      color: Colors.redAccent),
+                                                ),
+                                              ],
+                                            ),
+                                          )
+                                        : '',
                                     Colors.redAccent,
                                   ),
                                 ),
@@ -591,7 +614,9 @@ class _MatchSummaryScreenState extends State<MatchSummaryScreen> {
                                         Expanded(
                                           child: _buildStageMetric(
                                             'HR',
-                                            stage.avgHeartRate > 0 ? '${stage.avgHeartRate} BPM' : '--',
+                                            stage.avgHeartRate > 0
+                                                ? '${stage.avgHeartRate}/${stage.maxHeartRate} BPM'
+                                                : '--',
                                           ),
                                         ),
                                         Expanded(
@@ -760,7 +785,7 @@ class _MatchSummaryScreenState extends State<MatchSummaryScreen> {
   }
 
   Widget _buildMetricItem(
-      String label, dynamic value, String subtext, Color valueColor) {
+      String label, dynamic value, dynamic subtext, Color valueColor) {
     return Column(
       children: [
         Text(
@@ -777,12 +802,14 @@ class _MatchSummaryScreenState extends State<MatchSummaryScreen> {
                     fontWeight: FontWeight.bold,
                     color: valueColor),
               ),
-        if (subtext.isNotEmpty) ...[
+        if (subtext != null && subtext != '') ...[
           const SizedBox(height: 4),
-          Text(
-            subtext,
-            style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-          ),
+          subtext is Widget
+              ? subtext
+              : Text(
+                  subtext.toString(),
+                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                ),
         ],
       ],
     );
