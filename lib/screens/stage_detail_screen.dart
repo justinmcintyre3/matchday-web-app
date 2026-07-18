@@ -77,7 +77,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     'Forgot to Hold Wind',
     'Forgot to Hold Elevation',
     'Did not trust Wind/Impact',
-    'Dialed Instead of Holding',
+    'Dial vs Hold',
   ];
 
   final List<String> _presetSkillsErrors = [
