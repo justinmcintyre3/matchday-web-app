@@ -469,12 +469,37 @@ class MatchProvider with ChangeNotifier {
             leadVal = '${finalLead.toStringAsFixed(2)} MIL';
           }
 
+          // Check target safety status (isSafe) and center hold text for watch display
+          bool isSafe = false;
+          String centerHoldText = '';
+          if (array.windage1Value != null &&
+              array.windage2Value != null &&
+              array.targets.isNotEmpty) {
+            final w1 = array.windage1Value!;
+            final w2 = array.windage2Value!;
+            final spread = (w2 - w1).abs();
+            final hold = (w1 + w2) / 2;
+            final cleanStr = array.targets[0].size.replaceAll(RegExp(r'[^0-9.]'), '');
+            final targetWidth = double.tryParse(cleanStr) ?? 0.0;
+            if (targetWidth > 0.0) {
+              isSafe = spread <= targetWidth;
+              if (hold.abs() < 0.005) {
+                centerHoldText = '0.00';
+              } else {
+                final dir = hold < 0 ? 'R' : 'L';
+                centerHoldText = '${hold.abs().toStringAsFixed(2)} $dir';
+              }
+            }
+          }
+
           dopeTargets.add({
             'distance': array.distance,
             'elevation': array.elevationResult,
             'windage': array.windageResult,
             'holdover': holdoverVal,
             'lead': leadVal,
+            'isSafe': isSafe ? 'true' : 'false',
+            'centerHoldText': centerHoldText,
           });
         }
         await syncDopeToWatch(dopeTargets);
@@ -527,14 +552,39 @@ class MatchProvider with ChangeNotifier {
           leadVal = '${finalLead.toStringAsFixed(2)} MIL';
         }
 
-        dopeTargets.add({
-          'distance': array.distance,
-          'elevation': array.elevationResult,
-          'windage': array.windageResult,
-          'holdover': holdoverVal,
-          'lead': leadVal,
-        });
-      }
+          // Check target safety status (isSafe) and center hold text for watch display
+          bool isSafe = false;
+          String centerHoldText = '';
+          if (array.windage1Value != null &&
+              array.windage2Value != null &&
+              array.targets.isNotEmpty) {
+            final w1 = array.windage1Value!;
+            final w2 = array.windage2Value!;
+            final spread = (w2 - w1).abs();
+            final hold = (w1 + w2) / 2;
+            final cleanStr = array.targets[0].size.replaceAll(RegExp(r'[^0-9.]'), '');
+            final targetWidth = double.tryParse(cleanStr) ?? 0.0;
+            if (targetWidth > 0.0) {
+              isSafe = spread <= targetWidth;
+              if (hold.abs() < 0.005) {
+                centerHoldText = '0.00';
+              } else {
+                final dir = hold < 0 ? 'R' : 'L';
+                centerHoldText = '${hold.abs().toStringAsFixed(2)} $dir';
+              }
+            }
+          }
+
+          dopeTargets.add({
+            'distance': array.distance,
+            'elevation': array.elevationResult,
+            'windage': array.windageResult,
+            'holdover': holdoverVal,
+            'lead': leadVal,
+            'isSafe': isSafe ? 'true' : 'false',
+            'centerHoldText': centerHoldText,
+          });
+        }
       await syncDopeToWatch(dopeTargets);
     }
   }
