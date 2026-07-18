@@ -13,7 +13,6 @@ import '../features/sg_pulse/providers/sg_pulse_provider.dart';
 import '../widgets/global_app_bar.dart';
 import '../features/rx5000/providers/rx5000_provider.dart';
 import '../widgets/performance_charts.dart';
-import 'wind_columns_screen.dart';
 
 class StageDetailScreen extends StatefulWidget {
   final String matchId;
@@ -64,6 +63,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   late Stage _stage;
   bool _initialized = false;
   bool _isActualWindageManipulated = false;
+  bool _hasReceivedKestrelData = false;
 
   List<String> _mentalTags = [];
   List<String> _skillsTags = [];
@@ -643,7 +643,13 @@ class _StageDetailScreenState extends State<StageDetailScreen>
         windColumns: WindColumnData(
           mode: currentStage.windColumns.mode,
           values: List.from(currentStage.windColumns.values),
+          valuesMax: List.from(currentStage.windColumns.valuesMax),
           results: Map.from(currentStage.windColumns.results),
+          angleValues: List.from(currentStage.windColumns.angleValues),
+          angleResults: Map.from(currentStage.windColumns.angleResults),
+          mphValues: List.from(currentStage.windColumns.mphValues),
+          mphValuesMax: List.from(currentStage.windColumns.mphValuesMax),
+          mphResults: Map.from(currentStage.windColumns.mphResults),
         ),
       );
 
@@ -684,6 +690,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       for (int i = 1; i < _stage.targetArrays.length; i++) {
         _extrapolateWindForArray(i);
       }
+      // Check if we already have Kestrel data from a prior sync
+      _hasReceivedKestrelData = _stage.targetArrays.any((a) => a.elevationResult.isNotEmpty);
       _initialized = true;
     }
   }
@@ -991,6 +999,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   }
 
   void _applyBalResultToArray(int arrayIdx, Map<String, dynamic> result) {
+    _hasReceivedKestrelData = true;
     final elevation = (result['elevation'] as num).toDouble();
     final w1 = (result['windage1'] as num).toDouble();
     final w2 = (result['windage2'] as num).toDouble();
@@ -3019,29 +3028,50 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                   ),
                   const Divider(height: 24, color: Colors.white10),
                   Center(
-                    child: TextButton.icon(
-                      onPressed: () {
-                        HapticFeedback.lightImpact();
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => WindColumnsScreen(
-                              matchId: widget.matchId,
-                              stage: _stage,
-                            ),
+                    child: FractionallySizedBox(
+                      widthFactor: 0.75,
+                      child: ElevatedButton.icon(
+                        onPressed: _hasReceivedKestrelData
+                            ? () {
+                                HapticFeedback.lightImpact();
+                                _showWindColumnsDialog();
+                              }
+                            : null,
+                        icon: Icon(
+                          Icons.view_column_rounded,
+                          size: 18,
+                          color: _hasReceivedKestrelData
+                              ? const Color(0xFF00E676)
+                              : Colors.grey,
+                        ),
+                        label: Text(
+                          _hasReceivedKestrelData
+                              ? 'Build Wind Columns'
+                              : 'Build Wind Columns (sync first)',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
                           ),
-                        ).then((_) {
-                          setState(() {});
-                        });
-                      },
-                      icon: const Icon(Icons.view_column_rounded,
-                          color: Color(0xFF007AFF), size: 18),
-                      label: const Text(
-                        'Build Wind Columns',
-                        style: TextStyle(
-                          color: Color(0xFF007AFF),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _hasReceivedKestrelData
+                              ? const Color(0xFF00E676).withValues(alpha: 0.12)
+                              : Colors.white.withValues(alpha: 0.03),
+                          foregroundColor: _hasReceivedKestrelData
+                              ? const Color(0xFF00E676)
+                              : Colors.grey,
+                          disabledBackgroundColor: Colors.white.withValues(alpha: 0.03),
+                          disabledForegroundColor: Colors.white24,
+                          side: BorderSide(
+                            color: _hasReceivedKestrelData
+                                ? const Color(0xFF00E676).withValues(alpha: 0.5)
+                                : Colors.white10,
+                            width: 1,
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
                       ),
                     ),
@@ -3752,18 +3782,17 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                 final globalShotIdx = shotIndices[shotIdx];
 
                                 // Safety bounds check
-                                if (globalShotIdx >=
-                                    _stage.shotResults.length) {
+                                if (globalShotIdx >= _stage.shotResults.length) {
                                   return const SizedBox();
                                 }
 
                                 final result =
                                     _stage.shotResults[globalShotIdx];
-                                Color bgColor = Colors.grey[850]!;
+                                Color bgColor = Colors.white.withValues(alpha: 0.15);
                                 Color borderColor =
-                                    Colors.white70.withValues(alpha: 0.3);
+                                    Colors.white.withValues(alpha: 0.65);
                                 Color embossedColor =
-                                    Colors.white70.withValues(alpha: 0.15);
+                                    Colors.white.withValues(alpha: 0.55);
 
                                 if (result == 'hit') {
                                   bgColor = const Color(0xFF00E676)
@@ -4061,17 +4090,43 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                         _stage.environmentalErrors = '';
                         _stage.windPlan.actualValue = 0.0;
                         _stage.windPlan.actualDirection = 'None';
+                        _stage.windPlan.kestrelValue = 0.0;
+                        _stage.windPlan.kestrelDirection = 'None';
                         _isActualWindageManipulated = false;
-                        // Reset COF sequence, shot times, rolls, stabilities, and restore default target shot counts
+                        _hasReceivedKestrelData = false;
+
+                        // Clear DOPE from target arrays, keep ranges/DOF/inclinations
+                        for (var array in _stage.targetArrays) {
+                          array.elevationResult = '';
+                          array.windageResult = '';
+                          array.elevationValue = null;
+                          array.windage1Value = null;
+                          array.windage2Value = null;
+                          array.leadValue = null;
+                          for (var target in array.targets) {
+                            target.shotsCount = 1;
+                            target.targetLeadMil = 0.0;
+                          }
+                        }
+
+                        // Clear built wind columns
+                        _stage.windColumns = WindColumnData(
+                          mode: 'angle',
+                          values: const [300.0, 330.0, 0.0, 30.0, 60.0],
+                          valuesMax: const [],
+                          results: const {},
+                          angleValues: const [],
+                          angleResults: const {},
+                          mphValues: const [],
+                          mphValuesMax: const [],
+                          mphResults: const {},
+                        );
+
+                        // Reset COF sequence, shot times, rolls, stabilities
                         _stage.shotTargetsSequence = [];
                         _stage.shotTimes = [];
                         _stage.shotRolls = [];
                         _stage.shotStabilities = [];
-                        for (var array in _stage.targetArrays) {
-                          for (var target in array.targets) {
-                            target.shotsCount = 1;
-                          }
-                        }
                         _adjustShotResultsLength();
 
                         // Clear text controllers and tag lists
@@ -5500,6 +5555,1196 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       },
     );
   }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  Wind Columns Builder Dialog (overlay, like COF Target Selector)
+  // ─────────────────────────────────────────────────────────────────────────
+  void _showWindColumnsDialog() {
+    // === Local dialog state ===
+    String mode = _stage.windColumns.mode;
+    bool isBuilding = false;
+    double buildProgress = 0.0;
+    String progressText = '';
+
+    List<TextEditingController> mphMinCtrls = [];
+    List<TextEditingController> mphMaxCtrls = [];
+    List<int> angleSlots = [];
+    int nextColKey = 0;
+    List<int> colKeys = [];
+
+    // Mode-specific configurations & results loaded from stage
+    List<double> angleValues = List<double>.from(_stage.windColumns.angleValues);
+    Map<String, String> angleResults = Map<String, String>.from(_stage.windColumns.angleResults);
+
+    List<double> mphValues = List<double>.from(_stage.windColumns.mphValues);
+    List<double> mphValuesMax = List<double>.from(_stage.windColumns.mphValuesMax);
+    Map<String, String> mphResults = Map<String, String>.from(_stage.windColumns.mphResults);
+
+    // If completely new/empty, initialize them
+    if (angleValues.isEmpty && _stage.targetArrays.isNotEmpty) {
+      final arr0 = _stage.targetArrays[0];
+      final s = TargetArray.migrateWindClockSlot(arr0.windClockDirection);
+      angleValues = [
+        TargetArray.clockSlotToDegrees((s - 2 + 24) % 24), // −1 hour
+        TargetArray.clockSlotToDegrees(s),                   // current
+        TargetArray.clockSlotToDegrees((s + 2) % 24),        // +1 hour
+      ];
+    } else if (angleValues.isEmpty) {
+      angleValues = [300.0, 330.0, 0.0, 30.0, 60.0];
+    }
+
+    if (mphValues.isEmpty && _stage.targetArrays.isNotEmpty) {
+      final arr0 = _stage.targetArrays[0];
+      double w1 = arr0.minWindSpeed;
+      double w2 = arr0.maxWindSpeed;
+      if (w1 == 0.0 && w2 == 0.0) {
+        w1 = 4.0;
+        w2 = 8.0;
+      }
+      mphValues = [w1];
+      mphValuesMax = [w2];
+    } else if (mphValues.isEmpty) {
+      mphValues = [4.0, 8.0, 12.0, 16.0];
+      mphValuesMax = [4.0, 8.0, 12.0, 16.0];
+    }
+
+    // Active pointers that reference the currently active mode
+    List<double> values = mode == 'angle' ? angleValues : mphValues;
+    List<double> valuesMax = mode == 'angle' ? [] : mphValuesMax;
+    Map<String, String> dialogResults = mode == 'angle' ? angleResults : mphResults;
+
+    // === Initialize editors ===
+    void initEditors() {
+      for (var c in mphMinCtrls) {
+        c.dispose();
+      }
+      for (var c in mphMaxCtrls) {
+        c.dispose();
+      }
+      mphMinCtrls.clear();
+      mphMaxCtrls.clear();
+      angleSlots.clear();
+      colKeys.clear();
+      nextColKey = 0;
+
+      if (mode == 'mph') {
+        for (int i = 0; i < values.length; i++) {
+          mphMinCtrls
+              .add(TextEditingController(text: values[i].toStringAsFixed(0)));
+          final mx = i < valuesMax.length ? valuesMax[i] : values[i];
+          mphMaxCtrls.add(TextEditingController(text: mx.toStringAsFixed(0)));
+          colKeys.add(nextColKey++);
+        }
+      } else {
+        for (var v in values) {
+          angleSlots.add(TargetArray.degreesToClockSlot(v));
+          colKeys.add(nextColKey++);
+        }
+      }
+    }
+
+    initEditors();
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            // ── Helpers ──────────────────────────────────────────────
+
+            void addColumn() {
+              HapticFeedback.lightImpact();
+              setDialogState(() {
+                if (mode == 'mph') {
+                  final lastMin = values.isNotEmpty ? values.last : 8.0;
+                  final lastMax = valuesMax.isNotEmpty ? valuesMax.last : lastMin;
+                  final step = lastMin == lastMax ? 4.0 : (lastMax - lastMin).clamp(2.0, 8.0);
+                  final newMin = lastMax;
+                  final newMax = lastMax + step;
+                  values.add(newMin);
+                  valuesMax.add(newMax);
+                  mphMinCtrls.add(
+                      TextEditingController(text: newMin.toStringAsFixed(0)));
+                  mphMaxCtrls.add(
+                      TextEditingController(text: newMax.toStringAsFixed(0)));
+                } else {
+                  final lastSlot = angleSlots.isNotEmpty ? angleSlots.last : 0;
+                  final newSlot = (lastSlot + 2) % 24; // +1 hour
+                  values.add(TargetArray.clockSlotToDegrees(newSlot));
+                  angleSlots.add(newSlot);
+                }
+                colKeys.add(nextColKey++);
+              });
+            }
+
+            void removeColumn(int index) {
+              HapticFeedback.lightImpact();
+              setDialogState(() {
+                values.removeAt(index);
+                colKeys.removeAt(index);
+                if (mode == 'mph') {
+                  if (index < valuesMax.length) valuesMax.removeAt(index);
+                  mphMinCtrls[index].dispose();
+                  mphMinCtrls.removeAt(index);
+                  mphMaxCtrls[index].dispose();
+                  mphMaxCtrls.removeAt(index);
+                } else {
+                  angleSlots.removeAt(index);
+                }
+              });
+            }
+
+            void saveCurrentEditorsToModeStorage() {
+              if (mode == 'mph') {
+                mphValues.clear();
+                mphValuesMax.clear();
+                for (int i = 0; i < mphMinCtrls.length; i++) {
+                  mphValues.add(double.tryParse(mphMinCtrls[i].text) ?? 8.0);
+                  mphValuesMax.add(double.tryParse(mphMaxCtrls[i].text) ?? (i < mphValues.length ? mphValues[i] : 8.0));
+                }
+              } else {
+                angleValues.clear();
+                for (var slot in angleSlots) {
+                  angleValues.add(TargetArray.clockSlotToDegrees(slot));
+                }
+              }
+            }
+
+            void switchMode(String newMode) {
+              if (mode == newMode) return;
+              HapticFeedback.lightImpact();
+              setDialogState(() {
+                saveCurrentEditorsToModeStorage();
+                mode = newMode;
+                if (mode == 'angle') {
+                  values = angleValues;
+                  valuesMax = [];
+                  dialogResults = angleResults;
+                } else {
+                  values = mphValues;
+                  valuesMax = mphValuesMax;
+                  dialogResults = mphResults;
+                }
+                initEditors();
+              });
+            }
+
+            void applyPresets(String type) {
+              HapticFeedback.mediumImpact();
+              setDialogState(() {
+                dialogResults.clear();
+                if (type == 'angle') {
+                  angleResults.clear();
+                  if (_stage.targetArrays.isNotEmpty) {
+                    final s = TargetArray.migrateWindClockSlot(
+                        _stage.targetArrays[0].windClockDirection);
+                    angleValues = [
+                      TargetArray.clockSlotToDegrees((s - 2 + 24) % 24),
+                      TargetArray.clockSlotToDegrees(s),
+                      TargetArray.clockSlotToDegrees((s + 2) % 24),
+                    ];
+                  } else {
+                    angleValues = [300.0, 330.0, 0.0, 30.0, 60.0];
+                  }
+                  values = angleValues;
+                  valuesMax = [];
+                  dialogResults = angleResults;
+                } else {
+                  mphResults.clear();
+                  if (_stage.targetArrays.isNotEmpty) {
+                    final arr0 = _stage.targetArrays[0];
+                    double w1 = arr0.minWindSpeed;
+                    double w2 = arr0.maxWindSpeed;
+                    if (w1 == 0.0 && w2 == 0.0) {
+                      w1 = 4.0;
+                      w2 = 8.0;
+                    }
+                    mphValues = [w1];
+                    mphValuesMax = [w2];
+                  } else {
+                    mphValues = [4.0, 8.0, 12.0, 16.0];
+                    mphValuesMax = [4.0, 8.0, 12.0, 16.0];
+                  }
+                  values = mphValues;
+                  valuesMax = mphValuesMax;
+                  dialogResults = mphResults;
+                }
+                initEditors();
+              });
+            }
+
+            void onReorder(int oldIdx, int newIdx) {
+              HapticFeedback.lightImpact();
+              setDialogState(() {
+                if (newIdx > oldIdx) newIdx--;
+                final v = values.removeAt(oldIdx);
+                values.insert(newIdx, v);
+                final k = colKeys.removeAt(oldIdx);
+                colKeys.insert(newIdx, k);
+                if (mode == 'mph') {
+                  if (oldIdx < valuesMax.length && newIdx <= valuesMax.length) {
+                    final mx = valuesMax.removeAt(oldIdx);
+                    valuesMax.insert(newIdx, mx);
+                  }
+                  final c1 = mphMinCtrls.removeAt(oldIdx);
+                  mphMinCtrls.insert(newIdx, c1);
+                  final c2 = mphMaxCtrls.removeAt(oldIdx);
+                  mphMaxCtrls.insert(newIdx, c2);
+                } else {
+                  final s = angleSlots.removeAt(oldIdx);
+                  angleSlots.insert(newIdx, s);
+                }
+              });
+            }
+
+            // ── Build matrix from Kestrel ────────────────────────────
+
+            Future<void> buildMatrix() async {
+              FocusManager.instance.primaryFocus?.unfocus();
+              final kestrelProvider = context.read<KestrelProvider>();
+              final matchProvider = context.read<MatchProvider>();
+              if (kestrelProvider.connectionState !=
+                  KestrelConnectionState.connected) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                        'Kestrel not connected. Please connect in Settings.'),
+                    backgroundColor: Colors.redAccent,
+                  ),
+                );
+                return;
+              }
+
+              // Sync editor values → lists
+              if (mode == 'mph') {
+                values.clear();
+                valuesMax.clear();
+                for (int i = 0; i < mphMinCtrls.length; i++) {
+                  values
+                      .add(double.tryParse(mphMinCtrls[i].text) ?? 8.0);
+                  valuesMax
+                      .add(double.tryParse(mphMaxCtrls[i].text) ?? values.last);
+                }
+              } else {
+                values.clear();
+                for (var slot in angleSlots) {
+                  values.add(TargetArray.clockSlotToDegrees(slot));
+                }
+              }
+
+              setDialogState(() {
+                isBuilding = true;
+                buildProgress = 0.0;
+                progressText = 'Starting calculations…';
+              });
+
+              final newResults = <String, String>{};
+              final totalSteps = values.length * _stage.targetArrays.length;
+              int completedSteps = 0;
+
+              try {
+                for (int c = 0; c < values.length; c++) {
+                  for (int a = 0; a < _stage.targetArrays.length; a++) {
+                    final array = _stage.targetArrays[a];
+
+                    // Progress label
+                    String progressLabel;
+                    if (mode == 'mph') {
+                      final mn = values[c];
+                      final mx =
+                          c < valuesMax.length ? valuesMax[c] : mn;
+                      progressLabel = mn == mx
+                          ? '${mn.toStringAsFixed(0)} mph'
+                          : '${mn.toStringAsFixed(0)}–${mx.toStringAsFixed(0)} mph';
+                    } else {
+                      progressLabel =
+                          TargetArray.formatClockSlot(angleSlots[c]);
+                    }
+
+                    setDialogState(() {
+                      progressText =
+                          'Array ${a + 1} (${array.distance}) · $progressLabel';
+                      buildProgress = totalSteps > 0
+                          ? completedSteps / totalSteps
+                          : 0.0;
+                    });
+
+                    final rangeYards = _parseRangeYards(array.distance);
+                    final dof = _parseDof(array.degreeOfFire);
+                    final inc = double.tryParse(array.inclination) ?? 0.0;
+
+                    double wind1, wind2, windDirDeg;
+
+                    if (mode == 'mph') {
+                      wind1 = values[c];
+                      wind2 =
+                          c < valuesMax.length ? valuesMax[c] : wind1;
+                      // Each array keeps its own derived wind direction
+                      windDirDeg = _absoluteWindBearingForArray(a);
+                    } else {
+                      // Angle mode: keep Array 1's speed, vary direction
+                      final arr0 = _stage.targetArrays[0];
+                      wind1 = arr0.minWindSpeed > 0
+                          ? arr0.minWindSpeed
+                          : 8.0;
+                      wind2 = arr0.maxWindSpeed > 0
+                          ? arr0.maxWindSpeed
+                          : wind1;
+
+                      final colAngle = values[c]; // relative to Array 1
+                      if (a == 0) {
+                        windDirDeg = colAngle;
+                      } else {
+                        // Transform for each array's DOF difference
+                        final dof0 = _parseDof(
+                            _stage.targetArrays[0].degreeOfFire);
+                        windDirDeg =
+                            (colAngle + dof0 - dof) % 360.0;
+                        if (windDirDeg < 0) windDirDeg += 360.0;
+                      }
+                    }
+
+                    try {
+                      final solution =
+                          await _sendAndWaitForBalSolution(
+                        provider: kestrelProvider,
+                        targetNumber: a,
+                        send: () =>
+                            kestrelProvider.sendCmdSetBalFullInputs(
+                          targetNumber: a,
+                          targetRangeYards: rangeYards,
+                          directionOfFire: dof,
+                          windSpeed1Mph: wind1,
+                          windSpeed2Mph: wind2,
+                          windDirection: windDirDeg,
+                          inclinationAngle: inc,
+                          targetSpeedMph: 0.0,
+                        ),
+                      );
+
+                      final w1r =
+                          (solution['windage1'] as num).toDouble();
+                      final w2r =
+                          (solution['windage2'] as num).toDouble();
+                      newResults['${a}_$c'] =
+                          TargetArray.formatWindagePair(w1r, w2r);
+                    } catch (e) {
+                      debugPrint(
+                          '[WindColumns] Error solving array $a col $c: $e');
+                      newResults['${a}_$c'] = '—';
+                    }
+                    completedSteps++;
+                  }
+                }
+
+                setDialogState(() {
+                  buildProgress = 1.0;
+                  progressText = 'Done!';
+                  dialogResults
+                    ..clear()
+                    ..addAll(newResults);
+                });
+
+                // Save to mode-specific fields
+                if (mode == 'mph') {
+                  mphResults.clear();
+                  mphResults.addAll(newResults);
+                } else {
+                  angleResults.clear();
+                  angleResults.addAll(newResults);
+                }
+
+                // Persist to stage
+                setState(() {
+                  _stage.windColumns.mode = mode;
+                  _stage.windColumns.angleValues = List<double>.from(angleValues);
+                  _stage.windColumns.angleResults = Map<String, String>.from(angleResults);
+                  _stage.windColumns.mphValues = List<double>.from(mphValues);
+                  _stage.windColumns.mphValuesMax = List<double>.from(mphValuesMax);
+                  _stage.windColumns.mphResults = Map<String, String>.from(mphResults);
+
+                  // Set active fields as well
+                  _stage.windColumns.values = List<double>.from(values);
+                  _stage.windColumns.valuesMax = List<double>.from(valuesMax);
+                  _stage.windColumns.results = Map<String, String>.from(dialogResults);
+                });
+                matchProvider.updateStage(widget.matchId, _stage);
+                _saveStage(exitScreen: false);
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Wind Columns built successfully!'),
+                      backgroundColor: Color(0xFF00E676),
+                    ),
+                  );
+                }
+              } catch (e) {
+                debugPrint('[WindColumns] Build error: $e');
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                        content: Text('Error: $e'),
+                        backgroundColor: Colors.redAccent),
+                  );
+                }
+              } finally {
+                setDialogState(() => isBuilding = false);
+              }
+            }
+
+            // ── Reference wind info ──────────────────────────────────
+            String refWindInfo = '';
+            if (_stage.targetArrays.isNotEmpty) {
+              final arr0 = _stage.targetArrays[0];
+              final slot = TargetArray.migrateWindClockSlot(
+                  arr0.windClockDirection);
+              final speed = TargetArray.formatWindSpeedRange(
+                  arr0.minWindSpeed, arr0.maxWindSpeed);
+              refWindInfo =
+                  '${TargetArray.formatClockSlot(slot)} · $speed';
+            }
+
+            final hasResults = dialogResults.isNotEmpty;
+
+            // ── Dialog UI ────────────────────────────────────────────
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E1E24),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+              contentPadding:
+                  const EdgeInsets.fromLTRB(20, 12, 20, 0),
+              actionsPadding:
+                  const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00E676)
+                              .withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Icon(Icons.view_column_rounded,
+                            size: 16, color: Color(0xFF00E676)),
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'WIND COLUMNS BUILDER',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            letterSpacing: 0.5,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (refWindInfo.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF121214),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.white10),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.air,
+                              size: 14, color: Color(0xFF007AFF)),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Ref: Array 1 · $refWindInfo',
+                            style: const TextStyle(
+                                fontSize: 11, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // ── Mode selector ──
+                      Row(
+                        children: [
+                          const Text('Mode',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  color: Colors.white70)),
+                          const Spacer(),
+                          ChoiceChip(
+                            label: const Text('Angle'),
+                            selected: mode == 'angle',
+                            showCheckmark: false,
+                            onSelected: isBuilding
+                                ? null
+                                : (_) {
+                                    if (mode != 'angle') {
+                                      switchMode('angle');
+                                    }
+                                  },
+                            labelStyle: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: mode == 'angle' ? Colors.white : Colors.white60,
+                            ),
+                            selectedColor: const Color(0xFF007AFF),
+                            backgroundColor: Colors.transparent,
+                            side: BorderSide(
+                              color: mode == 'angle' ? const Color(0xFF007AFF) : Colors.white24,
+                              width: 1,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          ChoiceChip(
+                            label: const Text('MPH'),
+                            selected: mode == 'mph',
+                            showCheckmark: false,
+                            onSelected: isBuilding
+                                ? null
+                                : (_) {
+                                    if (mode != 'mph') {
+                                      switchMode('mph');
+                                    }
+                                  },
+                            labelStyle: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: mode == 'mph' ? Colors.white : Colors.white60,
+                            ),
+                            selectedColor: const Color(0xFF007AFF),
+                            backgroundColor: Colors.transparent,
+                            side: BorderSide(
+                              color: mode == 'mph' ? const Color(0xFF007AFF) : Colors.white24,
+                              width: 1,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      // ── Columns setup ──
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF121214),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.white10),
+                        ),
+                        child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment:
+                                  MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'COLUMNS SETUP',
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey,
+                                      letterSpacing: 0.5),
+                                ),
+                                Row(
+                                  children: [
+                                    InkWell(
+                                      onTap: isBuilding
+                                          ? null
+                                          : () => applyPresets(mode),
+                                      child: Padding(
+                                        padding:
+                                            const EdgeInsets.symmetric(
+                                                horizontal: 6,
+                                                vertical: 4),
+                                        child: Row(
+                                          mainAxisSize:
+                                              MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.refresh,
+                                                size: 13,
+                                                color: isBuilding
+                                                    ? Colors.grey
+                                                    : const Color(
+                                                        0xFF007AFF)),
+                                            const SizedBox(width: 3),
+                                            Text('Reset',
+                                                style: TextStyle(
+                                                    fontSize: 10,
+                                                    color: isBuilding
+                                                        ? Colors.grey
+                                                        : const Color(
+                                                            0xFF007AFF),
+                                                    fontWeight:
+                                                        FontWeight
+                                                            .bold)),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    InkWell(
+                                      onTap:
+                                          isBuilding ? null : addColumn,
+                                      child: Padding(
+                                        padding:
+                                            const EdgeInsets.symmetric(
+                                                horizontal: 6,
+                                                vertical: 4),
+                                        child: Row(
+                                          mainAxisSize:
+                                              MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.add,
+                                                size: 13,
+                                                color: isBuilding
+                                                    ? Colors.grey
+                                                    : const Color(
+                                                        0xFF00E676)),
+                                            const SizedBox(width: 3),
+                                            Text('Add',
+                                                style: TextStyle(
+                                                    fontSize: 10,
+                                                    color: isBuilding
+                                                        ? Colors.grey
+                                                        : const Color(
+                                                            0xFF00E676),
+                                                    fontWeight:
+                                                        FontWeight
+                                                            .bold)),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            if (values.isEmpty)
+                              const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.symmetric(
+                                      vertical: 12),
+                                  child: Text('No columns configured.',
+                                      style: TextStyle(
+                                          color: Colors.white24,
+                                          fontSize: 11)),
+                                ),
+                              )
+                            else
+                              SizedBox(
+                                height: (values.length * 52.0)
+                                    .clamp(52.0, 260.0),
+                                child:
+                                    ReorderableListView.builder(
+                                  shrinkWrap: true,
+                                  itemCount: values.length,
+                                  onReorderItem: (int oldIdx, int newIdx) {
+                                    onReorder(oldIdx, newIdx);
+                                  },
+                                  proxyDecorator:
+                                      (child, index, animation) {
+                                    return Material(
+                                      color: Colors.transparent,
+                                      elevation: 4,
+                                      child: child,
+                                    );
+                                  },
+                                  itemBuilder: (itemCtx, index) {
+                                    return Container(
+                                      key: ValueKey(colKeys[index]),
+                                      margin: const EdgeInsets.only(
+                                          bottom: 4),
+                                      padding:
+                                          const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white
+                                            .withValues(alpha: 0.04),
+                                        borderRadius:
+                                            BorderRadius.circular(6),
+                                        border: Border.all(
+                                            color: Colors.white10),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(
+                                              Icons.drag_handle,
+                                              size: 16,
+                                              color: Colors.white24),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'C${index + 1}',
+                                            style: const TextStyle(
+                                                color: Colors.grey,
+                                                fontSize: 11,
+                                                fontWeight:
+                                                    FontWeight.bold),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          if (mode == 'mph') ...[
+                                            // Min mph input
+                                            SizedBox(
+                                              width: 40,
+                                              height: 28,
+                                              child: TextField(
+                                                controller:
+                                                    mphMinCtrls[
+                                                        index],
+                                                keyboardType:
+                                                    TextInputType
+                                                        .number,
+                                                textAlign:
+                                                    TextAlign.center,
+                                                style: const TextStyle(
+                                                    color:
+                                                        Colors.white,
+                                                    fontSize: 12,
+                                                    fontWeight:
+                                                        FontWeight
+                                                            .bold),
+                                                decoration:
+                                                    const InputDecoration(
+                                                  border:
+                                                      OutlineInputBorder(),
+                                                  contentPadding:
+                                                      EdgeInsets
+                                                          .zero,
+                                                ),
+                                                onChanged: (v) {
+                                                  values[index] =
+                                                      double.tryParse(
+                                                              v) ??
+                                                          values[
+                                                              index];
+                                                },
+                                              ),
+                                            ),
+                                            const Padding(
+                                              padding:
+                                                  EdgeInsets
+                                                      .symmetric(
+                                                          horizontal:
+                                                              4),
+                                              child: Text('–',
+                                                  style: TextStyle(
+                                                      color:
+                                                          Colors.grey,
+                                                      fontSize: 14,
+                                                      fontWeight:
+                                                          FontWeight
+                                                              .bold)),
+                                            ),
+                                            // Max mph input
+                                            SizedBox(
+                                              width: 40,
+                                              height: 28,
+                                              child: TextField(
+                                                controller:
+                                                    mphMaxCtrls[
+                                                        index],
+                                                keyboardType:
+                                                    TextInputType
+                                                        .number,
+                                                textAlign:
+                                                    TextAlign.center,
+                                                style: const TextStyle(
+                                                    color:
+                                                        Colors.white,
+                                                    fontSize: 12,
+                                                    fontWeight:
+                                                        FontWeight
+                                                            .bold),
+                                                decoration:
+                                                    const InputDecoration(
+                                                  border:
+                                                      OutlineInputBorder(),
+                                                  contentPadding:
+                                                      EdgeInsets
+                                                          .zero,
+                                                ),
+                                                onChanged: (v) {
+                                                  if (index <
+                                                      valuesMax
+                                                          .length) {
+                                                    valuesMax[
+                                                            index] =
+                                                        double.tryParse(
+                                                                v) ??
+                                                            valuesMax[
+                                                                index];
+                                                  }
+                                                },
+                                              ),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            const Text('mph',
+                                                style: TextStyle(
+                                                    color: Colors.grey,
+                                                    fontSize: 10)),
+                                          ] else ...[
+                                            // Angle selector
+                                            InkWell(
+                                              onTap: () async {
+                                                HapticFeedback
+                                                    .lightImpact();
+                                                final picked =
+                                                    await showWindClockPickerDialog(
+                                                  ctx,
+                                                  initialSlot:
+                                                      angleSlots[
+                                                          index],
+                                                );
+                                                if (picked == null) {
+                                                  return;
+                                                }
+                                                setDialogState(() {
+                                                  angleSlots[index] =
+                                                      picked;
+                                                  values[index] =
+                                                      TargetArray
+                                                          .clockSlotToDegrees(
+                                                              picked);
+                                                });
+                                              },
+                                              borderRadius:
+                                                  BorderRadius
+                                                      .circular(4),
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 4),
+                                                decoration:
+                                                    BoxDecoration(
+                                                  color:
+                                                      Colors.white10,
+                                                  borderRadius:
+                                                      BorderRadius
+                                                          .circular(
+                                                              4),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize
+                                                          .min,
+                                                  children: [
+                                                    Text(
+                                                      TargetArray
+                                                          .formatClockSlot(
+                                                              angleSlots[
+                                                                  index]),
+                                                      style: const TextStyle(
+                                                          color: Colors
+                                                              .white,
+                                                          fontSize:
+                                                              12,
+                                                          fontWeight:
+                                                              FontWeight
+                                                                  .bold),
+                                                    ),
+                                                    const SizedBox(
+                                                        width: 4),
+                                                    const Icon(
+                                                        Icons
+                                                            .arrow_drop_down,
+                                                        size: 14,
+                                                        color: Colors
+                                                            .grey),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                          const Spacer(),
+                                          IconButton(
+                                            onPressed: isBuilding
+                                                ? null
+                                                : () => removeColumn(
+                                                    index),
+                                            icon: const Icon(
+                                                Icons.cancel,
+                                                color:
+                                                    Colors.redAccent,
+                                                size: 14),
+                                            padding: EdgeInsets.zero,
+                                            constraints:
+                                                const BoxConstraints(),
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // ── Build / Progress ──
+                      if (isBuilding)
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF121214),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                                color: const Color(0xFF007AFF)
+                                    .withValues(alpha: 0.3)),
+                          ),
+                          child: Column(
+                            children: [
+                              const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                    color: Color(0xFF007AFF),
+                                    strokeWidth: 2),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                progressText,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 8),
+                              ClipRRect(
+                                borderRadius:
+                                    BorderRadius.circular(3),
+                                child: SizedBox(
+                                  height: 5,
+                                  child: LinearProgressIndicator(
+                                    value: buildProgress,
+                                    backgroundColor: Colors.white10,
+                                    color: const Color(0xFF007AFF),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        ElevatedButton.icon(
+                          onPressed: values.isEmpty
+                              ? null
+                              : () => buildMatrix(),
+                          icon: const Icon(Icons.flash_on, size: 16),
+                          label: const Text(
+                              'BUILD MATRIX FROM KESTREL',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor:
+                                const Color(0xFF007AFF),
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor:
+                                Colors.white.withValues(alpha: 0.05),
+                            disabledForegroundColor: Colors.white24,
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 12),
+                            shape: RoundedRectangleBorder(
+                                borderRadius:
+                                    BorderRadius.circular(8)),
+                          ),
+                        ),
+
+                      // ── Results grid ──
+                      if (hasResults) ...[
+                        const SizedBox(height: 16),
+                        const Text(
+                          'GRID SOLUTIONS',
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey,
+                              letterSpacing: 0.5),
+                        ),
+                        const SizedBox(height: 6),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: DataTable(
+                            columnSpacing: 16,
+                            horizontalMargin: 8,
+                            headingRowHeight: 34,
+                            dataRowMinHeight: 30,
+                            dataRowMaxHeight: 40,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF121214),
+                              borderRadius:
+                                  BorderRadius.circular(8),
+                            ),
+                            columns: [
+                              const DataColumn(
+                                  label: Text('Range',
+                                      style: TextStyle(
+                                          color: Colors.grey,
+                                          fontWeight:
+                                              FontWeight.bold,
+                                          fontSize: 10))),
+                              const DataColumn(
+                                  label: Text('Elev',
+                                      style: TextStyle(
+                                          color: Colors.grey,
+                                          fontWeight:
+                                              FontWeight.bold,
+                                          fontSize: 10))),
+                              ...List.generate(
+                                  values.length,
+                                  (colIdx) {
+                                String label;
+                                if (mode == 'mph') {
+                                  final mn = values[colIdx];
+                                  final mx = colIdx < valuesMax.length
+                                      ? valuesMax[colIdx]
+                                      : mn;
+                                  label = mn == mx
+                                      ? mn.toStringAsFixed(0)
+                                      : '${mn.toStringAsFixed(0)}–${mx.toStringAsFixed(0)}';
+                                  label += ' mph';
+                                } else {
+                                  final slot = TargetArray
+                                      .degreesToClockSlot(values[colIdx]);
+                                  label = TargetArray
+                                      .formatClockSlot(slot);
+                                }
+                                return DataColumn(
+                                  label: Text(label,
+                                      style: const TextStyle(
+                                          color:
+                                              Color(0xFF00E676),
+                                          fontWeight:
+                                              FontWeight.bold,
+                                          fontSize: 10)),
+                                );
+                              }),
+                            ],
+                            rows: List.generate(
+                                _stage.targetArrays.length,
+                                (arrayIdx) {
+                              final array =
+                                  _stage.targetArrays[arrayIdx];
+                              final displayElev = array
+                                      .elevationResult.isNotEmpty
+                                  ? array.elevationResult
+                                      .replaceAll(' MIL', '')
+                                  : '—';
+                              return DataRow(cells: [
+                                DataCell(Text(
+                                  array.distance.isNotEmpty
+                                      ? array.distance
+                                      : '—',
+                                  style: const TextStyle(
+                                      fontWeight:
+                                          FontWeight.bold,
+                                      fontSize: 10),
+                                )),
+                                DataCell(Text(
+                                  displayElev,
+                                  style: const TextStyle(
+                                      color:
+                                          Color(0xFF007AFF),
+                                      fontWeight:
+                                          FontWeight.bold,
+                                      fontSize: 10),
+                                )),
+                                ...List.generate(
+                                    values.length, (colIdx) {
+                                  final cellVal = dialogResults[
+                                      '${arrayIdx}_$colIdx'] ??
+                                      '—';
+                                  return DataCell(Text(
+                                    cellVal.replaceAll(
+                                        ' MIL', ''),
+                                    style: const TextStyle(
+                                        fontSize: 10,
+                                        color:
+                                            Colors.white70),
+                                  ));
+                                }),
+                              ]);
+                            }),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isBuilding
+                      ? null
+                      : () {
+                          saveCurrentEditorsToModeStorage();
+                          setState(() {
+                            _stage.windColumns.mode = mode;
+                            _stage.windColumns.angleValues = List<double>.from(angleValues);
+                            _stage.windColumns.angleResults = Map<String, String>.from(angleResults);
+                            _stage.windColumns.mphValues = List<double>.from(mphValues);
+                            _stage.windColumns.mphValuesMax = List<double>.from(mphValuesMax);
+                            _stage.windColumns.mphResults = Map<String, String>.from(mphResults);
+
+                            // Sync active values
+                            _stage.windColumns.values = List<double>.from(values);
+                            _stage.windColumns.valuesMax = List<double>.from(valuesMax);
+                            _stage.windColumns.results = Map<String, String>.from(dialogResults);
+                          });
+                          context.read<MatchProvider>().updateStage(widget.matchId, _stage);
+                          _saveStage(exitScreen: false);
+
+                          for (var c in mphMinCtrls) {
+                            c.dispose();
+                          }
+                          for (var c in mphMaxCtrls) {
+                            c.dispose();
+                          }
+                          Navigator.pop(ctx);
+                        },
+                  child: const Text('Close'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    ).then((_) {
+      setState(() {}); // Refresh parent on close
+    });
+  }
+
 
   String _getCardinalDirection(double heading) {
     if (heading >= 337.5 || heading < 22.5) return 'N';

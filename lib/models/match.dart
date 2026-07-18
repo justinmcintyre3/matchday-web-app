@@ -388,29 +388,66 @@ class WindPlan {
 
 class WindColumnData {
   String mode; // 'angle' or 'mph'
-  List<double> values; // angles (degrees) or wind speeds (mph)
+  List<double> values; // active angles (degrees) or wind speeds (mph)
+  List<double> valuesMax; // Max wind speeds for bracket mode (mph mode only). Empty for angle mode or single speed.
   Map<String, String> results; // Key: "arrayIndex_columnIndex" -> Value: "0.3 R" or "0.3 R / 0.6 R"
+
+  // Mode-specific configurations
+  List<double> angleValues;
+  Map<String, String> angleResults;
+  List<double> mphValues;
+  List<double> mphValuesMax;
+  Map<String, String> mphResults;
 
   WindColumnData({
     this.mode = 'angle',
     List<double>? values,
+    List<double>? valuesMax,
     Map<String, String>? results,
-  })  : values = values ?? const [300.0, 330.0, 0.0, 30.0, 60.0], // Defaults: 10:00, 11:00, 12:00, 1:00, 2:00
-        results = results ?? const {};
+    List<double>? angleValues,
+    Map<String, String>? angleResults,
+    List<double>? mphValues,
+    List<double>? mphValuesMax,
+    Map<String, String>? mphResults,
+  })  : values = values ?? const [300.0, 330.0, 0.0, 30.0, 60.0],
+        valuesMax = valuesMax ?? const [],
+        results = results ?? const {},
+        angleValues = angleValues ?? (mode == 'angle' ? (values ?? const [300.0, 330.0, 0.0, 30.0, 60.0]) : const [300.0, 330.0, 0.0, 30.0, 60.0]),
+        angleResults = angleResults ?? (mode == 'angle' ? (results ?? const {}) : const {}),
+        mphValues = mphValues ?? (mode == 'mph' ? (values ?? const [4.0, 8.0, 12.0, 16.0]) : const [4.0, 8.0, 12.0, 16.0]),
+        mphValuesMax = mphValuesMax ?? (mode == 'mph' ? (valuesMax ?? const [4.0, 8.0, 12.0, 16.0]) : const [4.0, 8.0, 12.0, 16.0]),
+        mphResults = mphResults ?? (mode == 'mph' ? (results ?? const {}) : const {});
 
   Map<String, dynamic> toMap() {
     return {
       'mode': mode,
       'values': values,
+      'valuesMax': valuesMax,
       'results': results,
+      'angleValues': angleValues,
+      'angleResults': angleResults,
+      'mphValues': mphValues,
+      'mphValuesMax': mphValuesMax,
+      'mphResults': mphResults,
     };
   }
 
   factory WindColumnData.fromMap(Map<dynamic, dynamic> map) {
+    final mode = map['mode'] ?? 'angle';
+    final values = List<double>.from(map['values']?.map((x) => (x as num).toDouble()) ?? const [300.0, 330.0, 0.0, 30.0, 60.0]);
+    final valuesMax = List<double>.from(map['valuesMax']?.map((x) => (x as num).toDouble()) ?? const []);
+    final results = Map<String, String>.from(map['results'] ?? const {});
+
     return WindColumnData(
-      mode: map['mode'] ?? 'angle',
-      values: List<double>.from(map['values']?.map((x) => (x as num).toDouble()) ?? const [300.0, 330.0, 0.0, 30.0, 60.0]),
-      results: Map<String, String>.from(map['results'] ?? const {}),
+      mode: mode,
+      values: values,
+      valuesMax: valuesMax,
+      results: results,
+      angleValues: List<double>.from(map['angleValues']?.map((x) => (x as num).toDouble()) ?? (mode == 'angle' ? values : const [300.0, 330.0, 0.0, 30.0, 60.0])),
+      angleResults: Map<String, String>.from(map['angleResults'] ?? (mode == 'angle' ? results : const {})),
+      mphValues: List<double>.from(map['mphValues']?.map((x) => (x as num).toDouble()) ?? (mode == 'mph' ? values : const [4.0, 8.0, 12.0, 16.0])),
+      mphValuesMax: List<double>.from(map['mphValuesMax']?.map((x) => (x as num).toDouble()) ?? (mode == 'mph' ? valuesMax : const [4.0, 8.0, 12.0, 16.0])),
+      mphResults: Map<String, String>.from(map['mphResults'] ?? (mode == 'mph' ? results : const {})),
     );
   }
 }
