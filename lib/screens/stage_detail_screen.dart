@@ -15,7 +15,6 @@ import '../features/rx5000/providers/rx5000_provider.dart';
 import '../widgets/performance_charts.dart';
 import 'wind_columns_screen.dart';
 
-
 class StageDetailScreen extends StatefulWidget {
   final String matchId;
   final int stageNumber;
@@ -72,15 +71,17 @@ class _StageDetailScreenState extends State<StageDetailScreen>
 
   final List<String> _presetMentalErrors = [
     'Rushed Shot',
-    'Lost Target Track',
+    'Target Reference/Track Lost',
     'Timer Panic',
     'Forgot Stage Plan',
-    'Wrong Target Index',
-    'Dry Fire Mistake',
+    'Forgot to Hold Wind',
+    'Forgot to Hold Elevation',
+    'Did not trust Wind/Impact',
+    'Dialed Instead of Holding',
   ];
 
   final List<String> _presetSkillsErrors = [
-    'Unstable Position',
+    'Speed Moving',
     'Poor Recoil Control',
     'Trigger Jerk',
     'Slow Bolt Cycle',
@@ -257,7 +258,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       if (_isRx5000Active) {
         _rxProvider.decrementActivePages();
         _isRx5000Active = false;
-        debugPrint('[StageDetailScreen] Range box unfocused. Disconnected RX5000.');
+        debugPrint(
+            '[StageDetailScreen] Range box unfocused. Disconnected RX5000.');
       }
     }
   }
@@ -898,8 +900,6 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     _remainingTimeTimer?.cancel();
   }
 
-
-
   double _parseDof(String dofStr) {
     final clean = dofStr.replaceAll(RegExp(r'[^0-9.]'), '');
     return double.tryParse(clean) ?? 0.0;
@@ -999,7 +999,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     final array = _stage.targetArrays[arrayIdx];
     array.elevationResult = TargetArray.formatElevationMil(elevation);
     array.windageResult = TargetArray.formatWindagePair(w1, w2);
-    
+
     // Save numerical double values for calculations / brackets
     array.elevationValue = elevation;
     array.windage1Value = w1;
@@ -1030,7 +1030,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
             children: [
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                   decoration: BoxDecoration(
                     color: const Color(0xFF007AFF).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(4),
@@ -1043,7 +1044,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                     children: [
                       const Text(
                         'Elevation',
-                        style: TextStyle(fontSize: 10, color: Color(0xFF007AFF)),
+                        style:
+                            TextStyle(fontSize: 10, color: Color(0xFF007AFF)),
                       ),
                       const SizedBox(height: 2),
                       Row(
@@ -1059,18 +1061,20 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                           ),
                           if (_stage.targetArrays.indexOf(array) >= 1 &&
                               _stage.targetArrays[0].elevationValue != null &&
-                              array.elevationValue != null) () {
-                            final diff = array.elevationValue! - _stage.targetArrays[0].elevationValue!;
-                            final dir = diff < 0 ? 'U' : 'D';
-                            return Text(
-                              'HO: ${diff.abs().toStringAsFixed(2)} $dir',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFFFF9500),
-                              ),
-                            );
-                          }(),
+                              array.elevationValue != null)
+                            () {
+                              final diff = array.elevationValue! -
+                                  _stage.targetArrays[0].elevationValue!;
+                              final dir = diff < 0 ? 'U' : 'D';
+                              return Text(
+                                'HO: ${diff.abs().toStringAsFixed(2)} $dir',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFFFF9500),
+                                ),
+                              );
+                            }(),
                         ],
                       ),
                     ],
@@ -1080,7 +1084,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
               const SizedBox(width: 8),
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                   decoration: BoxDecoration(
                     color: const Color(0xFF00E676).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(4),
@@ -1093,7 +1098,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                     children: [
                       const Text(
                         'Windage',
-                        style: TextStyle(fontSize: 10, color: Color(0xFF00E676)),
+                        style:
+                            TextStyle(fontSize: 10, color: Color(0xFF00E676)),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -1117,7 +1123,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   }
 
   Widget _buildWindBracketsSection(TargetArray array) {
-    if (array.windage1Value == null || array.windage2Value == null) return const SizedBox.shrink();
+    if (array.windage1Value == null || array.windage2Value == null) {
+      return const SizedBox.shrink();
+    }
 
     final w1 = array.windage1Value!;
     final w2 = array.windage2Value!;
@@ -1138,7 +1146,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       if (targetWidth <= 0.0) continue;
 
       final isSafe = spread <= targetWidth;
-      
+
       // Calculate covers relative to hold center
 
       targetWidgets.add(
@@ -1163,7 +1171,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                       Icon(
                         isSafe ? Icons.check_circle : Icons.warning_rounded,
                         size: 11,
-                        color: isSafe ? const Color(0xFF00E676) : const Color(0xFFFF9F0A),
+                        color: isSafe
+                            ? const Color(0xFF00E676)
+                            : const Color(0xFFFF9F0A),
                       ),
                       const SizedBox(width: 4),
                       Text(
@@ -1171,7 +1181,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                         style: TextStyle(
                           fontSize: 9,
                           fontWeight: FontWeight.bold,
-                          color: isSafe ? const Color(0xFF00E676) : const Color(0xFFFF9F0A),
+                          color: isSafe
+                              ? const Color(0xFF00E676)
+                              : const Color(0xFFFF9F0A),
                         ),
                       ),
                     ],
@@ -1184,7 +1196,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.01),
                   borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.05)),
                 ),
                 child: Center(
                   child: Text(
@@ -1198,7 +1211,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                 ),
               ),
               const SizedBox(height: 6),
-              _buildBracketVisualPainter(targetWidth, spread, isSafe, w1, w2, hold),
+              _buildBracketVisualPainter(
+                  targetWidth, spread, isSafe, w1, w2, hold),
             ],
           ),
         ),
@@ -1213,7 +1227,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     );
   }
 
-  Widget _buildBracketVisualPainter(double targetWidth, double spread, bool isSafe, double w1, double w2, double hold) {
+  Widget _buildBracketVisualPainter(double targetWidth, double spread,
+      bool isSafe, double w1, double w2, double hold) {
     return Container(
       height: 48,
       width: double.infinity,
@@ -1686,8 +1701,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     final confirmedAt = _envConfirmedAt[key];
     final now = DateTime.now();
 
-    final needsConfirm = confirmedAt == null ||
-        now.difference(confirmedAt) > _envConfirmWindow;
+    final needsConfirm =
+        confirmedAt == null || now.difference(confirmedAt) > _envConfirmWindow;
 
     if (!needsConfirm) return true; // Confirmed recently — skip dialog
 
@@ -2110,7 +2125,13 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                               keyboardType: const TextInputType
                                                   .numberWithOptions(
                                                   decimal: true),
-                                              textInputAction: (targetIdx < array.targets.length - 1 || arrayIdx < _stage.targetArrays.length - 1)
+                                              textInputAction: (targetIdx <
+                                                          array.targets.length -
+                                                              1 ||
+                                                      arrayIdx <
+                                                          _stage.targetArrays
+                                                                  .length -
+                                                              1)
                                                   ? TextInputAction.next
                                                   : TextInputAction.done,
                                               onTap: () =>
@@ -2144,14 +2165,24 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                                     : '$val MIL';
                                                 setState(() {});
                                                 _saveStage(exitScreen: false);
-                                                if (targetIdx < array.targets.length - 1) {
-                                                  _getTargetSizeFocusNode(array.targets[targetIdx + 1])
+                                                if (targetIdx <
+                                                    array.targets.length - 1) {
+                                                  _getTargetSizeFocusNode(
+                                                          array.targets[
+                                                              targetIdx + 1])
                                                       .requestFocus();
-                                                } else if (arrayIdx < _stage.targetArrays.length - 1) {
-                                                  _getTargetSizeFocusNode(_stage.targetArrays[arrayIdx + 1].targets.first)
+                                                } else if (arrayIdx <
+                                                    _stage.targetArrays.length -
+                                                        1) {
+                                                  _getTargetSizeFocusNode(_stage
+                                                          .targetArrays[
+                                                              arrayIdx + 1]
+                                                          .targets
+                                                          .first)
                                                       .requestFocus();
                                                 } else {
-                                                  FocusScope.of(context).unfocus();
+                                                  FocusScope.of(context)
+                                                      .unfocus();
                                                 }
                                               },
                                             ),
@@ -2319,18 +2350,28 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                                 // Lead display box — styled to match Speed field
                                                 Expanded(
                                                   child: GestureDetector(
-                                                    onTap: target.targetLeadMil == 0.0
-                                                        ? null
-                                                        : () {
-                                                            HapticFeedback.lightImpact();
-                                                            setState(() {
-                                                              target.selectedLeadType = 'lead';
-                                                            });
-                                                            _saveStage(exitScreen: false);
-                                                            context.read<MatchProvider>().syncOnlyDopeToWatch();
-                                                          },
+                                                    onTap:
+                                                        target.targetLeadMil ==
+                                                                0.0
+                                                            ? null
+                                                            : () {
+                                                                HapticFeedback
+                                                                    .lightImpact();
+                                                                setState(() {
+                                                                  target.selectedLeadType =
+                                                                      'lead';
+                                                                });
+                                                                _saveStage(
+                                                                    exitScreen:
+                                                                        false);
+                                                                context
+                                                                    .read<
+                                                                        MatchProvider>()
+                                                                    .syncOnlyDopeToWatch();
+                                                              },
                                                     child: InputDecorator(
-                                                      decoration: InputDecoration(
+                                                      decoration:
+                                                          InputDecoration(
                                                         labelText: 'Lead',
                                                         suffixText:
                                                             target.targetLeadMil ==
@@ -2338,19 +2379,37 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                                                 ? ''
                                                                 : 'MIL',
                                                         isDense: true,
-                                                        filled: target.selectedLeadType == 'lead',
-                                                        fillColor: target.selectedLeadType == 'lead'
-                                                            ? const Color(0xFFFFB300).withValues(alpha: 0.15)
+                                                        filled: target
+                                                                .selectedLeadType ==
+                                                            'lead',
+                                                        fillColor: target
+                                                                    .selectedLeadType ==
+                                                                'lead'
+                                                            ? const Color(
+                                                                    0xFFFFB300)
+                                                                .withValues(
+                                                                    alpha: 0.15)
                                                             : null,
                                                         border:
                                                             const OutlineInputBorder(),
                                                         enabledBorder:
                                                             OutlineInputBorder(
                                                           borderSide: BorderSide(
-                                                              color: target.selectedLeadType == 'lead'
-                                                                  ? const Color(0xFFFFB300)
-                                                                  : const Color(0xFFFFB300).withValues(alpha: 0.4),
-                                                              width: target.selectedLeadType == 'lead' ? 2.0 : 1.0),
+                                                              color: target
+                                                                          .selectedLeadType ==
+                                                                      'lead'
+                                                                  ? const Color(
+                                                                      0xFFFFB300)
+                                                                  : const Color(
+                                                                          0xFFFFB300)
+                                                                      .withValues(
+                                                                          alpha:
+                                                                              0.4),
+                                                              width:
+                                                                  target.selectedLeadType ==
+                                                                          'lead'
+                                                                      ? 2.0
+                                                                      : 1.0),
                                                         ),
                                                         labelStyle:
                                                             const TextStyle(
@@ -2375,7 +2434,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                                         target.targetLeadMil ==
                                                                 0.0
                                                             ? '---'
-                                                            : target.targetLeadMil
+                                                            : target
+                                                                .targetLeadMil
                                                                 .toStringAsFixed(
                                                                     2),
                                                         style: const TextStyle(
@@ -2435,17 +2495,30 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                             // Edge holds
                                             Builder(builder: (context) {
                                               double parsedWidth = 0.0;
-                                              final cleanStr = target.size.replaceAll(RegExp(r'[^0-9.]'), '');
+                                              final cleanStr = target.size
+                                                  .replaceAll(
+                                                      RegExp(r'[^0-9.]'), '');
                                               if (cleanStr.isNotEmpty) {
-                                                parsedWidth = double.tryParse(cleanStr) ?? 0.0;
+                                                parsedWidth =
+                                                    double.tryParse(cleanStr) ??
+                                                        0.0;
                                               }
-                                              
-                                              final showEdges = target.targetLeadMil != 0.0 && parsedWidth > 0.0;
-                                              final leadingEdge = showEdges ? (target.targetLeadMil - (parsedWidth / 2)) : 0.0;
-                                              final trailingEdge = showEdges ? (target.targetLeadMil + (parsedWidth / 2)) : 0.0;
-                                              
+
+                                              final showEdges =
+                                                  target.targetLeadMil != 0.0 &&
+                                                      parsedWidth > 0.0;
+                                              final leadingEdge = showEdges
+                                                  ? (target.targetLeadMil -
+                                                      (parsedWidth / 2))
+                                                  : 0.0;
+                                              final trailingEdge = showEdges
+                                                  ? (target.targetLeadMil +
+                                                      (parsedWidth / 2))
+                                                  : 0.0;
+
                                               return Padding(
-                                                padding: const EdgeInsets.only(top: 8.0),
+                                                padding: const EdgeInsets.only(
+                                                    top: 8.0),
                                                 child: Row(
                                                   children: [
                                                     Expanded(
@@ -2453,45 +2526,95 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                                         onTap: !showEdges
                                                             ? null
                                                             : () {
-                                                                HapticFeedback.lightImpact();
+                                                                HapticFeedback
+                                                                    .lightImpact();
                                                                 setState(() {
-                                                                  target.selectedLeadType = 'leadingEdge';
+                                                                  target.selectedLeadType =
+                                                                      'leadingEdge';
                                                                 });
-                                                                _saveStage(exitScreen: false);
-                                                                context.read<MatchProvider>().syncOnlyDopeToWatch();
+                                                                _saveStage(
+                                                                    exitScreen:
+                                                                        false);
+                                                                context
+                                                                    .read<
+                                                                        MatchProvider>()
+                                                                    .syncOnlyDopeToWatch();
                                                               },
                                                         child: InputDecorator(
-                                                          decoration: InputDecoration(
-                                                            labelText: 'Leading Edge',
-                                                            suffixText: showEdges ? 'MIL' : '',
+                                                          decoration:
+                                                              InputDecoration(
+                                                            labelText:
+                                                                'Leading Edge',
+                                                            suffixText:
+                                                                showEdges
+                                                                    ? 'MIL'
+                                                                    : '',
                                                             isDense: true,
-                                                            filled: target.selectedLeadType == 'leadingEdge',
-                                                            fillColor: target.selectedLeadType == 'leadingEdge'
-                                                                ? const Color(0xFFFFB300).withValues(alpha: 0.15)
+                                                            filled: target
+                                                                    .selectedLeadType ==
+                                                                'leadingEdge',
+                                                            fillColor: target
+                                                                        .selectedLeadType ==
+                                                                    'leadingEdge'
+                                                                ? const Color(
+                                                                        0xFFFFB300)
+                                                                    .withValues(
+                                                                        alpha:
+                                                                            0.15)
                                                                 : null,
-                                                            border: const OutlineInputBorder(),
-                                                            enabledBorder: OutlineInputBorder(
+                                                            border:
+                                                                const OutlineInputBorder(),
+                                                            enabledBorder:
+                                                                OutlineInputBorder(
                                                               borderSide: BorderSide(
-                                                                  color: target.selectedLeadType == 'leadingEdge'
-                                                                      ? const Color(0xFFFFB300)
-                                                                      : const Color(0xFFFFB300).withValues(alpha: 0.4),
-                                                                  width: target.selectedLeadType == 'leadingEdge' ? 2.0 : 1.0),
+                                                                  color: target
+                                                                              .selectedLeadType ==
+                                                                          'leadingEdge'
+                                                                      ? const Color(
+                                                                          0xFFFFB300)
+                                                                      : const Color(0xFFFFB300).withValues(
+                                                                          alpha:
+                                                                              0.4),
+                                                                  width: target
+                                                                              .selectedLeadType ==
+                                                                          'leadingEdge'
+                                                                      ? 2.0
+                                                                      : 1.0),
                                                             ),
-                                                            labelStyle: const TextStyle(
-                                                                fontSize: 10, color: Color(0xFFFFB300)),
+                                                            labelStyle:
+                                                                const TextStyle(
+                                                                    fontSize:
+                                                                        10,
+                                                                    color: Color(
+                                                                        0xFFFFB300)),
                                                             suffixStyle: const TextStyle(
                                                                 fontSize: 9,
-                                                                fontWeight: FontWeight.bold,
-                                                                color: Color(0xFFFFB300)),
-                                                            contentPadding: const EdgeInsets.symmetric(
-                                                                horizontal: 6, vertical: 6),
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                                color: Color(
+                                                                    0xFFFFB300)),
+                                                            contentPadding:
+                                                                const EdgeInsets
+                                                                    .symmetric(
+                                                                    horizontal:
+                                                                        6,
+                                                                    vertical:
+                                                                        6),
                                                           ),
                                                           child: Text(
-                                                            showEdges ? leadingEdge.toStringAsFixed(2) : '---',
+                                                            showEdges
+                                                                ? leadingEdge
+                                                                    .toStringAsFixed(
+                                                                        2)
+                                                                : '---',
                                                             style: const TextStyle(
                                                                 fontSize: 12,
-                                                                fontWeight: FontWeight.bold,
-                                                                color: Colors.white),
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                                color: Colors
+                                                                    .white),
                                                           ),
                                                         ),
                                                       ),
@@ -2502,45 +2625,95 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                                         onTap: !showEdges
                                                             ? null
                                                             : () {
-                                                                HapticFeedback.lightImpact();
+                                                                HapticFeedback
+                                                                    .lightImpact();
                                                                 setState(() {
-                                                                  target.selectedLeadType = 'trailingEdge';
+                                                                  target.selectedLeadType =
+                                                                      'trailingEdge';
                                                                 });
-                                                                _saveStage(exitScreen: false);
-                                                                context.read<MatchProvider>().syncOnlyDopeToWatch();
+                                                                _saveStage(
+                                                                    exitScreen:
+                                                                        false);
+                                                                context
+                                                                    .read<
+                                                                        MatchProvider>()
+                                                                    .syncOnlyDopeToWatch();
                                                               },
                                                         child: InputDecorator(
-                                                          decoration: InputDecoration(
-                                                            labelText: 'Trailing Edge',
-                                                            suffixText: showEdges ? 'MIL' : '',
+                                                          decoration:
+                                                              InputDecoration(
+                                                            labelText:
+                                                                'Trailing Edge',
+                                                            suffixText:
+                                                                showEdges
+                                                                    ? 'MIL'
+                                                                    : '',
                                                             isDense: true,
-                                                            filled: target.selectedLeadType == 'trailingEdge',
-                                                            fillColor: target.selectedLeadType == 'trailingEdge'
-                                                                ? const Color(0xFFFFB300).withValues(alpha: 0.15)
+                                                            filled: target
+                                                                    .selectedLeadType ==
+                                                                'trailingEdge',
+                                                            fillColor: target
+                                                                        .selectedLeadType ==
+                                                                    'trailingEdge'
+                                                                ? const Color(
+                                                                        0xFFFFB300)
+                                                                    .withValues(
+                                                                        alpha:
+                                                                            0.15)
                                                                 : null,
-                                                            border: const OutlineInputBorder(),
-                                                            enabledBorder: OutlineInputBorder(
+                                                            border:
+                                                                const OutlineInputBorder(),
+                                                            enabledBorder:
+                                                                OutlineInputBorder(
                                                               borderSide: BorderSide(
-                                                                  color: target.selectedLeadType == 'trailingEdge'
-                                                                      ? const Color(0xFFFFB300)
-                                                                      : const Color(0xFFFFB300).withValues(alpha: 0.4),
-                                                                  width: target.selectedLeadType == 'trailingEdge' ? 2.0 : 1.0),
+                                                                  color: target
+                                                                              .selectedLeadType ==
+                                                                          'trailingEdge'
+                                                                      ? const Color(
+                                                                          0xFFFFB300)
+                                                                      : const Color(0xFFFFB300).withValues(
+                                                                          alpha:
+                                                                              0.4),
+                                                                  width: target
+                                                                              .selectedLeadType ==
+                                                                          'trailingEdge'
+                                                                      ? 2.0
+                                                                      : 1.0),
                                                             ),
-                                                            labelStyle: const TextStyle(
-                                                                fontSize: 10, color: Color(0xFFFFB300)),
+                                                            labelStyle:
+                                                                const TextStyle(
+                                                                    fontSize:
+                                                                        10,
+                                                                    color: Color(
+                                                                        0xFFFFB300)),
                                                             suffixStyle: const TextStyle(
                                                                 fontSize: 9,
-                                                                fontWeight: FontWeight.bold,
-                                                                color: Color(0xFFFFB300)),
-                                                            contentPadding: const EdgeInsets.symmetric(
-                                                                horizontal: 6, vertical: 6),
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                                color: Color(
+                                                                    0xFFFFB300)),
+                                                            contentPadding:
+                                                                const EdgeInsets
+                                                                    .symmetric(
+                                                                    horizontal:
+                                                                        6,
+                                                                    vertical:
+                                                                        6),
                                                           ),
                                                           child: Text(
-                                                            showEdges ? trailingEdge.toStringAsFixed(2) : '---',
+                                                            showEdges
+                                                                ? trailingEdge
+                                                                    .toStringAsFixed(
+                                                                        2)
+                                                                : '---',
                                                             style: const TextStyle(
                                                                 fontSize: 12,
-                                                                fontWeight: FontWeight.bold,
-                                                                color: Colors.white),
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                                color: Colors
+                                                                    .white),
                                                           ),
                                                         ),
                                                       ),
@@ -2730,8 +2903,11 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                     },
                     style: () {
                       final isCofFullyMapped = _stage.plannedRoundCount > 0 &&
-                          _stage.shotTargetsSequence.length == _stage.plannedRoundCount;
-                      final cofColor = isCofFullyMapped ? const Color(0xFF007AFF) : const Color(0xFFFFD60A);
+                          _stage.shotTargetsSequence.length ==
+                              _stage.plannedRoundCount;
+                      final cofColor = isCofFullyMapped
+                          ? const Color(0xFF007AFF)
+                          : const Color(0xFFFFD60A);
                       return ElevatedButton.styleFrom(
                         backgroundColor: cofColor.withValues(alpha: 0.1),
                         foregroundColor: cofColor,
@@ -2858,7 +3034,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                           setState(() {});
                         });
                       },
-                      icon: const Icon(Icons.view_column_rounded, color: Color(0xFF007AFF), size: 18),
+                      icon: const Icon(Icons.view_column_rounded,
+                          color: Color(0xFF007AFF), size: 18),
                       label: const Text(
                         'Build Wind Columns',
                         style: TextStyle(
@@ -2960,7 +3137,10 @@ class _StageDetailScreenState extends State<StageDetailScreen>
         if (totalRolls > 0) ...[
           const Text(
             'Firearm Roll Consistency',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white70),
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.white70),
           ),
           const SizedBox(height: 8),
           MatchdayDonutChart(
@@ -2968,9 +3148,18 @@ class _StageDetailScreenState extends State<StageDetailScreen>
             centerLabel: '$totalRolls',
             centerSubLabel: 'SHOTS',
             segments: [
-              ChartSegment(value: rollGreen.toDouble(), color: const Color(0xFF30D158), label: 'Centered (Green)'),
-              ChartSegment(value: rollRed.toDouble(), color: const Color(0xFFFF453A), label: 'Roll Left (Red)'),
-              ChartSegment(value: rollBlue.toDouble(), color: const Color(0xFF0A84FF), label: 'Roll Right (Blue)'),
+              ChartSegment(
+                  value: rollGreen.toDouble(),
+                  color: const Color(0xFF30D158),
+                  label: 'Centered (Green)'),
+              ChartSegment(
+                  value: rollRed.toDouble(),
+                  color: const Color(0xFFFF453A),
+                  label: 'Roll Left (Red)'),
+              ChartSegment(
+                  value: rollBlue.toDouble(),
+                  color: const Color(0xFF0A84FF),
+                  label: 'Roll Right (Blue)'),
             ],
           ),
         ],
@@ -2978,7 +3167,10 @@ class _StageDetailScreenState extends State<StageDetailScreen>
         if (totalStabilities > 0) ...[
           const Text(
             'Firearm Stability Zones',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white70),
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.white70),
           ),
           const SizedBox(height: 8),
           MatchdayDonutChart(
@@ -2986,9 +3178,18 @@ class _StageDetailScreenState extends State<StageDetailScreen>
             centerLabel: '$totalStabilities',
             centerSubLabel: 'SHOTS',
             segments: [
-              ChartSegment(value: stabilityGreen.toDouble(), color: const Color(0xFF30D158), label: 'Excellent (Green)'),
-              ChartSegment(value: stabilityYellow.toDouble(), color: const Color(0xFFFFD60A), label: 'Acceptable (Yellow)'),
-              ChartSegment(value: stabilityRed.toDouble(), color: const Color(0xFFFF453A), label: 'Poor (Red)'),
+              ChartSegment(
+                  value: stabilityGreen.toDouble(),
+                  color: const Color(0xFF30D158),
+                  label: 'Excellent (Green)'),
+              ChartSegment(
+                  value: stabilityYellow.toDouble(),
+                  color: const Color(0xFFFFD60A),
+                  label: 'Acceptable (Yellow)'),
+              ChartSegment(
+                  value: stabilityRed.toDouble(),
+                  color: const Color(0xFFFF453A),
+                  label: 'Poor (Red)'),
             ],
           ),
         ],
@@ -3211,12 +3412,15 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                           style: const TextStyle(
                               fontWeight: FontWeight.bold, fontSize: 14),
                         ),
-                        if (!_isShootTimerRunning && _stage.maxHeartRate > 0) ...[
+                        if (!_isShootTimerRunning &&
+                            _stage.maxHeartRate > 0) ...[
                           const SizedBox(height: 2),
                           Text(
                             'Max: ${_stage.maxHeartRate} BPM',
                             style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 14, color: Colors.redAccent),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                color: Colors.redAccent),
                           ),
                         ],
                         const SizedBox(height: 4),
@@ -3224,7 +3428,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                           _isShootTimerRunning
                               ? 'Live / Max Heart Rate'
                               : 'Heart Rate',
-                          style: const TextStyle(color: Colors.grey, fontSize: 11),
+                          style:
+                              const TextStyle(color: Colors.grey, fontSize: 11),
                         ),
                       ],
                     ),
@@ -3336,10 +3541,12 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                                       children: [
                                         const TextSpan(
                                           text: 'Roll: ',
-                                          style: TextStyle(color: Colors.grey, fontSize: 11),
+                                          style: TextStyle(
+                                              color: Colors.grey, fontSize: 11),
                                         ),
                                         TextSpan(
-                                          text: '${truncatedRoll.toStringAsFixed(1)}° ${truncatedRoll < 0 ? "Left" : "Right"}',
+                                          text:
+                                              '${truncatedRoll.toStringAsFixed(1)}° ${truncatedRoll < 0 ? "Left" : "Right"}',
                                           style: TextStyle(
                                             fontSize: 11,
                                             color: rollColor,
@@ -3588,11 +3795,14 @@ class _StageDetailScreenState extends State<StageDetailScreen>
 
                                         setState(() {
                                           if (result == 'hit') {
-                                            _stage.shotResults[globalShotIdx] = 'miss';
+                                            _stage.shotResults[globalShotIdx] =
+                                                'miss';
                                           } else if (result == 'miss') {
-                                            _stage.shotResults[globalShotIdx] = 'timeOutMiss';
+                                            _stage.shotResults[globalShotIdx] =
+                                                'timeOutMiss';
                                           } else {
-                                            _stage.shotResults[globalShotIdx] = 'hit';
+                                            _stage.shotResults[globalShotIdx] =
+                                                'hit';
                                           }
                                         });
                                       },
@@ -3777,13 +3987,15 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                             Text(
                               'Max: ${_stage.maxHeartRate} BPM',
                               style: const TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 13, color: Colors.redAccent),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: Colors.redAccent),
                             ),
                           ],
                           const SizedBox(height: 4),
                           const Text('Heart Rate',
-                              style: TextStyle(
-                                  color: Colors.grey, fontSize: 9)),
+                              style:
+                                  TextStyle(color: Colors.grey, fontSize: 9)),
                         ],
                       ),
                     ],
@@ -3874,7 +4086,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                       });
                       // Reset environmental confirmation so the next sync
                       // will prompt the user to refresh Kestrel data.
-                      _envConfirmedAt.remove('${widget.matchId}_${_stage.stageNumber}');
+                      _envConfirmedAt
+                          .remove('${widget.matchId}_${_stage.stageNumber}');
                       _saveStage(markAsCompleted: false);
                     },
                     style: OutlinedButton.styleFrom(
@@ -3905,7 +4118,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                         const SnackBar(
                           content: Text(
                             'Please mark all shots as Hit, Miss, or Timeout first.',
-                            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                                color: Colors.black,
+                                fontWeight: FontWeight.bold),
                           ),
                           backgroundColor: Color(0xFFFFD60A),
                         ),
@@ -3913,14 +4128,16 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                       return;
                     }
 
-                    final needsWindPrompt = _stage.status != 'completed' && !_isActualWindageManipulated;
+                    final needsWindPrompt = _stage.status != 'completed' &&
+                        !_isActualWindageManipulated;
 
                     if (needsWindPrompt) {
                       showDialog(
                         context: context,
                         builder: (dialogCtx) => AlertDialog(
                           title: const Text('Confirm Windage Held'),
-                          content: const Text('Do you accept current entered final wind held?'),
+                          content: const Text(
+                              'Do you accept current entered final wind held?'),
                           actions: [
                             TextButton(
                               onPressed: () {
@@ -3933,9 +4150,13 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                               onPressed: () {
                                 HapticFeedback.lightImpact();
                                 Navigator.pop(dialogCtx);
-                                _saveStage(markAsCompleted: _stage.status != 'completed');
+                                _saveStage(
+                                    markAsCompleted:
+                                        _stage.status != 'completed');
                               },
-                              child: const Text('Accept', style: TextStyle(fontWeight: FontWeight.bold)),
+                              child: const Text('Accept',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.bold)),
                             ),
                           ],
                         ),
@@ -6228,30 +6449,38 @@ class _BracketPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0;
 
-    canvas.drawRRect(RRect.fromRectAndRadius(plateRect, const Radius.circular(2)), platePaint);
-    canvas.drawRRect(RRect.fromRectAndRadius(plateRect, const Radius.circular(2)), plateBorderPaint);
+    canvas.drawRRect(
+        RRect.fromRectAndRadius(plateRect, const Radius.circular(2)),
+        platePaint);
+    canvas.drawRRect(
+        RRect.fromRectAndRadius(plateRect, const Radius.circular(2)),
+        plateBorderPaint);
 
     // Left and right edges of the plate (Left is positive, Right is negative in our coordinate space)
     final leftCover = hold + targetWidth / 2;
     final rightCover = hold - targetWidth / 2;
 
     // Draw plate edge labels above
-    _drawText(canvas, formatSigned(rightCover), Offset(center.dx - plateWidth / 2, center.dy - 18), Colors.white38);
-    _drawText(canvas, formatSigned(leftCover), Offset(center.dx + plateWidth / 2, center.dy - 18), Colors.white38);
+    _drawText(canvas, formatSigned(rightCover),
+        Offset(center.dx - plateWidth / 2, center.dy - 18), Colors.white38);
+    _drawText(canvas, formatSigned(leftCover),
+        Offset(center.dx + plateWidth / 2, center.dy - 18), Colors.white38);
 
     // 2. Draw Center Line Reference (Target Center)
     final centerPaint = Paint()
       ..color = Colors.white24
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0;
-    canvas.drawLine(Offset(center.dx, center.dy - 8), Offset(center.dx, center.dy + 8), centerPaint);
+    canvas.drawLine(Offset(center.dx, center.dy - 8),
+        Offset(center.dx, center.dy + 8), centerPaint);
 
     // 3. Draw Wind Bracket (Lull to Gust range)
     // w1 and w2 position mapping relative to center (hold)
     final w1Pos = center.dx + (w1 - hold) * scale;
     final w2Pos = center.dx + (w2 - hold) * scale;
 
-    final bracketColor = isSafe ? const Color(0xFF00E676) : const Color(0xFFFF9F0A);
+    final bracketColor =
+        isSafe ? const Color(0xFF00E676) : const Color(0xFFFF9F0A);
 
     final linePaint = Paint()
       ..color = bracketColor
@@ -6262,7 +6491,8 @@ class _BracketPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     // Draw connecting line
-    canvas.drawLine(Offset(w1Pos, center.dy), Offset(w2Pos, center.dy), linePaint);
+    canvas.drawLine(
+        Offset(w1Pos, center.dy), Offset(w2Pos, center.dy), linePaint);
 
     // Draw dots at lull & gust ends
     canvas.drawCircle(Offset(w1Pos, center.dy), 3.5, dotPaint);
@@ -6285,17 +6515,24 @@ class _BracketPainter extends CustomPainter {
     final redColor = const Color(0xFFFF3B30);
 
     // Paint margin numbers beside the dots (with plus prefix for positive, minus for negative)
-    final leftMarginText = '${leftMargin >= 0 ? "+" : ""}${leftMargin.toStringAsFixed(2)}';
+    final leftMarginText =
+        '${leftMargin >= 0 ? "+" : ""}${leftMargin.toStringAsFixed(2)}';
     final leftMarginColor = leftMargin >= 0 ? greenColor : redColor;
-    _drawTextAligned(canvas, leftMarginText, leftX, center.dy, leftMarginColor, isLeft: true);
+    _drawTextAligned(canvas, leftMarginText, leftX, center.dy, leftMarginColor,
+        isLeft: true);
 
-    final rightMarginText = '${rightMargin >= 0 ? "+" : ""}${rightMargin.toStringAsFixed(2)}';
+    final rightMarginText =
+        '${rightMargin >= 0 ? "+" : ""}${rightMargin.toStringAsFixed(2)}';
     final rightMarginColor = rightMargin >= 0 ? greenColor : redColor;
-    _drawTextAligned(canvas, rightMarginText, rightX, center.dy, rightMarginColor, isLeft: false);
+    _drawTextAligned(
+        canvas, rightMarginText, rightX, center.dy, rightMarginColor,
+        isLeft: false);
 
     // Paint hold value below the dots
-    _drawText(canvas, formatSigned(leftHold), Offset(leftX, center.dy + 8), leftMarginColor);
-    _drawText(canvas, formatSigned(rightHold), Offset(rightX, center.dy + 8), rightMarginColor);
+    _drawText(canvas, formatSigned(leftHold), Offset(leftX, center.dy + 8),
+        leftMarginColor);
+    _drawText(canvas, formatSigned(rightHold), Offset(rightX, center.dy + 8),
+        rightMarginColor);
 
     // Draw a small indicator for center hold
     canvas.drawCircle(center, 1.5, Paint()..color = Colors.white);
@@ -6305,32 +6542,34 @@ class _BracketPainter extends CustomPainter {
     final textPainter = TextPainter(
       text: TextSpan(
         text: text,
-        style: TextStyle(color: color, fontSize: 8, fontWeight: FontWeight.bold),
+        style:
+            TextStyle(color: color, fontSize: 8, fontWeight: FontWeight.bold),
       ),
       textDirection: TextDirection.ltr,
     );
     textPainter.layout();
-    
+
     // Center the label horizontally on the offset position
     final offset = Offset(position.dx - textPainter.width / 2, position.dy);
     textPainter.paint(canvas, offset);
   }
 
-  void _drawTextAligned(Canvas canvas, String text, double x, double y, Color color, {required bool isLeft}) {
+  void _drawTextAligned(
+      Canvas canvas, String text, double x, double y, Color color,
+      {required bool isLeft}) {
     final textPainter = TextPainter(
       text: TextSpan(
         text: text,
-        style: TextStyle(color: color, fontSize: 8, fontWeight: FontWeight.bold),
+        style:
+            TextStyle(color: color, fontSize: 8, fontWeight: FontWeight.bold),
       ),
       textDirection: TextDirection.ltr,
     );
     textPainter.layout();
-    
-    final double dx = isLeft 
-        ? x - 6 - textPainter.width 
-        : x + 6;
+
+    final double dx = isLeft ? x - 6 - textPainter.width : x + 6;
     final double dy = y - textPainter.height / 2;
-    
+
     textPainter.paint(canvas, Offset(dx, dy));
   }
 
