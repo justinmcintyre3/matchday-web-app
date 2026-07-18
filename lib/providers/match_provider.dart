@@ -440,7 +440,9 @@ class MatchProvider with ChangeNotifier {
           if (i >= 1 &&
               stage.targetArrays[0].elevationValue != null &&
               array.elevationValue != null) {
-            final diff = array.elevationValue! - stage.targetArrays[0].elevationValue!;
+            final v1 = double.parse(stage.targetArrays[0].elevationValue!.toStringAsFixed(2));
+            final v2 = double.parse(array.elevationValue!.toStringAsFixed(2));
+            final diff = v2 - v1;
             final dir = diff < 0 ? 'U' : 'D';
             holdoverVal = '${diff.abs().toStringAsFixed(2)} $dir';
           }
@@ -523,7 +525,9 @@ class MatchProvider with ChangeNotifier {
         if (i >= 1 &&
             stage.targetArrays[0].elevationValue != null &&
             array.elevationValue != null) {
-          final diff = array.elevationValue! - stage.targetArrays[0].elevationValue!;
+          final v1 = double.parse(stage.targetArrays[0].elevationValue!.toStringAsFixed(2));
+          final v2 = double.parse(array.elevationValue!.toStringAsFixed(2));
+          final diff = v2 - v1;
           final dir = diff < 0 ? 'U' : 'D';
           holdoverVal = '${diff.abs().toStringAsFixed(2)} $dir';
         }

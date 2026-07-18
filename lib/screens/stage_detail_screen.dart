@@ -1072,8 +1072,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                               _stage.targetArrays[0].elevationValue != null &&
                               array.elevationValue != null)
                             () {
-                              final diff = array.elevationValue! -
-                                  _stage.targetArrays[0].elevationValue!;
+                              final v1 = double.parse(_stage.targetArrays[0].elevationValue!.toStringAsFixed(2));
+                              final v2 = double.parse(array.elevationValue!.toStringAsFixed(2));
+                              final diff = v2 - v1;
                               final dir = diff < 0 ? 'U' : 'D';
                               return Text(
                                 'HO: ${diff.abs().toStringAsFixed(2)} $dir',
