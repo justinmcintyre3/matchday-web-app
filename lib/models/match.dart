@@ -11,6 +11,9 @@ class Match {
   final int? winnerHits;
   final int? position;
   final String? matchNotes;
+  final String matchType;     // 'match' or 'training'
+  final String matchSubtype;  // e.g. 'PRS', 'Club Match', 'Live Fire'
+  final bool isArchived;
   final List<String> deletedMentalTags;
   final List<String> deletedSkillsTags;
   final List<String> deletedEnvTags;
@@ -31,6 +34,9 @@ class Match {
     this.winnerHits,
     this.position,
     this.matchNotes,
+    this.matchType = 'match',
+    this.matchSubtype = '',
+    this.isArchived = false,
     List<String>? deletedMentalTags,
     List<String>? deletedSkillsTags,
     List<String>? deletedEnvTags,
@@ -78,6 +84,9 @@ class Match {
       'winnerHits': winnerHits,
       'position': position,
       'matchNotes': matchNotes,
+      'matchType': matchType,
+      'matchSubtype': matchSubtype,
+      'isArchived': isArchived,
       'deletedMentalTags': deletedMentalTags,
       'deletedSkillsTags': deletedSkillsTags,
       'deletedEnvTags': deletedEnvTags,
@@ -102,6 +111,9 @@ class Match {
       winnerHits: map['winnerHits']?.toInt(),
       position: map['position']?.toInt(),
       matchNotes: map['matchNotes'],
+      matchType: map['matchType'] ?? 'match',
+      matchSubtype: map['matchSubtype'] ?? '',
+      isArchived: map['isArchived'] ?? false,
       deletedMentalTags:
           List<String>.from(map['deletedMentalTags'] ?? const []),
       deletedSkillsTags:

@@ -10,6 +10,15 @@ class MatchProvider with ChangeNotifier {
   String? _activeMatchId;
   int? _activeStageIndex;
 
+  // Global subtype lists (not per-match)
+  List<String> _matchSubtypes = [];
+  List<String> _trainingSubtypes = [];
+  List<String> get matchSubtypes => List.unmodifiable(_matchSubtypes);
+  List<String> get trainingSubtypes => List.unmodifiable(_trainingSubtypes);
+
+  static const _kDefaultMatchSubtypes = ['PRS', 'NRL', 'Club Match', 'Qualifier'];
+  static const _kDefaultTrainingSubtypes = ['Live Fire', 'Dryfire', 'Positional'];
+
   final _watchConnectivity = WatchConnectivity();
   WatchConnectivity get watchConnectivity => _watchConnectivity;
   bool _isWatchConnected = false;
@@ -20,6 +29,7 @@ class MatchProvider with ChangeNotifier {
 
   MatchProvider(this._box) {
     _loadMatches();
+    _loadSubtypes();
     _initWatchConnectivity();
   }
 
@@ -86,6 +96,83 @@ class MatchProvider with ChangeNotifier {
       _box.delete('active_stage_index');
     }
     _saveMatches();
+    notifyListeners();
+  }
+
+  void archiveMatch(String matchId) {
+    final idx = _matches.indexWhere((m) => m.id == matchId);
+    if (idx == -1) return;
+    final m = _matches[idx];
+    _matches[idx] = Match(
+      id: m.id, name: m.name, location: m.location, date: m.date,
+      numStages: m.numStages, shotsPerStage: m.shotsPerStage, stages: m.stages,
+      winnerHits: m.winnerHits, position: m.position, matchNotes: m.matchNotes,
+      matchType: m.matchType, matchSubtype: m.matchSubtype, isArchived: true,
+      deletedMentalTags: m.deletedMentalTags, deletedSkillsTags: m.deletedSkillsTags,
+      deletedEnvTags: m.deletedEnvTags, customMentalTags: m.customMentalTags,
+      customSkillsTags: m.customSkillsTags, customEnvTags: m.customEnvTags,
+      customTargetTypes: m.customTargetTypes, deletedTargetTypes: m.deletedTargetTypes,
+    );
+    _saveMatches();
+    notifyListeners();
+  }
+
+  void unarchiveMatch(String matchId) {
+    final idx = _matches.indexWhere((m) => m.id == matchId);
+    if (idx == -1) return;
+    final m = _matches[idx];
+    _matches[idx] = Match(
+      id: m.id, name: m.name, location: m.location, date: m.date,
+      numStages: m.numStages, shotsPerStage: m.shotsPerStage, stages: m.stages,
+      winnerHits: m.winnerHits, position: m.position, matchNotes: m.matchNotes,
+      matchType: m.matchType, matchSubtype: m.matchSubtype, isArchived: false,
+      deletedMentalTags: m.deletedMentalTags, deletedSkillsTags: m.deletedSkillsTags,
+      deletedEnvTags: m.deletedEnvTags, customMentalTags: m.customMentalTags,
+      customSkillsTags: m.customSkillsTags, customEnvTags: m.customEnvTags,
+      customTargetTypes: m.customTargetTypes, deletedTargetTypes: m.deletedTargetTypes,
+    );
+    _saveMatches();
+    notifyListeners();
+  }
+
+  // ── Subtype management ─────────────────────────────────────────────────────
+
+  void _loadSubtypes() {
+    final stored = _box.get('match_subtypes') as List<dynamic>?;
+    final storedTraining = _box.get('training_subtypes') as List<dynamic>?;
+    _matchSubtypes = stored != null
+        ? List<String>.from(stored)
+        : List<String>.from(_kDefaultMatchSubtypes);
+    _trainingSubtypes = storedTraining != null
+        ? List<String>.from(storedTraining)
+        : List<String>.from(_kDefaultTrainingSubtypes);
+    _saveSubtypes();
+  }
+
+  void _saveSubtypes() {
+    _box.put('match_subtypes', _matchSubtypes);
+    _box.put('training_subtypes', _trainingSubtypes);
+  }
+
+  void addSubtype(String subtype, String forType) {
+    final trimmed = subtype.trim();
+    if (trimmed.isEmpty) return;
+    if (forType == 'match' && !_matchSubtypes.contains(trimmed)) {
+      _matchSubtypes.add(trimmed);
+    } else if (forType == 'training' && !_trainingSubtypes.contains(trimmed)) {
+      _trainingSubtypes.add(trimmed);
+    }
+    _saveSubtypes();
+    notifyListeners();
+  }
+
+  void removeSubtype(String subtype, String forType) {
+    if (forType == 'match') {
+      _matchSubtypes.remove(subtype);
+    } else {
+      _trainingSubtypes.remove(subtype);
+    }
+    _saveSubtypes();
     notifyListeners();
   }
 
@@ -254,7 +341,14 @@ class MatchProvider with ChangeNotifier {
     }
   }
 
-  void updateMatchBasicInfo(String matchId, String name, String location, DateTime date) {
+  void updateMatchBasicInfo(
+    String matchId,
+    String name,
+    String location,
+    DateTime date, {
+    String? matchType,
+    String? matchSubtype,
+  }) {
     final matchIndex = _matches.indexWhere((m) => m.id == matchId);
     if (matchIndex != -1) {
       final match = _matches[matchIndex];
@@ -269,6 +363,9 @@ class MatchProvider with ChangeNotifier {
         winnerHits: match.winnerHits,
         position: match.position,
         matchNotes: match.matchNotes,
+        matchType: matchType ?? match.matchType,
+        matchSubtype: matchSubtype ?? match.matchSubtype,
+        isArchived: match.isArchived,
         deletedMentalTags: match.deletedMentalTags,
         deletedSkillsTags: match.deletedSkillsTags,
         deletedEnvTags: match.deletedEnvTags,
