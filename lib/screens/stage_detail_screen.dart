@@ -503,6 +503,16 @@ class _StageDetailScreenState extends State<StageDetailScreen>
             _isShootTimerRunning = true;
           });
 
+          // Swipe watch to first target array in COF at the beginning of the timer
+          if (mounted && _stage.shotTargetsSequence.isNotEmpty) {
+            final firstKey = _stage.shotTargetsSequence[0];
+            final parts = firstKey.split('_');
+            if (parts.length == 2) {
+              final int firstArrayIdx = int.parse(parts[0]);
+              context.read<MatchProvider>().sendSwipeToWatchArray(firstArrayIdx);
+            }
+          }
+
           final sgPulseProvider = context.read<SgPulseProvider>();
           _shotSubscription = sgPulseProvider.shotDetectedStream.listen((_) {
             if (_isShootTimerRunning && _currentShootTimeMs != null) {
@@ -516,6 +526,24 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                 _stage.shotRolls.add(currentRoll);
                 _stage.shotStabilities.add(currentStability);
               });
+
+              // Auto-swipe watch card to next target array if target array changes in COF
+              final int shotsTaken = _stage.shotTimes.length;
+              if (shotsTaken < _stage.shotTargetsSequence.length) {
+                final currentKey = _stage.shotTargetsSequence[shotsTaken - 1];
+                final nextKey = _stage.shotTargetsSequence[shotsTaken];
+                final currentParts = currentKey.split('_');
+                final nextParts = nextKey.split('_');
+                if (currentParts.length == 2 && nextParts.length == 2) {
+                  final int currentArrayIdx = int.parse(currentParts[0]);
+                  final int nextArrayIdx = int.parse(nextParts[0]);
+                  if (nextArrayIdx != currentArrayIdx) {
+                    if (mounted) {
+                      context.read<MatchProvider>().sendSwipeToWatchArray(nextArrayIdx);
+                    }
+                  }
+                }
+              }
 
               // Auto scroll to bottom
               WidgetsBinding.instance.addPostFrameCallback((_) {

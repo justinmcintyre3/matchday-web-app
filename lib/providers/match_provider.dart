@@ -723,6 +723,21 @@ class MatchProvider with ChangeNotifier {
     }
   }
 
+  Future<void> sendSwipeToWatchArray(int arrayIndex) async {
+    try {
+      final isSupported = await _watchConnectivity.isSupported;
+      if (!isSupported) return;
+
+      await _watchConnectivity.sendMessage({
+        'type': 'swipe_to_array',
+        'arrayIndex': arrayIndex,
+      });
+      debugPrint('Sent swipe_to_array command to watch for index: $arrayIndex');
+    } catch (e) {
+      debugPrint('Error sending swipe_to_array to watch: $e');
+    }
+  }
+
   void _initWatchConnectivity() {
     void handleIncoming(Map<String, dynamic> message) {
       debugPrint('Incoming watch message: $message');
