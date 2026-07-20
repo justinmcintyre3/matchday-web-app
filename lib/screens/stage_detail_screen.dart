@@ -1104,12 +1104,44 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                               final v2 = double.parse(array.elevationValue!.toStringAsFixed(2));
                               final diff = v2 - v1;
                               final dir = diff < 0 ? 'U' : 'D';
-                              return Text(
-                                'HO: ${diff.abs().toStringAsFixed(2)} $dir',
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFFFF9500),
+                              final isSelected = array.isHoldoverSelected;
+                              return GestureDetector(
+                                onTap: () {
+                                  HapticFeedback.lightImpact();
+                                  setState(() {
+                                    array.isHoldoverSelected = !array.isHoldoverSelected;
+                                  });
+                                  _saveStage(exitScreen: false);
+                                  context
+                                      .read<MatchProvider>()
+                                      .syncOnlyDopeToWatch();
+                                },
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? const Color(0xFFFF9500).withValues(alpha: 0.15)
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? const Color(0xFFFF9500)
+                                          : const Color(0xFFFF9500).withValues(alpha: 0.3),
+                                      width: isSelected ? 1.5 : 1.0,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    'HO: ${diff.abs().toStringAsFixed(2)} $dir',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: isSelected
+                                          ? const Color(0xFFFF9500)
+                                          : const Color(0xFFFF9500).withValues(alpha: 0.5),
+                                    ),
+                                  ),
                                 ),
                               );
                             }(),

@@ -482,6 +482,7 @@ class TargetArray {
   double? windage1Value;
   double? windage2Value;
   double? leadValue;
+  bool isHoldoverSelected;
 
   /// 0–23 clock slots: 0 = 12:00, 1 = 12:30, 2 = 1:00, … (15° steps).
   static int migrateWindClockSlot(int value) {
@@ -558,6 +559,7 @@ class TargetArray {
     this.windage1Value,
     this.windage2Value,
     this.leadValue,
+    this.isHoldoverSelected = false,
   });
 
   Map<String, dynamic> toMap() {
@@ -577,6 +579,7 @@ class TargetArray {
       'windage1Value': windage1Value,
       'windage2Value': windage2Value,
       'leadValue': leadValue,
+      'isHoldoverSelected': isHoldoverSelected,
     };
   }
 
@@ -603,6 +606,7 @@ class TargetArray {
       windage1Value: (map['windage1Value'] as num?)?.toDouble(),
       windage2Value: (map['windage2Value'] as num?)?.toDouble(),
       leadValue: (map['leadValue'] as num?)?.toDouble(),
+      isHoldoverSelected: map['isHoldoverSelected'] as bool? ?? false,
     );
   }
 }

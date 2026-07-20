@@ -615,6 +615,7 @@ class MatchProvider with ChangeNotifier {
           final array = stage.targetArrays[i];
           String holdoverVal = '';
           if (i >= 1 &&
+              array.isHoldoverSelected &&
               stage.targetArrays[0].elevationValue != null &&
               array.elevationValue != null) {
             final v1 = double.parse(stage.targetArrays[0].elevationValue!.toStringAsFixed(2));
@@ -700,6 +701,7 @@ class MatchProvider with ChangeNotifier {
         final array = stage.targetArrays[i];
         String holdoverVal = '';
         if (i >= 1 &&
+            array.isHoldoverSelected &&
             stage.targetArrays[0].elevationValue != null &&
             array.elevationValue != null) {
           final v1 = double.parse(stage.targetArrays[0].elevationValue!.toStringAsFixed(2));
