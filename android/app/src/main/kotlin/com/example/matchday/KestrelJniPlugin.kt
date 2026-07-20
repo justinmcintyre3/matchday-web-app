@@ -302,12 +302,15 @@ class KestrelJniPlugin(private val channel: MethodChannel, private val context: 
         lead: Float,
         targetNumber: Int,
         solutionId: Int = targetNumber,
-        velocity: Float = 0f,
-        energy: Float = 0f,
+        velocity: Float = 0f,  // received in m/s from JNI native layer
+        energy: Float = 0f,    // received in Joules from JNI native layer
         tof: Float = 0f,
         spinD: Float = 0f,
         targetRange: Float = 0f,
     ): Map<String, Any> {
+        // Convert metric JNI values to imperial for display (matching Kestrel device display)
+        val velocityFps = velocity / 0.3048f   // m/s → FPS
+        val energyFtLb  = energy  / 1.35582f   // Joules → ft-lb
         return mapOf(
             "elevation" to elevation,
             "windage1" to windage1,
@@ -315,8 +318,8 @@ class KestrelJniPlugin(private val channel: MethodChannel, private val context: 
             "lead" to lead,
             "targetNumber" to targetNumber,
             "solutionId" to solutionId,
-            "velocity" to velocity,
-            "energy" to energy,
+            "velocity" to velocityFps,
+            "energy" to energyFtLb,
             "tof" to tof,
             "spinD" to spinD,
             "targetRange" to targetRange,
