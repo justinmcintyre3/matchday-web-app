@@ -791,16 +791,17 @@ class MatchProvider with ChangeNotifier {
     }
   }
 
-  Future<void> syncRangeCardToWatch(List<Map<String, dynamic>> rangeCard) async {
+  Future<void> syncRangeCardToWatch(List<Map<String, dynamic>> rangeCard, {String? activeGunName}) async {
     try {
       final isSupported = await _watchConnectivity.isSupported;
       if (!isSupported) return;
 
       await _watchConnectivity.sendMessage({
         'type': 'sync_range_card',
+        'activeGunName': activeGunName,
         'rangeCard': rangeCard,
       });
-      debugPrint('Synced Range Card to watch: $rangeCard');
+      debugPrint('Synced Range Card to watch (gun: $activeGunName): $rangeCard');
     } catch (e) {
       debugPrint('Error syncing Range Card to watch: $e');
     }

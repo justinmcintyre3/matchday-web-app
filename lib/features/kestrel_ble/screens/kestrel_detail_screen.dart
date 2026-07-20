@@ -1123,7 +1123,8 @@ class _RangeCardGenerationCardState extends State<_RangeCardGenerationCard> {
       };
     }).toList();
 
-    await matchProvider.syncRangeCardToWatch(watchRows);
+    final activeGunName = _savedCard!['activeGunName'] as String?;
+    await matchProvider.syncRangeCardToWatch(watchRows, activeGunName: activeGunName);
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
