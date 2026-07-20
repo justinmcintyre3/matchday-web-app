@@ -8,7 +8,7 @@ import 'stage_detail_screen.dart';
 import 'match_summary_screen.dart';
 import '../widgets/global_app_bar.dart';
 
-class MatchDetailScreen extends StatelessWidget {
+class MatchDetailScreen extends StatefulWidget {
   final String matchId;
 
   const MatchDetailScreen({
@@ -17,11 +17,26 @@ class MatchDetailScreen extends StatelessWidget {
   });
 
   @override
+  State<MatchDetailScreen> createState() => _MatchDetailScreenState();
+}
+
+class _MatchDetailScreenState extends State<MatchDetailScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<MatchProvider>().launchWatchAppIfNeeded();
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Consumer<MatchProvider>(
       builder: (context, provider, child) {
         final match = provider.matches.firstWhere(
-          (m) => m.id == matchId,
+          (m) => m.id == widget.matchId,
           orElse: () => Match(
             id: '',
             name: 'Not Found',

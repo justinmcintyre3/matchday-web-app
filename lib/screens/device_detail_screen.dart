@@ -176,11 +176,49 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
           const SizedBox(height: 20),
 
           if (widget.deviceName == 'Matchday Watch') ...[
-            // -- SETTINGS section header
+            // -- APP BEHAVIOR section header
             Padding(
               padding: const EdgeInsets.only(left: 4, bottom: 10),
               child: Text(
-                'SETTINGS',
+                'APP BEHAVIOR',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white.withValues(alpha: 0.4),
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ),
+
+            // -- App Behavior card
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E1E24),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Consumer<MatchProvider>(
+                builder: (context, provider, child) {
+                  return Column(
+                    children: [
+                      _SettingSwitchRow(
+                        label: 'Auto Launch Watch App',
+                        value: provider.watchAutoLaunch,
+                        onChanged: (value) => provider.updateWatchSetting('autoLaunch', value),
+                        showDivider: false,
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // -- WATCH OPTIONS section header
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 10),
+              child: Text(
+                'WATCH OPTIONS',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -190,7 +228,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
               ),
             ),
             
-            // -- Settings card
+            // -- Watch Options card
             Container(
               decoration: BoxDecoration(
                 color: const Color(0xFF1E1E24),

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:watch_connectivity/watch_connectivity.dart';
 import '../models/match.dart';
@@ -514,6 +515,7 @@ class MatchProvider with ChangeNotifier {
   // ── Watch Settings (2-Way Sync) ──────────────────────────────────────────
   bool get watchAutoDope => _box.get('watch_autoDope') ?? true;
   bool get watchReadAloud => _box.get('watch_readAloud') ?? true;
+  bool get watchAutoLaunch => _box.get('watch_autoLaunch') ?? true;
   String get watchBeepPitch => _box.get('watch_beepPitch') ?? 'Med';
   bool get watchFiftyCentBeep => _box.get('watch_fiftyCentBeep') ?? true;
   bool get watchFortySecondsRemaining => _box.get('watch_fortySecondsRemaining') ?? true;
@@ -555,6 +557,7 @@ class MatchProvider with ChangeNotifier {
           'settings': {
             'autoDope': watchAutoDope,
             'readAloud': watchReadAloud,
+            'autoLaunch': watchAutoLaunch,
             'beepPitch': watchBeepPitch,
             'fiftyCentBeep': watchFiftyCentBeep,
             'fortySecondsRemaining': watchFortySecondsRemaining,
@@ -570,6 +573,21 @@ class MatchProvider with ChangeNotifier {
       }
     } catch (e) {
       debugPrint('[Phone] Error syncing all settings to watch: $e');
+    }
+  }
+
+  static const _wearChannel = MethodChannel('com.matchday/wear_os');
+
+  Future<void> launchWatchAppIfNeeded() async {
+    if (!watchAutoLaunch) {
+      debugPrint('[Phone] Auto-launch is disabled.');
+      return;
+    }
+    try {
+      debugPrint('[Phone] Triggering auto-launch for watch app.');
+      await _wearChannel.invokeMethod('launchWatchApp');
+    } catch (e) {
+      debugPrint('[Phone] Error launching watch app: $e');
     }
   }
 

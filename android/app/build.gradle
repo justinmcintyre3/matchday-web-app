@@ -51,6 +51,8 @@ android {
 
 dependencies {
     implementation 'androidx.multidex:multidex:2.0.1'
+    implementation 'com.google.android.gms:play-services-wearable:18.1.0'
+    implementation 'androidx.wear:wear-remote-interactions:1.0.0'
 }
 
 flutter {
