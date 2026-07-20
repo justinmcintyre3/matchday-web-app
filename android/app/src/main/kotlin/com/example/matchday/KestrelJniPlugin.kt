@@ -170,6 +170,33 @@ class KestrelJniPlugin(private val channel: MethodChannel, private val context: 
                 flushTxBytes()
                 result.success(null)
             }
+            "sendCmdSetActiveGunIdx" -> {
+                val index = call.argument<Int>("index") ?: 0
+                kestrel.sendCmdSetActiveGunIdx(index)
+                kestrel.updateComs()
+                flushTxBytes()
+                result.success(null)
+            }
+            "sendCmdGetGun" -> {
+                val index = call.argument<Int>("index") ?: 0
+                val format = call.argument<Int>("format") ?: 0
+                val version = call.argument<Int>("version") ?: 0
+                kestrel.sendCmdGetGun(index, format, version)
+                kestrel.updateComs()
+                flushTxBytes()
+                result.success(null)
+            }
+            "sendCmdGetRemoteDisplayData" -> {
+                val gunFormat = call.argument<Int>("gunFormat") ?: 0
+                if (gunFormat == 2) {
+                    kestrel.sendGetRemoteDisplayDataHornady()
+                } else {
+                    kestrel.sendGetRemoteDisplayDataAb()
+                }
+                kestrel.updateComs()
+                flushTxBytes()
+                result.success(null)
+            }
             else -> result.notImplemented()
         }
     }
@@ -220,6 +247,54 @@ class KestrelJniPlugin(private val channel: MethodChannel, private val context: 
         }
     }
 
+    private fun extractProfileNameFromRemoteDisplay(profileObj: Any?): String {
+        var name = ""
+        if (profileObj != null) {
+            try {
+                val lMethod = profileObj.javaClass.getMethod("l")
+                name = lMethod.invoke(profileObj) as? String ?: ""
+            } catch (e: Exception) {
+                try {
+                    val field = profileObj.javaClass.getField("profileName")
+                    name = field.get(profileObj) as? String ?: ""
+                } catch (e2: Exception) {}
+            }
+        }
+        if (name.isEmpty()) {
+            name = extractProfileNameFromStBytes()
+        }
+        return name.trim()
+    }
+
+    private fun extractProfileNameFromStBytes(): String {
+        return try {
+            val stProfileBytes = kestrel.getSTProfileName()
+            if (stProfileBytes != null && stProfileBytes.isNotEmpty()) {
+                val s = String(stProfileBytes).trim()
+                if (s.isNotEmpty() && s != "---" && s.all { it >= ' ' && it <= '~' }) {
+                    s
+                } else {
+                    ""
+                }
+            } else {
+                ""
+            }
+        } catch (e: Exception) {
+            ""
+        }
+    }
+
+    private fun emitActiveGunProfile(name: String, index: Int = 0) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty() || trimmed == "---") return
+        mainHandler.post {
+            channel.invokeMethod("onActiveGunProfileReceived", mapOf(
+                "index" to index,
+                "name" to trimmed,
+            ))
+        }
+    }
+
     private fun solutionMap(
         elevation: Float,
         windage1: Float,
@@ -227,6 +302,11 @@ class KestrelJniPlugin(private val channel: MethodChannel, private val context: 
         lead: Float,
         targetNumber: Int,
         solutionId: Int = targetNumber,
+        velocity: Float = 0f,
+        energy: Float = 0f,
+        tof: Float = 0f,
+        spinD: Float = 0f,
+        targetRange: Float = 0f,
     ): Map<String, Any> {
         return mapOf(
             "elevation" to elevation,
@@ -235,6 +315,11 @@ class KestrelJniPlugin(private val channel: MethodChannel, private val context: 
             "lead" to lead,
             "targetNumber" to targetNumber,
             "solutionId" to solutionId,
+            "velocity" to velocity,
+            "energy" to energy,
+            "tof" to tof,
+            "spinD" to spinD,
+            "targetRange" to targetRange,
         )
     }
 
@@ -255,7 +340,14 @@ class KestrelJniPlugin(private val channel: MethodChannel, private val context: 
     }
 
     override fun A(z4: Boolean, i2: Int, i4: Int, i5: Int, iArr: IntArray?) {
-        invokeFlutter("onGunTransferSettingsReceived", z4)
+        mainHandler.post {
+            channel.invokeMethod("onGunTransferSettingsReceived", mapOf(
+                "success" to z4,
+                "activeGunIdx" to i2,
+                "gunFormat" to i4,
+                "gunVersion" to i5
+            ))
+        }
     }
 
     override fun B(str: String?) {
@@ -296,8 +388,88 @@ class KestrelJniPlugin(private val channel: MethodChannel, private val context: 
         ))
     }
 
-    override fun S(z4: Boolean, pVar: Any?) {}
-    override fun U(i2: Int, d4: Double, bVar: Any?) {}
+    override fun S(z4: Boolean, pVar: Any?) {
+        val name = extractProfileNameFromRemoteDisplay(pVar)
+        android.util.Log.d("NK-JNI", "S callback: extracted name='$name'")
+        if (z4) {
+            emitActiveGunProfile(name)
+        }
+    }
+    override fun U(i2: Int, d4: Double, bVar: Any?) {
+        var name = ""
+        val rx = kestrel.receivedGun
+        val rxAb = kestrel.getAbProtoReceivedGun()
+        val stProfileBytes = kestrel.getSTProfileName()
+
+        if (bVar != null) {
+            try {
+                val field = bVar.javaClass.getField("pro")
+                name = field.get(bVar) as? String ?: ""
+            } catch (e: Exception) {
+                try {
+                    val kMethod = bVar.javaClass.getMethod("k")
+                    val json = kMethod.invoke(bVar) as? String ?: ""
+                    val matcher = java.util.regex.Pattern.compile("\"pro\"\\s*:\\s*\"([^\"]+)\"").matcher(json)
+                    if (matcher.find()) {
+                        name = matcher.group(1) ?: ""
+                    }
+                } catch (e2: Exception) {
+                    try {
+                        for (f in bVar.javaClass.fields) {
+                            if (f.type == String::class.java) {
+                                val s = f.get(bVar) as? String
+                                if (s != null && s.isNotEmpty() && s.length <= 12 && !s.contains("{") && !s.contains("}")) {
+                                    name = s
+                                    break
+                                }
+                            }
+                        }
+                    } catch (e3: Exception) {}
+                }
+            }
+        }
+        if (name.isEmpty()) {
+            try {
+                if (rx != null && rx.size >= 14) {
+                    val bArr = ByteArray(12)
+                    System.arraycopy(rx, 2, bArr, 0, 12)
+                    val s = String(bArr).trim()
+                    if (s.isNotEmpty() && s.all { it >= ' ' && it <= '~' }) {
+                        name = s
+                    }
+                }
+            } catch (e: Exception) {}
+        }
+        if (name.isEmpty()) {
+            try {
+                if (rxAb != null && rxAb.size >= 14) {
+                    val bArr = ByteArray(12)
+                    System.arraycopy(rxAb, 2, bArr, 0, 12)
+                    val s = String(bArr).trim()
+                    if (s.isNotEmpty() && s.all { it >= ' ' && it <= '~' }) {
+                        name = s
+                    }
+                }
+            } catch (e: Exception) {}
+        }
+        if (name.isEmpty()) {
+            try {
+                if (stProfileBytes != null && stProfileBytes.isNotEmpty()) {
+                    val s = String(stProfileBytes).trim()
+                    if (s.isNotEmpty() && s != "---" && s.all { it >= ' ' && it <= '~' }) {
+                        name = s
+                    }
+                }
+            } catch (e: Exception) {}
+        }
+        android.util.Log.d("NK-JNI", "U callback: extracted name='$name' for index=$i2")
+        mainHandler.post {
+            channel.invokeMethod("onActiveGunProfileReceived", mapOf(
+                "index" to i2,
+                "name" to name.trim()
+            ))
+        }
+    }
     override fun W(f4: Float, f5: Float) {}
 
     override fun X(
@@ -334,8 +506,105 @@ class KestrelJniPlugin(private val channel: MethodChannel, private val context: 
     }
 
     override fun f(z4: Boolean) {}
-    override fun g0(iVar: Any?) {}
-    override fun i(z4: Boolean, qVar: Any?) {}
+    override fun g0(iVar: Any?) {
+        var name = ""
+        val rx = kestrel.receivedGun
+        val rxAb = kestrel.getAbProtoReceivedGun()
+        val stProfileBytes = kestrel.getSTProfileName()
+
+        android.util.Log.d("NK-JNI", "g0 callback: iVar=$iVar, iVarClass=${iVar?.javaClass?.name}")
+        if (iVar != null) {
+            try {
+                val kMethod = iVar.javaClass.getMethod("k")
+                val json = kMethod.invoke(iVar) as? String ?: ""
+                android.util.Log.d("NK-JNI", "iVar k() output: $json")
+            } catch (e: Exception) {
+                android.util.Log.e("NK-JNI", "Error calling k()", e)
+            }
+
+            // Inspect all fields
+            try {
+                for (f in iVar.javaClass.fields) {
+                    f.isAccessible = true
+                    val valStr = try { f.get(iVar)?.toString() ?: "null" } catch(e: Exception) { "error" }
+                    android.util.Log.d("NK-JNI", "Field: ${f.name} (type ${f.type.name}) = $valStr")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("NK-JNI", "Error inspecting fields", e)
+            }
+
+            try {
+                val field = iVar.javaClass.getField("pro")
+                name = field.get(iVar) as? String ?: ""
+                android.util.Log.d("NK-JNI", "Successfully got field pro: '$name'")
+            } catch (e: Exception) {
+                android.util.Log.e("NK-JNI", "Error getting field 'pro' directly", e)
+            }
+        }
+
+        android.util.Log.d("NK-JNI", "g0 callback: rx size=${rx?.size}, rxAb size=${rxAb?.size}, stProfileBytes size=${stProfileBytes?.size}")
+        if (rx != null) {
+            android.util.Log.d("NK-JNI", "rx hex: " + rx.joinToString("") { String.format("%02x", it) })
+        }
+        if (rxAb != null) {
+            android.util.Log.d("NK-JNI", "rxAb hex: " + rxAb.joinToString("") { String.format("%02x", it) })
+        }
+        if (stProfileBytes != null) {
+            android.util.Log.d("NK-JNI", "stProfileBytes hex: " + stProfileBytes.joinToString("") { String.format("%02x", it) })
+            android.util.Log.d("NK-JNI", "stProfileBytes string: " + String(stProfileBytes).trim())
+        }
+
+        if (name.isEmpty()) {
+            try {
+                if (rx != null && rx.size >= 14) {
+                    val bArr = ByteArray(12)
+                    System.arraycopy(rx, 2, bArr, 0, 12)
+                    val s = String(bArr).trim()
+                    if (s.isNotEmpty() && s.all { it >= ' ' && it <= '~' }) {
+                        name = s
+                    }
+                }
+            } catch (e: Exception) {}
+        }
+        if (name.isEmpty()) {
+            try {
+                if (rxAb != null && rxAb.size >= 14) {
+                    val bArr = ByteArray(12)
+                    System.arraycopy(rxAb, 2, bArr, 0, 12)
+                    val s = String(bArr).trim()
+                    if (s.isNotEmpty() && s.all { it >= ' ' && it <= '~' }) {
+                        name = s
+                    }
+                }
+            } catch (e: Exception) {}
+        }
+        if (name.isEmpty()) {
+            try {
+                if (stProfileBytes != null && stProfileBytes.isNotEmpty()) {
+                    val s = String(stProfileBytes).trim()
+                    if (s.isNotEmpty() && s != "---" && s.all { it >= ' ' && it <= '~' }) {
+                        name = s
+                    }
+                }
+            } catch (e: Exception) {}
+        }
+        android.util.Log.d("NK-JNI", "g0 callback: final extracted name='$name'")
+        if (name.isNotEmpty()) {
+            mainHandler.post {
+                channel.invokeMethod("onActiveGunProfileReceived", mapOf(
+                    "index" to 0,
+                    "name" to name.trim()
+                ))
+            }
+        }
+    }
+    override fun i(z4: Boolean, qVar: Any?) {
+        val name = extractProfileNameFromRemoteDisplay(qVar)
+        android.util.Log.d("NK-JNI", "i callback (Hornady): extracted name='$name'")
+        if (z4) {
+            emitActiveGunProfile(name)
+        }
+    }
     override fun j0(i2: Int) {}
 
     override fun k(z4: Boolean, i2: Int, i4: Int, i5: Int, i6: Int) {
@@ -371,6 +640,11 @@ class KestrelJniPlugin(private val channel: MethodChannel, private val context: 
                 eVar.Lead,
                 eVar.TargetNumber,
                 eVar.SolutionId,
+                eVar.Velocity,
+                eVar.Energy,
+                eVar.ToF,
+                eVar.SpinD,
+                eVar.TargetRange,
             ),
         )
     }

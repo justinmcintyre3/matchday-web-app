@@ -26,8 +26,11 @@ class KestrelJniService {
   final StreamController<bool> _tgtInfoSettingsController = StreamController.broadcast();
   Stream<bool> get onTgtInfoSettingsReceived => _tgtInfoSettingsController.stream;
 
-  final StreamController<bool> _gunTransferSettingsController = StreamController.broadcast();
-  Stream<bool> get onGunTransferSettingsReceived => _gunTransferSettingsController.stream;
+  final StreamController<Map<String, dynamic>> _gunTransferSettingsController = StreamController.broadcast();
+  Stream<Map<String, dynamic>> get onGunTransferSettingsReceived => _gunTransferSettingsController.stream;
+
+  final StreamController<Map<String, dynamic>> _onActiveGunProfileReceivedController = StreamController.broadcast();
+  Stream<Map<String, dynamic>> get onActiveGunProfileReceived => _onActiveGunProfileReceivedController.stream;
 
   final StreamController<void> _balInfoSettingsController = StreamController.broadcast();
   Stream<void> get onBalInfoSettingsReceived => _balInfoSettingsController.stream;
@@ -81,7 +84,12 @@ class KestrelJniService {
         _tgtInfoSettingsController.add(call.arguments as bool);
         break;
       case 'onGunTransferSettingsReceived':
-        _gunTransferSettingsController.add(call.arguments as bool);
+        final map = Map<String, dynamic>.from(call.arguments as Map);
+        _gunTransferSettingsController.add(map);
+        break;
+      case 'onActiveGunProfileReceived':
+        final map = Map<String, dynamic>.from(call.arguments as Map);
+        _onActiveGunProfileReceivedController.add(map);
         break;
       case 'onEnvironmentReceived':
         final map = Map<String, dynamic>.from(call.arguments as Map);
@@ -219,6 +227,26 @@ class KestrelJniService {
     await _channel.invokeMethod('sendCmdGetBalInfoSettings');
   }
 
+  Future<void> sendCmdSetActiveGunIdx(int index) async {
+    await _channel.invokeMethod('sendCmdSetActiveGunIdx', {'index': index});
+  }
+
+  Future<void> sendCmdGetGun({required int index, required int format, required int version}) async {
+    await _channel.invokeMethod('sendCmdGetGun', {
+      'index': index,
+      'format': format,
+      'version': version,
+    });
+  }
+
+  /// Requests the active gun profile name from the Kestrel's remote display data.
+  /// gunFormat 0 = Applied Ballistics, 2 = Hornady.
+  Future<void> sendCmdGetRemoteDisplayData({required int gunFormat}) async {
+    await _channel.invokeMethod('sendCmdGetRemoteDisplayData', {
+      'gunFormat': gunFormat,
+    });
+  }
+
   void dispose() {
     _txBytesController.close();
     _privacyStatusController.close();
@@ -227,6 +255,7 @@ class KestrelJniService {
     _authRequestAckController.close();
     _tgtInfoSettingsController.close();
     _gunTransferSettingsController.close();
+    _onActiveGunProfileReceivedController.close();
     _balInfoSettingsController.close();
     _onBalFullSolutionController.close();
     _calcFullSolnAckController.close();

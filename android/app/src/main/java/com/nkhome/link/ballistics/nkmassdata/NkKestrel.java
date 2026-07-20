@@ -232,9 +232,11 @@ public class NkKestrel extends NkMassData {
     }
 
     public void updateAbSingleTargetData(boolean z4, int i2, int i4, int i5, int i6, int i7, int i8, int i9, float f4, float f5, float f6, float f7, float f8, float f9, float f10, float f11, float f12, float f13, float f14, float f15, float f16, float f17, float f18, float f19, float f20, float f21, float f22, float f23, float f24) {
+        byte[] sTProfileName = getSTProfileName();
+        p pVar = new p(sTProfileName == null ? "---" : new String(sTProfileName), i2, i4, i5, i6, i7, i8, i9, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20, f21, f22, f23, f24);
         k kVar = this.mListener;
         if (kVar != null) {
-            kVar.S(z4, null);
+            kVar.S(z4, pVar);
         }
     }
 

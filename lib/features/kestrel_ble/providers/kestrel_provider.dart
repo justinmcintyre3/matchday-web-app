@@ -38,6 +38,10 @@ class KestrelProvider extends ChangeNotifier with WidgetsBindingObserver {
   double? lastPhoneLat;
 
   int batteryWarningThreshold = 25;
+  String? _activeGunName;
+  String? get activeGunName => _activeGunName;
+  int _gunFormat = 0;
+  int get gunFormat => _gunFormat;
 
   KestrelProvider({KestrelBleService? service})
       : _service = service ?? KestrelBleService() {
@@ -46,6 +50,19 @@ class KestrelProvider extends ChangeNotifier with WidgetsBindingObserver {
     _service.onRxData = _onRxData;
     _service.onBatteryLevelReceived = _onBatteryLevelReceived;
     WidgetsBinding.instance.addObserver(this);
+
+    _service.onActiveGunProfileReceived.listen((map) {
+      final name = map['name'] as String? ?? '';
+      debugPrint('[KestrelProvider] onActiveGunProfileReceived: $name');
+      if (name.isNotEmpty && name != '---') {
+        _activeGunName = name;
+        notifyListeners();
+      }
+    });
+
+    _service.onGunTransferSettingsReceived.listen((map) {
+      _gunFormat = map['gunFormat'] as int? ?? 0;
+    });
     
     _service.onEnvironmentReceived.listen((env) {
       final kestrelLat = env['latitude'] as double?;
@@ -250,6 +267,9 @@ class KestrelProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void _onConnectionStateChanged(KestrelConnectionState state) {
+    if (state == KestrelConnectionState.disconnected || state == KestrelConnectionState.error) {
+      _activeGunName = null;
+    }
     connectedDevice = connectedDevice?.copyWith(state: state) ??
         KestrelDevice(
           name: 'Kestrel',
@@ -366,6 +386,42 @@ class KestrelProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> sendCalcFullSolution({required int targetNumber}) async {
     await _service.sendCalcFullSolution(targetNumber: targetNumber);
+  }
+
+  Future<void> setActiveGunIdx(int index) async {
+    if (connectionState != KestrelConnectionState.connected) return;
+    await _service.setActiveGunIdx(index);
+  }
+
+  Future<void> getGun({required int index, required int format, required int version}) async {
+    if (connectionState != KestrelConnectionState.connected) return;
+    await _service.getGun(index: index, format: format, version: version);
+  }
+
+  Future<void> getRemoteDisplayData({required int gunFormat}) async {
+    if (connectionState != KestrelConnectionState.connected) return;
+    await _service.getRemoteDisplayData(gunFormat: gunFormat);
+  }
+
+  /// Requests the active gun profile name from the Kestrel and waits briefly for a response.
+  Future<String?> refreshActiveGunName({Duration timeout = const Duration(seconds: 3)}) async {
+    if (connectionState != KestrelConnectionState.connected) return _activeGunName;
+
+    final completer = Completer<String?>();
+    void listener() {
+      final name = _activeGunName;
+      if (name != null && name.isNotEmpty && !completer.isCompleted) {
+        completer.complete(name);
+      }
+    }
+
+    addListener(listener);
+    try {
+      await _service.getRemoteDisplayData(gunFormat: _gunFormat);
+      return await completer.future.timeout(timeout, onTimeout: () => _activeGunName);
+    } finally {
+      removeListener(listener);
+    }
   }
 
   Future<void> _onBatteryLevelReceived(int batteryLevel) async {

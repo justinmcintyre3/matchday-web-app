@@ -134,8 +134,14 @@ class KestrelBleService {
       _jni.sendCmdGetGunTransferSettings();
     });
 
-    _jni.onGunTransferSettingsReceived.listen((_) {
-      debugPrint('[KestrelBLE] onGunTransferSettingsReceived');
+    _jni.onGunTransferSettingsReceived.listen((map) {
+      final idx = map['activeGunIdx'] as int? ?? 0;
+      final fmt = map['gunFormat'] as int? ?? 0;
+      final ver = map['gunVersion'] as int? ?? 0;
+      debugPrint('[KestrelBLE] onGunTransferSettingsReceived activeGunIdx: $idx');
+      
+      // Query active gun profile details during handshake
+      _jni.sendCmdGetGun(index: idx, format: fmt, version: ver);
       _jni.sendCmdGetBalInfoSettings();
     });
 
@@ -145,7 +151,8 @@ class KestrelBleService {
     });
   }
 
-  Stream<bool> get onGunTransferSettingsReceived => _jni.onGunTransferSettingsReceived;
+  Stream<Map<String, dynamic>> get onGunTransferSettingsReceived => _jni.onGunTransferSettingsReceived;
+  Stream<Map<String, dynamic>> get onActiveGunProfileReceived => _jni.onActiveGunProfileReceived;
   Stream<void> get onBalInfoSettingsReceived => _jni.onBalInfoSettingsReceived;
   Stream<Map<String, dynamic>> get onBalFullSolution => _jni.onBalFullSolution;
   Stream<bool> get onCalcFullSolnAck => _jni.onCalcFullSolnAck;
@@ -487,6 +494,18 @@ class KestrelBleService {
   /// Phase 2: request ballistics solution for a slot already on the Kestrel.
   Future<void> sendCalcFullSolution({required int targetNumber}) async {
     await _jni.sendCalcFullSolution(targetNumber: targetNumber);
+  }
+
+  Future<void> setActiveGunIdx(int index) async {
+    await _jni.sendCmdSetActiveGunIdx(index);
+  }
+
+  Future<void> getGun({required int index, required int format, required int version}) async {
+    await _jni.sendCmdGetGun(index: index, format: format, version: version);
+  }
+
+  Future<void> getRemoteDisplayData({required int gunFormat}) async {
+    await _jni.sendCmdGetRemoteDisplayData(gunFormat: gunFormat);
   }
 
   // ────────────────────────────────────────────────────────────────────────────
