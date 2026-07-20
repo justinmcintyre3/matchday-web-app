@@ -642,6 +642,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
             windage1Value: arr.windage1Value,
             windage2Value: arr.windage2Value,
             leadValue: arr.leadValue,
+            isHoldoverSelected: arr.isHoldoverSelected,
           );
         })),
         windPlan: WindPlan(
