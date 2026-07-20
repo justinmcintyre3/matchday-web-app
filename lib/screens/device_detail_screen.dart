@@ -175,6 +175,101 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
 
           const SizedBox(height: 20),
 
+          if (widget.deviceName == 'Matchday Watch') ...[
+            // -- SETTINGS section header
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 10),
+              child: Text(
+                'SETTINGS',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white.withValues(alpha: 0.4),
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ),
+            
+            // -- Settings card
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E1E24),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Consumer<MatchProvider>(
+                builder: (context, provider, child) {
+                  return Column(
+                    children: [
+                      _SettingSwitchRow(
+                        label: 'Auto Dope',
+                        value: provider.watchAutoDope,
+                        onChanged: (value) => provider.updateWatchSetting('autoDope', value),
+                      ),
+                      _SettingSwitchRow(
+                        label: 'Read Aloud',
+                        value: provider.watchReadAloud,
+                        onChanged: (value) => provider.updateWatchSetting('readAloud', value),
+                      ),
+                      _SettingCycleRow(
+                        label: 'Beep Pitch',
+                        value: provider.watchBeepPitch,
+                        onTap: () {
+                          final current = provider.watchBeepPitch;
+                          String next = 'Med';
+                          if (current == 'Med') {
+                            next = 'High';
+                          } else if (current == 'High') {
+                            next = 'Low';
+                          } else if (current == 'Low') {
+                            next = 'Med';
+                          }
+                          provider.updateWatchSetting('beepPitch', next);
+                        },
+                      ),
+                      _SettingSwitchRow(
+                        label: '50% Beep',
+                        value: provider.watchFiftyCentBeep,
+                        onChanged: (value) => provider.updateWatchSetting('fiftyCentBeep', value),
+                      ),
+                      _SettingSwitchRow(
+                        label: '40sec Beep',
+                        value: provider.watchFortySecondsRemaining,
+                        onChanged: (value) => provider.updateWatchSetting('fortySecondsRemaining', value),
+                      ),
+                      _SettingSwitchRow(
+                        label: '30sec Beep',
+                        value: provider.watchThirtySecondsRemaining,
+                        onChanged: (value) => provider.updateWatchSetting('thirtySecondsRemaining', value),
+                      ),
+                      _SettingSwitchRow(
+                        label: '20sec Beep',
+                        value: provider.watchTwentySecondsRemaining,
+                        onChanged: (value) => provider.updateWatchSetting('twentySecondsRemaining', value),
+                      ),
+                      _SettingSwitchRow(
+                        label: '10sec Beep',
+                        value: provider.watchTenSecondsRemaining,
+                        onChanged: (value) => provider.updateWatchSetting('tenSecondsRemaining', value),
+                      ),
+                      _SettingSwitchRow(
+                        label: 'Final 4 Beep',
+                        value: provider.watchFinalFourCountdown,
+                        onChanged: (value) => provider.updateWatchSetting('finalFourCountdown', value),
+                      ),
+                      _SettingSwitchRow(
+                        label: 'Final Beep',
+                        value: provider.watchFinalEndingBeep,
+                        onChanged: (value) => provider.updateWatchSetting('finalEndingBeep', value),
+                        showDivider: false,
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+
           // -- Troubleshooting Guidelines Expandable Card
           const _TroubleshootingCard(),
         ],
@@ -396,6 +491,114 @@ class _InfoRow extends StatelessWidget {
             indent: 16,
             color: Colors.white.withValues(alpha: 0.06),
           ),
+      ],
+    );
+  }
+}
+
+class _SettingSwitchRow extends StatelessWidget {
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final bool showDivider;
+
+  const _SettingSwitchRow({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    this.showDivider = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(color: Colors.white, fontSize: 15),
+              ),
+              Switch(
+                value: value,
+                onChanged: (val) {
+                  HapticFeedback.lightImpact();
+                  onChanged(val);
+                },
+                activeThumbColor: const Color(0xFF00E676),
+                activeTrackColor: const Color(0xFF00E676).withValues(alpha: 0.2),
+              ),
+            ],
+          ),
+        ),
+        if (showDivider)
+          Divider(
+            height: 1,
+            indent: 16,
+            color: Colors.white.withValues(alpha: 0.06),
+          ),
+      ],
+    );
+  }
+}
+
+class _SettingCycleRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  const _SettingCycleRow({
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(color: Colors.white, fontSize: 15),
+              ),
+              InkWell(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  onTap();
+                },
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    value,
+                    style: const TextStyle(
+                      color: Color(0xFF007AFF),
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Divider(
+          height: 1,
+          indent: 16,
+          color: Colors.white.withValues(alpha: 0.06),
+        ),
       ],
     );
   }

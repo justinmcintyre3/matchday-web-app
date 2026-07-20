@@ -511,6 +511,68 @@ class MatchProvider with ChangeNotifier {
     }
   }
 
+  // ── Watch Settings (2-Way Sync) ──────────────────────────────────────────
+  bool get watchAutoDope => _box.get('watch_autoDope') ?? true;
+  bool get watchReadAloud => _box.get('watch_readAloud') ?? true;
+  String get watchBeepPitch => _box.get('watch_beepPitch') ?? 'Med';
+  bool get watchFiftyCentBeep => _box.get('watch_fiftyCentBeep') ?? true;
+  bool get watchFortySecondsRemaining => _box.get('watch_fortySecondsRemaining') ?? true;
+  bool get watchThirtySecondsRemaining => _box.get('watch_thirtySecondsRemaining') ?? true;
+  bool get watchTwentySecondsRemaining => _box.get('watch_twentySecondsRemaining') ?? true;
+  bool get watchTenSecondsRemaining => _box.get('watch_tenSecondsRemaining') ?? true;
+  bool get watchFinalFourCountdown => _box.get('watch_finalFourCountdown') ?? true;
+  bool get watchFinalEndingBeep => _box.get('watch_finalEndingBeep') ?? true;
+
+  Future<void> updateWatchSetting(String key, dynamic value) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await _box.put('watch_settings_last_modified', now);
+    await _box.put('watch_$key', value);
+    notifyListeners();
+    
+    // Sync to watch
+    try {
+      final isSupported = await _watchConnectivity.isSupported;
+      if (isSupported) {
+        await _watchConnectivity.sendMessage({
+          'type': 'sync_settings',
+          'settings': {key: value},
+          'timestamp': now,
+        });
+        debugPrint('[Phone] Synced watch setting $key = $value with timestamp $now');
+      }
+    } catch (e) {
+      debugPrint('[Phone] Error syncing watch setting: $e');
+    }
+  }
+
+  Future<void> _syncAllSettingsToWatch() async {
+    final ts = _box.get('watch_settings_last_modified') ?? 0;
+    try {
+      final isSupported = await _watchConnectivity.isSupported;
+      if (isSupported) {
+        await _watchConnectivity.sendMessage({
+          'type': 'sync_settings',
+          'settings': {
+            'autoDope': watchAutoDope,
+            'readAloud': watchReadAloud,
+            'beepPitch': watchBeepPitch,
+            'fiftyCentBeep': watchFiftyCentBeep,
+            'fortySecondsRemaining': watchFortySecondsRemaining,
+            'thirtySecondsRemaining': watchThirtySecondsRemaining,
+            'twentySecondsRemaining': watchTwentySecondsRemaining,
+            'tenSecondsRemaining': watchTenSecondsRemaining,
+            'finalFourCountdown': watchFinalFourCountdown,
+            'finalEndingBeep': watchFinalEndingBeep,
+          },
+          'timestamp': ts,
+        });
+        debugPrint('[Phone] Synced all settings to watch with timestamp $ts');
+      }
+    } catch (e) {
+      debugPrint('[Phone] Error syncing all settings to watch: $e');
+    }
+  }
+
   Future<void> syncActiveStageToWatch() async {
     final stage = activeStage;
     if (stage == null) return;
@@ -739,7 +801,7 @@ class MatchProvider with ChangeNotifier {
   }
 
   void _initWatchConnectivity() {
-    void handleIncoming(Map<String, dynamic> message) {
+    Future<void> handleIncoming(Map<String, dynamic> message) async {
       debugPrint('Incoming watch message: $message');
       if (message['type'] == 'stage_result') {
         final timeLeft = message['timeLeft'] as int?;
@@ -779,6 +841,23 @@ class MatchProvider with ChangeNotifier {
       } else if (message['type'] == 'timer_started') {
         final timeLeft = message['timeLeft'] as int?;
         _watchTimerStartedController.add(timeLeft);
+      } else if (message['type'] == 'sync_settings') {
+        final incomingTs = message['timestamp'] as int? ?? 0;
+        final localTs = _box.get('watch_settings_last_modified') ?? 0;
+        if (incomingTs >= localTs) {
+          final settings = Map<String, dynamic>.from(message['settings']);
+          settings.forEach((key, value) {
+            _box.put('watch_$key', value);
+          });
+          await _box.put('watch_settings_last_modified', incomingTs);
+          notifyListeners();
+          debugPrint('[Phone] Applied settings from watch with timestamp $incomingTs');
+        } else {
+          debugPrint('[Phone] Rejected older settings from watch (incoming: $incomingTs, local: $localTs). Syncing back newer settings.');
+          _syncAllSettingsToWatch();
+        }
+      } else if (message['type'] == 'request_settings') {
+        _syncAllSettingsToWatch();
       }
     }
 
@@ -798,8 +877,12 @@ class MatchProvider with ChangeNotifier {
           final isPaired = await _watchConnectivity.isPaired;
           final connected = isReachable && isPaired;
           if (connected != _isWatchConnected) {
+            final wasConnected = _isWatchConnected;
             _isWatchConnected = connected;
             notifyListeners();
+            if (connected && !wasConnected) {
+              _syncAllSettingsToWatch();
+            }
           }
         }
       } catch (_) {}
