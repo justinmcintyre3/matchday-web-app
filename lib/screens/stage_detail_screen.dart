@@ -617,6 +617,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
               isMovingTarget: t.isMovingTarget,
               targetSpeedMph: t.targetSpeedMph,
               targetLeadMil: t.targetLeadMil,
+              selectedLeadType: t.selectedLeadType,
             );
           }));
 
