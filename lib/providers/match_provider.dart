@@ -524,6 +524,7 @@ class MatchProvider with ChangeNotifier {
   bool get watchTenSecondsRemaining => _box.get('watch_tenSecondsRemaining') ?? true;
   bool get watchFinalFourCountdown => _box.get('watch_finalFourCountdown') ?? true;
   bool get watchFinalEndingBeep => _box.get('watch_finalEndingBeep') ?? true;
+  bool get watchStreamAudioToPhone => _box.get('watch_streamAudioToPhone') ?? false;
 
   Future<void> updateWatchSetting(String key, dynamic value) async {
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -566,6 +567,7 @@ class MatchProvider with ChangeNotifier {
             'tenSecondsRemaining': watchTenSecondsRemaining,
             'finalFourCountdown': watchFinalFourCountdown,
             'finalEndingBeep': watchFinalEndingBeep,
+            'streamAudioToPhone': watchStreamAudioToPhone,
           },
           'timestamp': ts,
         });
@@ -894,6 +896,8 @@ class MatchProvider with ChangeNotifier {
         }
       } else if (message['type'] == 'request_settings') {
         _syncAllSettingsToWatch();
+      } else if (message['type'] == 'audio_relay') {
+        _handleAudioRelay(message);
       }
     }
 
@@ -938,6 +942,38 @@ class MatchProvider with ChangeNotifier {
 
       // Trigger UI callback stream so detail screen can prompt user
       _watchResultController.add(event);
+    }
+  }
+
+  void _handleAudioRelay(Map<String, dynamic> message) {
+    try {
+      final audioType = message['audioType'] as String?;
+      if (audioType == 'tone') {
+        final freq = (message['frequency'] as num?)?.toDouble() ?? 1500.0;
+        final duration = message['durationMs'] as int? ?? 250;
+        final count = message['count'] as int? ?? 1;
+        final silenceMs = message['silenceMs'] as int? ?? 250;
+        _wearChannel.invokeMethod('playTone', {
+          'frequency': freq,
+          'durationMs': duration,
+          'count': count,
+          'silenceMs': silenceMs,
+        });
+      } else if (audioType == 'sound') {
+        final fileName = message['fileName'] as String? ?? 'halfway.mp3';
+        _wearChannel.invokeMethod('playNativeSound', {
+          'fileName': fileName,
+        });
+      } else if (audioType == 'tts') {
+        final text = (message['text'] as String?) ?? (message['fileName'] as String?) ?? '';
+        if (text.isNotEmpty) {
+          _wearChannel.invokeMethod('speakText', {'text': text});
+        }
+      } else if (audioType == 'stop_tts') {
+        _wearChannel.invokeMethod('stopSpeaking');
+      }
+    } catch (e) {
+      debugPrint('[Phone] Error playing relayed audio: $e');
     }
   }
 

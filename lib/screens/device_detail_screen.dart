@@ -248,6 +248,11 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                         value: provider.watchReadAloud,
                         onChanged: (value) => provider.updateWatchSetting('readAloud', value),
                       ),
+                      _SettingSwitchRow(
+                        label: 'Stream Audio to Phone',
+                        value: provider.watchStreamAudioToPhone,
+                        onChanged: (value) => provider.updateWatchSetting('streamAudioToPhone', value),
+                      ),
                       _SettingCycleRow(
                         label: 'Beep Pitch',
                         value: provider.watchBeepPitch,
