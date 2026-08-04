@@ -525,6 +525,7 @@ class MatchProvider with ChangeNotifier {
   bool get watchFinalFourCountdown => _box.get('watch_finalFourCountdown') ?? true;
   bool get watchFinalEndingBeep => _box.get('watch_finalEndingBeep') ?? true;
   bool get watchStreamAudioToPhone => _box.get('watch_streamAudioToPhone') ?? false;
+  double get watchImuSensitivity => (_box.get('watch_imuSensitivity') as num?)?.toDouble() ?? 13.0;
 
   Future<void> updateWatchSetting(String key, dynamic value) async {
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -568,6 +569,7 @@ class MatchProvider with ChangeNotifier {
             'finalFourCountdown': watchFinalFourCountdown,
             'finalEndingBeep': watchFinalEndingBeep,
             'streamAudioToPhone': watchStreamAudioToPhone,
+            'imuSensitivity': watchImuSensitivity,
           },
           'timestamp': ts,
         });

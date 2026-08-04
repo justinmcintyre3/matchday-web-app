@@ -253,6 +253,14 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                         value: provider.watchStreamAudioToPhone,
                         onChanged: (value) => provider.updateWatchSetting('streamAudioToPhone', value),
                       ),
+                      _SettingSliderRow(
+                        label: 'Motion Sensitivity',
+                        value: provider.watchImuSensitivity,
+                        min: 5.0,
+                        max: 25.0,
+                        divisions: 20,
+                        onChanged: (val) => provider.updateWatchSetting('imuSensitivity', val),
+                      ),
                       _SettingCycleRow(
                         label: 'Beep Pitch',
                         value: provider.watchBeepPitch,
@@ -635,6 +643,75 @@ class _SettingCycleRow extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+        Divider(
+          height: 1,
+          indent: 16,
+          color: Colors.white.withValues(alpha: 0.06),
+        ),
+      ],
+    );
+  }
+}
+
+class _SettingSliderRow extends StatelessWidget {
+  final String label;
+  final double value;
+  final double min;
+  final double max;
+  final int divisions;
+  final ValueChanged<double> onChanged;
+
+  const _SettingSliderRow({
+    required this.label,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.divisions,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(color: Colors.white, fontSize: 15),
+              ),
+              Text(
+                value.toStringAsFixed(1),
+                style: const TextStyle(
+                  color: Color(0xFF007AFF),
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              activeTrackColor: const Color(0xFF007AFF),
+              inactiveTrackColor: Colors.white.withValues(alpha: 0.15),
+              thumbColor: const Color(0xFF007AFF),
+              overlayColor: const Color(0xFF007AFF).withValues(alpha: 0.2),
+            ),
+            child: Slider(
+              value: value.clamp(min, max),
+              min: min,
+              max: max,
+              divisions: divisions,
+              onChanged: onChanged,
+            ),
           ),
         ),
         Divider(
