@@ -977,28 +977,32 @@ class _MatchSummaryScreenState extends State<MatchSummaryScreen> {
     final rollThreshold = sgPulseProvider.rollThreshold;
 
     for (final stage in match.stages) {
-      for (final roll in stage.shotRolls) {
-        if (roll == 0.0) continue;
-        final sign = roll < 0 ? -1.0 : 1.0;
-        final truncatedRoll = sign * ((roll.abs() * 10).floor() / 10.0);
-        final isWithinThreshold = truncatedRoll.abs() <= rollThreshold;
-        if (isWithinThreshold) {
-          rollGreen++;
-        } else if (truncatedRoll < 0) {
-          rollRed++;
-        } else {
-          rollBlue++;
-        }
-      }
+      for (int i = 0; i < stage.shotTimes.length; i++) {
+        if (stage.shotTimes[i] == 0.0) continue;
 
-      for (final stability in stage.shotStabilities) {
-        if (stability == 0.0) continue;
-        if (stability <= sgPulseProvider.stabilityGreenZone) {
-          stabilityGreen++;
-        } else if (stability <= sgPulseProvider.stabilityYellowZone) {
-          stabilityYellow++;
-        } else {
-          stabilityRed++;
+        if (i < stage.shotRolls.length) {
+          final roll = stage.shotRolls[i];
+          final sign = roll < 0 ? -1.0 : 1.0;
+          final truncatedRoll = sign * ((roll.abs() * 10).floor() / 10.0);
+          final isWithinThreshold = truncatedRoll.abs() <= rollThreshold;
+          if (isWithinThreshold) {
+            rollGreen++;
+          } else if (truncatedRoll < 0) {
+            rollRed++;
+          } else {
+            rollBlue++;
+          }
+        }
+
+        if (i < stage.shotStabilities.length) {
+          final stability = stage.shotStabilities[i];
+          if (stability <= sgPulseProvider.stabilityGreenZone) {
+            stabilityGreen++;
+          } else if (stability <= sgPulseProvider.stabilityYellowZone) {
+            stabilityYellow++;
+          } else {
+            stabilityRed++;
+          }
         }
       }
     }

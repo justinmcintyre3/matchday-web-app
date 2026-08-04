@@ -472,6 +472,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
         setState(() {
           _stage.avgHeartRate = event.heartRate;
           _heartRateController.text = '${event.heartRate}';
+          if (event.heartRate > _stage.maxHeartRate) {
+            _stage.maxHeartRate = event.heartRate;
+          }
         });
       }
     });
@@ -488,10 +491,14 @@ class _StageDetailScreenState extends State<StageDetailScreen>
           _stage.shotTimes = [];
           _stage.shotRolls = [];
           _stage.shotStabilities = [];
-          _stage.shotResults = List.filled(_stage.shotResults.length, 'none');
+          _stage.shotResults = List.filled(_stage.shotTargetsSequence.length, 'none');
+          _stage.avgHeartRate = 0;
+          _stage.maxHeartRate = 0;
           _stoppedByLimit = false;
+          _heartRateController.text = '';
         });
         context.read<SgPulseProvider>().clearSession();
+        _tabController.animateTo(1);
 
         if (timeLeft != null) {
           // Deduct 300ms to compensate for BLE transmission latency
@@ -522,9 +529,24 @@ class _StageDetailScreenState extends State<StageDetailScreen>
               final currentStability =
                   sgPulseProvider.latestSnapshot?.stability ?? 0.0;
               setState(() {
-                _stage.shotTimes.add(elapsedSeconds);
-                _stage.shotRolls.add(currentRoll);
-                _stage.shotStabilities.add(currentStability);
+                final int shotIdx = _stage.shotTimes.where((t) => t > 0.0).length;
+                if (shotIdx < _stage.shotTimes.length) {
+                  _stage.shotTimes[shotIdx] = elapsedSeconds;
+                } else {
+                  _stage.shotTimes.add(elapsedSeconds);
+                }
+
+                if (shotIdx < _stage.shotRolls.length) {
+                  _stage.shotRolls[shotIdx] = currentRoll;
+                } else {
+                  _stage.shotRolls.add(currentRoll);
+                }
+
+                if (shotIdx < _stage.shotStabilities.length) {
+                  _stage.shotStabilities[shotIdx] = currentStability;
+                } else {
+                  _stage.shotStabilities.add(currentStability);
+                }
               });
 
               // Auto-swipe watch card to next target array if target array changes in COF
@@ -874,17 +896,21 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       _isShootTimerRunning = false;
       _stage.timeRemaining = remainingSeconds;
       _timeRemainingController.text = '$remainingSeconds';
+      _adjustShotResultsLength();
     });
     await context.read<MatchProvider>().stopWatchTimer();
+    _saveStage(exitScreen: false);
   }
 
   void _markUntakenShotsAsTimedOut() {
-    final int shotsTaken = _stage.shotTimes.length;
     setState(() {
+      _adjustShotResultsLength();
+      final int shotsTaken = _stage.shotTimes.where((t) => t > 0.0).length;
       for (int i = shotsTaken; i < _stage.shotResults.length; i++) {
         _stage.shotResults[i] = 'timeOutMiss';
       }
     });
+    _saveStage(exitScreen: false);
   }
 
   List<int> _getShotIndicesForTarget(int arrayIdx, int targetIdx) {
@@ -1577,7 +1603,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       _stage.targetArrays[arrayIdx].targets[targetIdx].shotsCount++;
     }
 
-    // 4. Adjust flat shot list sizes
+    // 4. Adjust flat shot list sizes to strictly match totalShotsNeeded
     final int totalShotsNeeded = _stage.shotTargetsSequence.length;
     if (_stage.shotResults.length < totalShotsNeeded) {
       _stage.shotResults.addAll(List.generate(
@@ -1587,15 +1613,24 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     } else if (_stage.shotResults.length > totalShotsNeeded) {
       _stage.shotResults = _stage.shotResults.sublist(0, totalShotsNeeded);
     }
+
     if (_stage.shotTimes.length > totalShotsNeeded) {
       _stage.shotTimes = _stage.shotTimes.sublist(0, totalShotsNeeded);
+    } else if (_stage.shotTimes.length < totalShotsNeeded) {
+      _stage.shotTimes.addAll(List.filled(totalShotsNeeded - _stage.shotTimes.length, 0.0));
     }
+
     if (_stage.shotRolls.length > totalShotsNeeded) {
       _stage.shotRolls = _stage.shotRolls.sublist(0, totalShotsNeeded);
+    } else if (_stage.shotRolls.length < totalShotsNeeded) {
+      _stage.shotRolls.addAll(List.filled(totalShotsNeeded - _stage.shotRolls.length, 0.0));
     }
+
     if (_stage.shotStabilities.length > totalShotsNeeded) {
       _stage.shotStabilities =
           _stage.shotStabilities.sublist(0, totalShotsNeeded);
+    } else if (_stage.shotStabilities.length < totalShotsNeeded) {
+      _stage.shotStabilities.addAll(List.filled(totalShotsNeeded - _stage.shotStabilities.length, 0.0));
     }
     _stage.numTargets = _stage.targets.length;
   }
@@ -3180,30 +3215,32 @@ class _StageDetailScreenState extends State<StageDetailScreen>
     final sgPulseProvider = context.read<SgPulseProvider>();
     final rollThreshold = sgPulseProvider.rollThreshold;
 
-    for (int i = 0; i < _stage.shotRolls.length; i++) {
-      final roll = _stage.shotRolls[i];
-      if (roll == 0.0) continue;
-      final sign = roll < 0 ? -1.0 : 1.0;
-      final truncatedRoll = sign * ((roll.abs() * 10).floor() / 10.0);
-      final isWithinThreshold = truncatedRoll.abs() <= rollThreshold;
-      if (isWithinThreshold) {
-        rollGreen++;
-      } else if (truncatedRoll < 0) {
-        rollRed++;
-      } else {
-        rollBlue++;
-      }
-    }
+    for (int i = 0; i < _stage.shotTimes.length; i++) {
+      if (_stage.shotTimes[i] == 0.0) continue;
 
-    for (int i = 0; i < _stage.shotStabilities.length; i++) {
-      final stability = _stage.shotStabilities[i];
-      if (stability == 0.0) continue;
-      if (stability <= sgPulseProvider.stabilityGreenZone) {
-        stabilityGreen++;
-      } else if (stability <= sgPulseProvider.stabilityYellowZone) {
-        stabilityYellow++;
-      } else {
-        stabilityRed++;
+      if (i < _stage.shotRolls.length) {
+        final roll = _stage.shotRolls[i];
+        final sign = roll < 0 ? -1.0 : 1.0;
+        final truncatedRoll = sign * ((roll.abs() * 10).floor() / 10.0);
+        final isWithinThreshold = truncatedRoll.abs() <= rollThreshold;
+        if (isWithinThreshold) {
+          rollGreen++;
+        } else if (truncatedRoll < 0) {
+          rollRed++;
+        } else {
+          rollBlue++;
+        }
+      }
+
+      if (i < _stage.shotStabilities.length) {
+        final stability = _stage.shotStabilities[i];
+        if (stability <= sgPulseProvider.stabilityGreenZone) {
+          stabilityGreen++;
+        } else if (stability <= sgPulseProvider.stabilityYellowZone) {
+          stabilityYellow++;
+        } else {
+          stabilityRed++;
+        }
       }
     }
 
@@ -3288,6 +3325,178 @@ class _StageDetailScreenState extends State<StageDetailScreen>
         ],
       ],
     );
+  }
+
+  Widget _buildShotDetectionsListView({bool shrinkWrap = false, ScrollController? controller}) {
+    final validShotCount = _stage.shotTimes.where((t) => t > 0.0).length;
+    if (validShotCount == 0) return const SizedBox.shrink();
+
+    Widget listView = ListView.builder(
+      physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
+      shrinkWrap: shrinkWrap,
+      controller: controller,
+      itemCount: validShotCount,
+      itemBuilder: (context, index) {
+        final shotTime = _stage.shotTimes[index];
+        final split = index == 0
+            ? shotTime
+            : (shotTime > 0 && _stage.shotTimes[index - 1] > 0
+                ? shotTime - _stage.shotTimes[index - 1]
+                : 0.0);
+        final targetName = _getTargetNameForShotIndex(index);
+        final sgPulseProvider = context.read<SgPulseProvider>();
+        final rollThreshold = sgPulseProvider.rollThreshold;
+
+        final roll = index < _stage.shotRolls.length ? _stage.shotRolls[index] : 0.0;
+        final sign = roll < 0 ? -1.0 : 1.0;
+        final truncatedRoll = sign * ((roll.abs() * 10).floor() / 10.0);
+        final isWithinThreshold = truncatedRoll.abs() <= rollThreshold;
+        final rollColor = roll == 0.0
+            ? Colors.grey
+            : (isWithinThreshold
+                ? const Color(0xFF30D158)
+                : (truncatedRoll < 0 ? const Color(0xFFFF453A) : const Color(0xFF0A84FF)));
+
+        final hasRoll = index < _stage.shotRolls.length;
+        final hasStability = index < _stage.shotStabilities.length;
+        final stability = hasStability ? _stage.shotStabilities[index] : 0.0;
+
+        Color stabilityColor = Colors.grey;
+        if (hasStability) {
+          if (stability <= sgPulseProvider.stabilityGreenZone) {
+            stabilityColor = const Color(0xFF30D158);
+          } else if (stability <= sgPulseProvider.stabilityYellowZone) {
+            stabilityColor = const Color(0xFFFFD60A);
+          } else {
+            stabilityColor = const Color(0xFFFF453A);
+          }
+        }
+
+        return Card(
+          margin: const EdgeInsets.symmetric(vertical: 4.0),
+          color: Colors.white.withValues(alpha: 0.02),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8.0),
+            side: const BorderSide(color: Colors.white10, width: 1.0),
+          ),
+          child: ListTile(
+            dense: true,
+            leading: CircleAvatar(
+              radius: 12,
+              backgroundColor: const Color(0xFF007AFF).withValues(alpha: 0.1),
+              child: Text(
+                '${index + 1}',
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF007AFF),
+                ),
+              ),
+            ),
+            title: Text(
+              targetName,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                fontSize: 13,
+              ),
+            ),
+            subtitle: (!hasRoll && !hasStability)
+                ? null
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (hasRoll)
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              const TextSpan(
+                                text: 'Roll: ',
+                                style: TextStyle(color: Colors.grey, fontSize: 11),
+                              ),
+                              TextSpan(
+                                text: '${truncatedRoll.toStringAsFixed(1)}° ${truncatedRoll < 0 ? "Left" : "Right"}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: rollColor,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (hasStability)
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              const TextSpan(
+                                text: 'Stability: ',
+                                style: TextStyle(color: Colors.grey, fontSize: 11),
+                              ),
+                              TextSpan(
+                                text: '${stability.toStringAsFixed(1)} MOA',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: stabilityColor,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (shotTime > 0.0)
+                  Text(
+                    '${shotTime.toStringAsFixed(2)}s',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: Colors.white,
+                    ),
+                  ),
+                if (index > 0 && split > 0.0) ...[
+                  const SizedBox(width: 12),
+                  Text(
+                    '>${split.toStringAsFixed(2)}s',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFFFFD60A),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (shrinkWrap) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 16),
+          const Text(
+            'INDIVIDUAL SHOT QUALITY & DETECTIONS',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 8),
+          listView,
+        ],
+      );
+    }
+
+    return listView;
   }
 
   // Improved custom stepper for MIL windage inputs (scope turret style)
@@ -3413,7 +3622,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
   }
 
   Widget _buildShootTab() {
-    final showShotList = _stage.shotTimes.isNotEmpty;
+    final showShotList = _stage.shotTimes.any((t) => t > 0.0);
 
     return Container(
       color: const Color(0xFF121214),
@@ -3547,157 +3756,9 @@ class _StageDetailScreenState extends State<StageDetailScreen>
             ),
             const SizedBox(height: 12),
             Expanded(
-              child: ListView.builder(
+              child: _buildShotDetectionsListView(
+                shrinkWrap: false,
                 controller: _shootScrollController,
-                itemCount: _stage.shotTimes.length,
-                itemBuilder: (context, index) {
-                  final shotTime = _stage.shotTimes[index];
-                  final split = index == 0
-                      ? shotTime
-                      : shotTime - _stage.shotTimes[index - 1];
-                  final targetName = _getTargetNameForShotIndex(index);
-                  final sgPulseProvider = context.read<SgPulseProvider>();
-                  final rollThreshold = sgPulseProvider.rollThreshold;
-
-                  final roll = index < _stage.shotRolls.length
-                      ? _stage.shotRolls[index]
-                      : 0.0;
-                  final sign = roll < 0 ? -1.0 : 1.0;
-                  final truncatedRoll =
-                      sign * ((roll.abs() * 10).floor() / 10.0);
-                  final isWithinThreshold =
-                      truncatedRoll.abs() <= rollThreshold;
-                  final rollColor = roll == 0.0
-                      ? Colors.grey
-                      : (isWithinThreshold
-                          ? const Color(0xFF30D158)
-                          : (truncatedRoll < 0
-                              ? const Color(0xFFFF453A)
-                              : const Color(0xFF0A84FF)));
-
-                  final hasRoll = index < _stage.shotRolls.length;
-                  final hasStability = index < _stage.shotStabilities.length;
-                  final rollVal = hasRoll ? _stage.shotRolls[index] : 0.0;
-                  final stability =
-                      hasStability ? _stage.shotStabilities[index] : 0.0;
-
-                  Color stabilityColor = Colors.grey;
-                  if (hasStability) {
-                    if (stability <= sgPulseProvider.stabilityGreenZone) {
-                      stabilityColor = const Color(0xFF30D158); // green
-                    } else if (stability <=
-                        sgPulseProvider.stabilityYellowZone) {
-                      stabilityColor = const Color(0xFFFFD60A); // yellow
-                    } else {
-                      stabilityColor = const Color(0xFFFF453A); // red
-                    }
-                  }
-
-                  return Card(
-                    margin: const EdgeInsets.symmetric(vertical: 4.0),
-                    color: Colors.white.withValues(alpha: 0.02),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8.0),
-                      side: const BorderSide(color: Colors.white10, width: 1.0),
-                    ),
-                    child: ListTile(
-                      dense: true,
-                      leading: CircleAvatar(
-                        radius: 12,
-                        backgroundColor:
-                            const Color(0xFF007AFF).withValues(alpha: 0.1),
-                        child: Text(
-                          '${index + 1}',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF007AFF),
-                          ),
-                        ),
-                      ),
-                      title: Text(
-                        targetName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          fontSize: 13,
-                        ),
-                      ),
-                      subtitle: (!hasRoll && !hasStability)
-                          ? null
-                          : Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                if (hasRoll && rollVal != 0.0)
-                                  Text.rich(
-                                    TextSpan(
-                                      children: [
-                                        const TextSpan(
-                                          text: 'Roll: ',
-                                          style: TextStyle(
-                                              color: Colors.grey, fontSize: 11),
-                                        ),
-                                        TextSpan(
-                                          text:
-                                              '${truncatedRoll.toStringAsFixed(1)}° ${truncatedRoll < 0 ? "Left" : "Right"}',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: rollColor,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                if (hasStability)
-                                  Text.rich(
-                                    TextSpan(
-                                      children: [
-                                        const TextSpan(
-                                            text: 'Stability: ',
-                                            style:
-                                                TextStyle(color: Colors.grey)),
-                                        TextSpan(
-                                          text: stability.toStringAsFixed(1),
-                                          style: TextStyle(
-                                              color: stabilityColor,
-                                              fontWeight: FontWeight.bold),
-                                        ),
-                                      ],
-                                    ),
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '${shotTime.toStringAsFixed(2)}s',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          if (index > 0)
-                            Text(
-                              '>${split.toStringAsFixed(2)}s',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFFFFD60A),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
               ),
             ),
           ],
@@ -4147,6 +4208,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                         _stage.status = 'pending';
                         _stage.timeRemaining = 0;
                         _stage.avgHeartRate = 0;
+                        _stage.maxHeartRate = 0;
                         _stage.timedOut = false;
                         _stage.mentalErrors = '';
                         _stage.skillsErrors = '';
