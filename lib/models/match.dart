@@ -482,6 +482,7 @@ class TargetArray {
   double? windage1Value;
   double? windage2Value;
   double? leadValue;
+  int elevationColor;
   bool isHoldoverSelected;
 
   /// 0–23 clock slots: 0 = 12:00, 1 = 12:30, 2 = 1:00, … (15° steps).
@@ -508,9 +509,8 @@ class TargetArray {
     final hour = (totalMinutes ~/ 60) % 12;
     final minute = totalMinutes % 60;
     final clockHour = hour == 0 ? 0.0 : hour.toDouble();
-    var degrees = clockHour * 30.0;
-    if (minute == 30) degrees += 15.0;
-    return degrees % 360.0;
+    final clockMin = minute.toDouble();
+    return (clockHour * 30.0) + (clockMin * 0.5);
   }
 
   static int degreesToClockSlot(double degrees) {
@@ -559,6 +559,7 @@ class TargetArray {
     this.windage1Value,
     this.windage2Value,
     this.leadValue,
+    this.elevationColor = 0,
     this.isHoldoverSelected = false,
   });
 
@@ -579,6 +580,7 @@ class TargetArray {
       'windage1Value': windage1Value,
       'windage2Value': windage2Value,
       'leadValue': leadValue,
+      'elevationColor': elevationColor,
       'isHoldoverSelected': isHoldoverSelected,
     };
   }
@@ -606,6 +608,7 @@ class TargetArray {
       windage1Value: (map['windage1Value'] as num?)?.toDouble(),
       windage2Value: (map['windage2Value'] as num?)?.toDouble(),
       leadValue: (map['leadValue'] as num?)?.toDouble(),
+      elevationColor: map['elevationColor']?.toInt() ?? 0,
       isHoldoverSelected: map['isHoldoverSelected'] as bool? ?? false,
     );
   }

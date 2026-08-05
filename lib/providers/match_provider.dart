@@ -684,6 +684,7 @@ class MatchProvider with ChangeNotifier {
             'lead': leadVal,
             'isSafe': isSafe ? 'true' : 'false',
             'centerHoldText': centerHoldText,
+            'elevationColor': array.elevationColor.toString(),
           });
         }
         await syncDopeToWatch(dopeTargets);
@@ -770,9 +771,12 @@ class MatchProvider with ChangeNotifier {
             'lead': leadVal,
             'isSafe': isSafe ? 'true' : 'false',
             'centerHoldText': centerHoldText,
+            'elevationColor': array.elevationColor.toString(),
           });
         }
       await syncDopeToWatch(dopeTargets);
+    } else {
+      await syncDopeToWatch([]);
     }
   }
 
@@ -898,8 +902,21 @@ class MatchProvider with ChangeNotifier {
         }
       } else if (message['type'] == 'request_settings') {
         _syncAllSettingsToWatch();
+        syncOnlyDopeToWatch();
       } else if (message['type'] == 'audio_relay') {
         _handleAudioRelay(message);
+      } else if (message['type'] == 'update_array_color') {
+        final arrayIdx = message['arrayIndex'] as int?;
+        final colorIdx = message['colorIndex'] as int?;
+        if (arrayIdx != null && colorIdx != null) {
+          final match = activeMatch;
+          final stage = activeStage;
+          if (match != null && stage != null && arrayIdx < stage.targetArrays.length) {
+            stage.targetArrays[arrayIdx].elevationColor = colorIdx;
+            updateStage(match.id, stage);
+            notifyListeners();
+          }
+        }
       }
     }
 
@@ -924,6 +941,7 @@ class MatchProvider with ChangeNotifier {
             notifyListeners();
             if (connected && !wasConnected) {
               _syncAllSettingsToWatch();
+              syncOnlyDopeToWatch();
             }
           }
         }

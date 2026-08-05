@@ -665,6 +665,7 @@ class _StageDetailScreenState extends State<StageDetailScreen>
             windage1Value: arr.windage1Value,
             windage2Value: arr.windage2Value,
             leadValue: arr.leadValue,
+            elevationColor: arr.elevationColor,
             isHoldoverSelected: arr.isHoldoverSelected,
           );
         })),
@@ -1094,36 +1095,44 @@ class _StageDetailScreenState extends State<StageDetailScreen>
           Row(
             children: [
               Expanded(
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF007AFF).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(
-                      color: const Color(0xFF007AFF).withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Elevation',
-                        style:
-                            TextStyle(fontSize: 10, color: Color(0xFF007AFF)),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    final arrayIdx = _stage.targetArrays.indexOf(array);
+                    if (arrayIdx != -1) {
+                      _cycleArrayColor(arrayIdx);
+                    }
+                  },
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF007AFF).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: const Color(0xFF007AFF).withValues(alpha: 0.3),
                       ),
-                      const SizedBox(height: 2),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            array.elevationResult,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Elevation',
+                          style:
+                              TextStyle(fontSize: 10, color: Color(0xFF007AFF)),
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              array.elevationResult,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: _getRoygbivColor(array.elevationColor),
+                              ),
                             ),
-                          ),
                           if (_stage.targetArrays.indexOf(array) >= 1 &&
                               _stage.targetArrays[0].elevationValue != null &&
                               array.elevationValue != null)
@@ -1179,7 +1188,8 @@ class _StageDetailScreenState extends State<StageDetailScreen>
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+            ),
+            const SizedBox(width: 8),
               Expanded(
                 child: Container(
                   padding:
@@ -1633,6 +1643,55 @@ class _StageDetailScreenState extends State<StageDetailScreen>
       _stage.shotStabilities.addAll(List.filled(totalShotsNeeded - _stage.shotStabilities.length, 0.0));
     }
     _stage.numTargets = _stage.targets.length;
+  }
+
+  Color _getRoygbivColor(int colorIdx) {
+    switch (colorIdx) {
+      case 1: return const Color(0xFFFF453A); // Red
+      case 2: return const Color(0xFFFF9F0A); // Orange
+      case 3: return const Color(0xFFFFD60A); // Yellow
+      case 4: return const Color(0xFF30D158); // Green
+      case 5: return const Color(0xFF0A84FF); // Blue
+      case 6: return const Color(0xFF5E5CE6); // Indigo
+      case 7: return const Color(0xFFBF5AF2); // Violet
+      default: return Colors.white;            // White
+    }
+  }
+
+  void _cycleArrayColor(int arrayIdx) {
+    HapticFeedback.lightImpact();
+    final currentIdx = _stage.targetArrays[arrayIdx].elevationColor;
+    int nextIdx = currentIdx;
+
+    for (int attempt = 1; attempt <= 8; attempt++) {
+      int candidate = (currentIdx + attempt) % 8;
+      if (candidate == 0) {
+        nextIdx = 0;
+        break;
+      }
+
+      // Check if candidate color is already used by another array in this stage
+      bool isAlreadyUsed = false;
+      for (int i = 0; i < _stage.targetArrays.length; i++) {
+        if (i == arrayIdx) continue;
+        if (_stage.targetArrays[i].elevationColor == candidate) {
+          isAlreadyUsed = true;
+          break;
+        }
+      }
+
+      if (!isAlreadyUsed) {
+        nextIdx = candidate;
+        break;
+      }
+    }
+
+    setState(() {
+      _stage.targetArrays[arrayIdx].elevationColor = nextIdx;
+    });
+
+    _saveStage(exitScreen: false);
+    context.read<MatchProvider>().syncOnlyDopeToWatch();
   }
 
   void _saveStage({bool exitScreen = true, bool markAsCompleted = false}) {
